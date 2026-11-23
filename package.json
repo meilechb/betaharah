@@ -1,0 +1,26 @@
+{
+  "name": "betaharah",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-2.0-or-later",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@hebcal/hdate": "^0.23.1",
+    "hono": "^4.13.20"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261123.1",
+    "@hebcal/core": "^6.16.1",
+    "@hebcal/noaa": "^0.12.4",
+    "temporal-polyfill": "^1.0.5",
+    "typescript": "5.9",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.166.0"
+  }
+}
