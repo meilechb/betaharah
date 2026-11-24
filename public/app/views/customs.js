@@ -1,5 +1,5 @@
 /*
- * The Customs tab: the halachic settings, chosen with the household's rav.
+ * The Customs tab: the halachic settings.
  * Each choice shows its current answer and opens in place; a bar at the
  * bottom appears once something changed (Save and confirm / Discard), and
  * leaving the tab with unsaved changes asks first. The titles, help texts
@@ -250,7 +250,6 @@ export function viewCustoms() {
       'section',
       { class: 'card customs-intro' },
       h('h2', {}, 'Customs'),
-      h('p', {}, t('Choose as your {rav} instructs. For a {stain}, a {bedikah} or any doubt, ask your {rav}.')),
       termsToggle({
         keep: () => {
           const kept = clone(draft.halachic);
@@ -262,7 +261,7 @@ export function viewCustoms() {
       }),
       S.halachic.confirmedAt
         ? h('p', { class: 'small muted last-saved' }, icon('check', { size: 'sm' }), 'Last saved: ' + when(S.halachic.confirmedAt))
-        : alert({ kind: 'warn', title: 'Not confirmed yet: the stricter options are in use' }, t('Review them with your {rav}, then choose Save and confirm.')),
+        : alert({ kind: 'warn', title: 'Not saved yet' }, 'The stricter option of each is in use.'),
     ),
     h(
       'div',

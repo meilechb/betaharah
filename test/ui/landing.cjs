@@ -48,11 +48,10 @@ const HOME_PHRASES = [
   'Read the Privacy page',
   'Questions people ask',
   'Is it free?',
-  'Does it replace asking a rav?',
 ];
 // The home page says what it does for a person; how it is built is on /privacy.
 const TECHNICAL = [/AES/, /decrypt/i, /encrypt/i, /Telnyx/, /cookie/i, /\bserver\b/i, /night of Shabbat/];
-const FOOTER_PHRASES = ['Message frequency varies', 'Message and data rates may apply', 'Reply STOP to stop, HELP for help', 'It does not rule on halacha'];
+const FOOTER_PHRASES = ['Message frequency varies', 'Message and data rates may apply', 'Reply STOP to stop, HELP for help', 'It does not give halachic rulings or medical advice'];
 const DOCS = [
   { path: '/help', h1: 'Help', phrases: ['On this page', 'Recording by text message', 'Using it by text only', 'MENU', 'JOIN', 'ask your rav'] },
   { path: '/privacy', h1: 'Privacy', phrases: ['On this page', 'What encryption does not do', 'Signing up by text', 'No mobile information is shared with third parties or affiliates for marketing or promotional purposes.'] },
