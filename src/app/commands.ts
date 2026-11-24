@@ -72,8 +72,10 @@ export function parseCommand(text: string): ParsedCommand {
   if (cleaned === '' ) return { kind: 'unknown' };
   if (cleaned === '?' || cleaned === 'help' || cleaned === 'info') return { kind: 'help' };
   const tokens = cleaned.split(/\s+/);
-  const code = CODES[tokens[0] as string];
-  if (!code) return { kind: 'unknown' };
+  // Only the listed digits are commands. (A plain lookup would also find the names every object has, such as "constructor".)
+  const first = tokens[0] as string;
+  if (!Object.hasOwn(CODES, first)) return { kind: 'unknown' };
+  const code = CODES[first] as (typeof CODES)[string];
   const rest = tokens.slice(1);
 
   if (code === 'status' || code === 'undo') {
