@@ -38,7 +38,8 @@ const HOME_PHRASES = [
   'Your mikvah calendar, worked out for you',
   'Tap any day to try it.',
   'Prefer texting?',
-  'period started today',
+  'period now',
+  'Hefsek from Sat Nov 28',
   'Text reminders, your way',
   'Signing in with Google',
 ];
