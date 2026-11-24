@@ -198,7 +198,7 @@ describe('the console state', () => {
     expect(r.json.ops).toEqual({ heartbeatAt: null, lastSentAt: null, lastSentConfirmed: false, lastFailure: null, lastReceivedAt: null, configSavedAt: null });
     expect(r.json.links).toEqual({ app: 'https://cal.example/app/', help: 'https://cal.example/help', optIn1: 'https://cal.example/sms-opt-in-1.png', optIn2: 'https://cal.example/sms-opt-in-2.png' });
     expect(r.json.checklist.map((i: any) => [i.key, i.status])).toEqual([
-      ['contact', 'todo'],
+      ['contact', 'done'], // the standing mailboxes are named by default
       ['account', 'todo'],
       ['telnyx_keys', 'todo'],
       ['test_text', 'todo'],
@@ -605,7 +605,7 @@ describe('invitation words and the text simulator', () => {
   });
 
   it('runs a complete sign-up by text from a made-up number, and sends nothing', async () => {
-    const op = await site({ sms: false });
+    const op = await site({ sms: false, config: { textSignup: true } });
     const say = async (text: string, from = '+17325550150') => {
       const r = await op.post('/api/admin/simulate', { from, text });
       expect(r.status, JSON.stringify(r.json)).toBe(200);

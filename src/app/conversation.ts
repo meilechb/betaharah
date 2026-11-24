@@ -33,7 +33,7 @@ import type { Deps, Env } from './env';
 import { compute, type Computed } from './household';
 import { addMessage, lastFour, MAX_PHONES, MAX_SEEN_TEXTS, smsReady, type HouseholdData, type Site } from './model';
 import { allowText, refundText } from './queue';
-import { allowInbound, HELP_REPLY, inboundKind, refreshHousehold, sendHouseholdText, type HouseholdSmsOutcome } from './service';
+import { allowInbound, HELP_REPLY, inboundKind, refreshHousehold, sendHouseholdText, START_REPLY, type HouseholdSmsOutcome } from './service';
 import { ValidationError } from './settings';
 import type { InboundMessage } from './sms';
 import {
@@ -66,6 +66,18 @@ export const STRANGER_REPLIES_PER_NUMBER = 1;
 export const STRANGER_REPLIES_PER_DAY = 50;
 /** At most this many accounts created by texting JOIN in one (UTC) day, for the whole site. */
 export const TEXT_SIGNUPS_PER_DAY = 25;
+
+/**
+ * HELP and START from a number without an account are answered with the
+ * wording filed for the toll-free verification (a carrier's check of the
+ * number texts these). They have their own caps, so that the one reply a
+ * day above does not swallow them: this many to one number in 24 hours,
+ */
+export const KEYWORD_REPLIES_PER_NUMBER = 4;
+/** and this many in one (UTC) day for the whole site. */
+export const KEYWORD_REPLIES_PER_DAY = 100;
+export const keywordKey = (hash: string): string => `kwn:${hash.slice(0, 24)}`;
+export const keywordDayKey = (now: number): string => `kw-day:${new Date(now).toISOString().slice(0, 10)}`;
 
 /** The counter of replies to one number without an account (keyed by its fingerprint; nothing readable). */
 export const strangerKey = (hash: string): string => `st:${hash.slice(0, 24)}`;
@@ -278,7 +290,10 @@ export async function receiveText(
     } else if (kind === 'start') {
       refresh = phone.optedOut;
       phone.optedOut = false;
-    } else if (kind === 'help') {
+      // The wording filed for the toll-free verification, in addition to the carrier's own confirmation.
+      texts = [{ text: START_REPLY, record: START_REPLY }];
+    } else if (kind === 'help' || kind === 'help_answered') {
+      // Sent also when Telnyx marks the keyword as already answered: the filed wording is this one.
       texts = [{ text: HELP_REPLY, record: HELP_REPLY }];
     } else if (kind === 'command' && phone.verifiedAt !== null && !phone.optedOut) {
       const out = converse({
@@ -395,17 +410,19 @@ export type StrangerOutcome = 'ignored' | 'replied' | 'created' | 'joined';
  *
  * Caps (each reply costs money): one reply per number in 24 hours, a daily
  * total of replies for the site, and a daily total of accounts created by
- * text. Past a cap nothing is sent. STOP, START and HELP already answered
- * by Telnyx get nothing from here; HELP otherwise gets the program's
- * description, within the same caps.
+ * text. Past a cap nothing is sent. STOP gets nothing from here (the
+ * carrier confirms it). HELP and START get the wording filed for the
+ * toll-free verification, within their own caps (keywordReply).
  */
 async function stranger(run: Run, message: ReceivedMessage, hash: string): Promise<{ outcome: StrangerOutcome; replies: SentText[]; householdId: string | null }> {
   const { env, site, now } = run;
   const nothing = { outcome: 'ignored' as const, replies: [], householdId: null };
   const kind = inboundKind(message);
-  if (kind !== 'command' && kind !== 'help') return nothing;
+  if (kind === 'stop') return nothing; // the carrier confirms it; there is no account to note it on
   if (!prefixAllowed(message.from, site.config)) return nothing;
   if (!run.simulate && !smsReady(site)) return nothing;
+  // HELP and START get the wording filed for the toll-free verification, whatever the sign-up settings are.
+  if (kind === 'help' || kind === 'help_answered' || kind === 'start') return keywordReply(run, message, hash, kind === 'start' ? START_REPLY : HELP_REPLY);
 
   const typed = joinWord(message.text);
   // A code from ADD: only for the household that made it, and the simulator's only for a test account (and the reverse).
@@ -420,7 +437,6 @@ async function stranger(run: Run, message: ReceivedMessage, hash: string): Promi
   }
 
   if (!site.config.textSignup || site.config.signup === 'closed') return nothing;
-  if (kind === 'help') return strangerReply(run, message.from, hash, [{ text: HELP_REPLY }]);
   const invite = typed !== null ? await findSignupInvite(env, typed, now) : null;
   const g = greet({ text: message.text, signup: site.config.signup, inviteValid: typed === null ? null : invite !== null, inviteKind: invite ? 'signup' : undefined });
   if (g.action === 'ignore' || g.action === 'join') return nothing;
@@ -432,6 +448,26 @@ async function stranger(run: Run, message: ReceivedMessage, hash: string): Promi
     return again.action === 'reply' ? strangerReply(run, message.from, hash, again.out) : nothing;
   }
   return createByText(run, message);
+}
+
+/**
+ * HELP or START from a number without an account: the filed reply, once per
+ * delivered text, within the keyword caps. Nothing about the number is kept
+ * but the counters, which are keyed by its fingerprint.
+ */
+async function keywordReply(run: Run, message: ReceivedMessage, hash: string, text: string): Promise<{ outcome: StrangerOutcome; replies: SentText[]; householdId: null }> {
+  const { env, now } = run;
+  const nothing = { outcome: 'ignored' as const, replies: [], householdId: null };
+  if (!run.simulate) {
+    // A text delivered twice is answered once.
+    const claimed = await env.DB.prepare('INSERT OR IGNORE INTO counters (key, value, expires_at) VALUES (?, 1, ?)').bind(`kw:${message.eventId.slice(0, 120)}`, now + DAY).run();
+    if (claimed.meta.changes === 0) return nothing;
+    if ((await bump(env.DB, keywordKey(hash), DAY, now)) > KEYWORD_REPLIES_PER_NUMBER) return nothing;
+    if ((await bump(env.DB, keywordDayKey(now), 2 * DAY, now)) > KEYWORD_REPLIES_PER_DAY) return nothing;
+  }
+  const texts: Planned[] = [{ text, record: text, allowed: true }];
+  const outcomes = await deliver(run, message.from, texts, run.simulate);
+  return outcomes[0]?.ok ? { outcome: 'replied', replies: [{ text }], householdId: null } : nothing;
 }
 
 /** One reply to a number without an account, within the caps. */

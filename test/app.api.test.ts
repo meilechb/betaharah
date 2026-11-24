@@ -11,7 +11,7 @@ import { DEMO_NUMBER, DEMO_SPOUSE } from '../src/app/demo';
 import { DEFAULT_SITE_CONFIG, type SiteConfig } from '../src/app/model';
 import type { QueuedReminder } from '../src/app/model';
 import { TABLES } from '../src/app/schema';
-import { codeText, HELP_REPLY, REMINDERS_ON_TEXT, TEST_TEXT, tick } from '../src/app/service';
+import { codeText, HELP_REPLY, REMINDERS_ON_TEXT, START_REPLY, TEST_TEXT, tick } from '../src/app/service';
 import { DEFAULT_APP_SETTINGS, PLACES } from '../src/app/settings';
 import { loadHousehold } from '../src/app/store';
 import { civilToAbs, localToInstant } from '../src/engine/civil';
@@ -239,11 +239,14 @@ describe('pages and request rules', () => {
       expect(r.res.headers.get('x-frame-options')).toBe('DENY');
       expect(r.res.headers.get('x-content-type-options')).toBe('nosniff');
       expect(r.res.headers.get('referrer-policy')).toBe('no-referrer');
-      expect(r.res.headers.get('x-robots-tag')).toBe('noindex');
+      expect(r.res.headers.get('x-robots-tag')).toBe(path === '/help' ? 'noindex' : null);
       expect(r.res.headers.get('content-security-policy')).toContain("default-src 'none'");
     }
     const privacy = (await new Client().get('/privacy')).text;
     expect(privacy).toContain('Mr. &lt;b&gt;Test&lt;/b&gt;');
+    expect(privacy).toContain('privacy@betaharah.com');
+    expect(privacy).toContain('Limited Use');
+    expect(privacy).toContain('https://www.googleapis.com/auth/calendar.app.created');
     expect(privacy).toContain('No mobile information is shared with third parties or affiliates for marketing or promotional purposes.');
     const terms = (await new Client().get('/terms')).text;
     for (const phrase of ['STOP', 'HELP', 'Message and data rates may apply', 'frequency varies']) expect(terms).toContain(phrase);
@@ -281,12 +284,13 @@ describe('pages and request rules', () => {
   });
 
   it('says what the site allows, and nothing about anyone', async () => {
-    await site({ config: { signup: 'invite', contactName: 'M', contactEmail: '' } });
+    await site({ config: { signup: 'invite', contactName: 'M', contactEmail: '', textSignup: true } });
     expect((await new Client().get('/api/public')).json).toEqual({
       configured: true,
       signedIn: false,
       signup: 'invite',
       sms: true,
+      google: false,
       textingNumber: OUR_NUMBER,
       prefixes: ['+1'],
       contactName: 'M',
@@ -298,13 +302,13 @@ describe('pages and request rules', () => {
     const op = await operator();
     await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, textSignup: false });
     expect((await new Client().get('/api/public')).json.textingNumber).toBeNull();
-    await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, signup: 'closed' });
+    await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, textSignup: true, signup: 'closed' });
     expect((await new Client().get('/api/public')).json.textingNumber).toBeNull();
     // a configuration saved before these settings existed still loads, with their defaults
     const { textSignup: _a, rcsEnabled: _b, ...older } = DEFAULT_SITE_CONFIG;
     const saved = await op.put('/api/admin/config', older);
     expect(saved.status).toBe(200);
-    expect(saved.json.config).toMatchObject({ textSignup: true, rcsEnabled: false });
+    expect(saved.json.config).toMatchObject({ textSignup: false, rcsEnabled: false });
   });
 });
 
@@ -329,7 +333,7 @@ describe('signing up and signing in with a phone number', () => {
 
     const s = await c.state();
     expect(s.phones).toEqual([{ number: HUSBAND, name: '', canUpdate: true, reminders: expect.any(Array), verified: true, texts: false, optedOut: false, me: true }]);
-    expect(s.account).toEqual({ number: HUSBAND, hasPassword: false, fresh: true, welcomed: false });
+    expect(s.account).toEqual({ number: HUSBAND, method: 'code', hasPassword: false, googleEmail: null, fresh: true, welcomed: false });
     expect(s.demo).toBe(false);
     expect(s.sms.simulated).toBe(false);
     expect(s.terms).toBe('en');
@@ -1287,12 +1291,12 @@ describe('text messages', () => {
 
     world.telnyx.blocked.delete(HUSBAND);
     await text(HUSBAND, 'START', 'ev-start', { autoresponseType: 'START' });
-    expect(world.telnyx.sent).toHaveLength(before); // the carrier confirms this too
+    expect(textsTo(HUSBAND).at(-1)).toBe(START_REPLY);
     s = await c.state();
     expect(s.phones[0]).toMatchObject({ optedOut: false, texts: true });
     expect(await waiting()).toBeGreaterThan(0);
     await text(HUSBAND, '9', 'ev-status-2');
-    expect(world.telnyx.sent).toHaveLength(before + 1);
+    expect(world.telnyx.sent).toHaveLength(before + 2);
   });
 
   it('the opt-out words work without Telnyx saying so, and for a phone that has not proved its number', async () => {
@@ -1300,17 +1304,34 @@ describe('text messages', () => {
     expect((await c.state()).phones[0].optedOut).toBe(true);
     await text(HUSBAND, 'unstop', 'ev2');
     expect((await c.state()).phones[0].optedOut).toBe(false);
-    expect(replies()).toEqual([]);
+    expect(replies()).toEqual([START_REPLY]);
   });
 
   it('HELP gets the program\'s description, once', async () => {
     await text(HUSBAND, 'HELP', 'ev1');
     expect(replies()).toEqual([HELP_REPLY]);
-    // when Telnyx has already answered, the site does not answer again
+    // the filed wording is sent even when Telnyx marks the keyword as already answered
     await text(HUSBAND, 'HELP', 'ev2', { autoresponseType: 'HELP' });
-    expect(replies()).toEqual([HELP_REPLY]);
+    expect(replies()).toEqual([HELP_REPLY, HELP_REPLY]);
     await text(HUSBAND, '?', 'ev3');
     expect(replies().at(-1)).toMatch(/^1 flow began, 2 hefsek done/);
+  });
+
+  it('HELP and START from a number with no account get the filed replies, and the number is not stored', async () => {
+    const stranger = '+17324440177'; // not one of the numbers reserved for fiction, which are never answered
+    expect(await text(stranger, 'HELP', 'kw-help')).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY]);
+    expect(await text(stranger, 'START', 'kw-start')).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
+    expect(await text(stranger, 'STOP', 'kw-stop')).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
+    expect(await text(stranger, '1', 'kw-command')).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
+    expect(await count('phones')).toBe(1);
+    expect(await count('households')).toBe(1);
+    const again = await text(stranger, 'HELP', 'kw-help');
+    expect(again).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
   });
 
   it('when the carrier says a number has opted out, the site notes it', async () => {
@@ -1894,6 +1915,7 @@ describe('the operator\'s console', () => {
     expect(r.json.urls).toEqual({
       webhook: 'https://cal.example/webhooks/telnyx',
       redirect: 'https://cal.example/api/google/callback',
+      signInRedirect: 'https://cal.example/api/auth/google/callback',
       home: 'https://cal.example/',
       privacy: 'https://cal.example/privacy',
       terms: 'https://cal.example/terms',
@@ -1903,6 +1925,30 @@ describe('the operator\'s console', () => {
     for (const hidden of ['7324440101', '7324440102', 'Private name', 'a private note', 'Lakewood', 'telnyx-key', 'client-secret', 'Tehorah']) {
       expect(r.text.includes(hidden), hidden).toBe(false);
     }
+  });
+
+  it('opens one account: its phone numbers, the Google email and its recent texts, and not its dates', async () => {
+    const op = await site({ google: true });
+    const member = await account(HUSBAND);
+    await addPhone(member, WIFE);
+    await member.put('/api/phones', { number: WIFE, name: 'Private name', canUpdate: true, reminders: [], texts: false });
+    await member.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day', note: 'a private note' });
+    await text(HUSBAND, '9', 'ev1');
+    const id = (await op.get('/api/admin/state')).json.households[0].id;
+    const r = await op.get(`/api/admin/accounts/${id}`);
+    expect(r.status).toBe(200);
+    expect(r.json.account).toMatchObject({ id, test: false, googleEmail: null, googleName: null });
+    expect(r.json.account.phones).toEqual([
+      { number: HUSBAND, verified: true, texts: false, optedOut: false },
+      { number: WIFE, verified: true, texts: false, optedOut: false },
+    ]);
+    expect(r.json.account.messages.some((m: { body: string }) => m.body === '9')).toBe(true);
+    expect(r.json.account.messages.length).toBeLessThanOrEqual(15);
+    for (const hidden of ['Private name', 'a private note', 'Lakewood', 'telnyx-key', 'client-secret', '2026-11-22']) expect(r.text.includes(hidden), hidden).toBe(false);
+    // only for the operator, and only an account that exists
+    expect((await member.get(`/api/admin/accounts/${id}`)).status).toBe(401);
+    expect((await new Client().get(`/api/admin/accounts/${id}`)).status).toBe(401);
+    expect((await op.get('/api/admin/accounts/no-such-account')).status).toBe(404);
   });
 
   it('checks the settings it is given, and never gives a key back', async () => {
@@ -1927,6 +1973,7 @@ describe('the operator\'s console', () => {
     expect(textsTo(HUSBAND)).toEqual([TEST_TEXT]);
     world.telnyx.failNext = 1;
     expect((await op.post('/api/admin/test-text', { to: HUSBAND })).status).toBe(502);
+    expect((await op.get('/api/admin/state')).json.usage.textsThisMonth).toBe(1);
 
     const member = await account(HUSBAND);
     world.clock.now += HOUR;
@@ -1977,7 +2024,7 @@ describe('the test account', () => {
 
     const s = await op.state();
     expect(s.demo).toBe(true);
-    expect(s.account).toEqual({ number: DEMO_NUMBER, hasPassword: false, fresh: true, welcomed: true });
+    expect(s.account).toEqual({ number: DEMO_NUMBER, method: 'code', hasPassword: false, googleEmail: null, fresh: true, welcomed: true });
     expect(s.phones.map((p: any) => [p.number, p.name, p.verified, p.texts, p.canUpdate, p.me])).toEqual([
       [DEMO_NUMBER, 'Test phone', true, true, true, true],
       [DEMO_SPOUSE, 'Spouse (example)', true, true, true, false],
@@ -2072,7 +2119,7 @@ describe('the test account', () => {
     expect(stopped.json.reply).toBeNull();
     expect(stopped.json.state.phones[0]).toMatchObject({ number: DEMO_NUMBER, optedOut: true });
     expect(await demoText(c, '9')).toBeNull(); // not acted on while opted out
-    expect(await demoText(c, 'START')).toBeNull();
+    expect(await demoText(c, 'START')).toBe(START_REPLY);
     expect((await c.state()).phones[0].optedOut).toBe(false);
 
     // commands change the account, and the reply comes with the new picture
@@ -2413,5 +2460,91 @@ describe('the month calendar on the dashboard', () => {
     // in the household's form of the terms
     expect((await c.put('/api/app', appSettings({ terms: 'he', calendar: { ...DEFAULT_APP_SETTINGS.calendar, style: 'discreet' } }))).status).toBe(200);
     expect((await c.state()).grid.events.find((e: any) => e.kind === 'flow').title).toBe('ראייה (night)');
+  });
+});
+
+describe('Sign in with Google', () => {
+  async function googleSignIn(client = new Client(), expectedLocation = '/app/'): Promise<Client> {
+    const start = await client.get('/api/auth/google/start');
+    expect(start.status).toBe(302);
+    const u = new URL(start.res.headers.get('location') as string);
+    expect(u.searchParams.get('scope')).toBe('openid email profile');
+    expect(u.searchParams.get('access_type')).toBeNull();
+    expect(u.searchParams.get('redirect_uri')).toBe('https://cal.example/api/auth/google/callback');
+    const state = u.searchParams.get('state') as string;
+    const back = await client.get(`/api/auth/google/callback?code=login-code&state=${encodeURIComponent(state)}`);
+    expect(back.status).toBe(302);
+    expect(back.res.headers.get('location')).toBe(expectedLocation);
+    expect(client.cookies.has('bt_session')).toBe(true);
+    return client;
+  }
+
+  it('creates an account from a verified Google email and signs in again as the same account', async () => {
+    await site({ sms: false, google: true });
+    expect((await new Client().get('/api/public')).json.google).toBe(true);
+    const first = await googleSignIn();
+    const state = await first.state();
+    expect(state.account).toEqual({ number: null, method: 'google', hasPassword: false, googleEmail: 'ada@example.com', fresh: true, welcomed: false });
+    expect(state.phones).toEqual([]);
+    const id = (await testDb.db.prepare('SELECT id FROM households').first<{ id: string }>())!.id;
+    first.cookies.clear();
+    const again = await googleSignIn(new Client('203.0.113.50'));
+    expect((await again.state()).account.googleEmail).toBe('ada@example.com');
+    expect(await count('households')).toBe(1);
+    expect((await loadHousehold(env, id))!.data.googleLogin).toEqual({ email: 'ada@example.com', name: 'Ada' });
+    const stored = await testDb.db.prepare('SELECT hash FROM google_ids').all<{ hash: string }>();
+    expect(JSON.stringify(stored)).not.toContain('ada@example.com');
+    expect(JSON.stringify(stored)).not.toContain('google-sub-1');
+    // the email is inside the encrypted document, not readable in the database
+    expect((await dump()).includes('ada@example.com')).toBe(false);
+  });
+
+  it('does not ask for a calendar refresh token, and a closed sign-up refuses a new Google account', async () => {
+    await site({ sms: false, google: true, config: { signup: 'closed' } });
+    const start = await new Client().get('/api/auth/google/start');
+    const state = new URL(start.res.headers.get('location') as string).searchParams.get('state') as string;
+    const back = await new Client().get(`/api/auth/google/callback?code=login-code&state=${encodeURIComponent(state)}`);
+    expect(back.res.headers.get('location')).toContain('google_error=');
+    expect(await count('households')).toBe(0);
+  });
+
+  it('is not offered until the operator has saved the Google keys', async () => {
+    await site({ sms: false });
+    expect((await new Client().get('/api/public')).json.google).toBe(false);
+    const start = await new Client().get('/api/auth/google/start');
+    expect(start.status).toBe(302);
+    expect(start.res.headers.get('location')).toContain('/app/?google_error=');
+  });
+
+  it('a phone account can add Google sign-in; then either way opens the same account, and the last phone may be removed', async () => {
+    await site({ google: true });
+    const member = await account(HUSBAND);
+    await member.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    await googleSignIn(member, '/app/?google=signed-in#settings');
+    expect(await count('households')).toBe(1);
+    const s = await member.state();
+    expect(s.account).toMatchObject({ method: 'google', googleEmail: 'ada@example.com', number: null });
+    expect(s.phones.map((p: any) => p.number)).toEqual([HUSBAND]);
+    expect(s.entries).toHaveLength(1);
+    // from another browser, Google opens the same account
+    const other = await googleSignIn(new Client('203.0.113.51'));
+    expect((await other.state()).entries).toHaveLength(1);
+    // a password belongs to a phone number, so a Google session cannot set one
+    expect((await other.put('/api/password', { password: 'a long enough password' })).status).toBe(400);
+    // Google is another way in, so the only phone may now be removed
+    const removed = await other.post('/api/phones/remove', { number: HUSBAND });
+    expect(removed.status, JSON.stringify(removed.json)).toBe(200);
+    expect((await other.state()).phones).toEqual([]);
+    expect(await count('phones')).toBe(0);
+  });
+
+  it('deleting the account removes the Google sign-in with it', async () => {
+    await site({ sms: false, google: true });
+    const c = await googleSignIn();
+    expect(await count('google_ids')).toBe(1);
+    const gone = await c.post('/api/account/delete', { confirm: 'DELETE' });
+    expect(gone.status, JSON.stringify(gone.json)).toBe(200);
+    expect(await count('households')).toBe(0);
+    expect(await count('google_ids')).toBe(0);
   });
 });

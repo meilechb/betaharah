@@ -284,6 +284,28 @@ export function registerAdminRoutes(app: AdminApp, deps: Deps): void {
     return c.json(await listAccounts(c.env, deps.now(), { sort, query }));
   });
 
+  /**
+   * One account, opened by the operator: its phone numbers, the Google email
+   * used to sign in, and its recent texts (the Privacy page says the console
+   * shows these). Not the stored dates, customs or settings.
+   */
+  app.get('/api/admin/accounts/:id', async c => {
+    const id = c.req.param('id');
+    const household = /^[A-Za-z0-9_-]{1,64}$/.test(id) ? await loadHousehold(c.env, id).catch(() => null) : null;
+    if (!household) return c.json({ error: 'This account no longer exists, or it cannot be read.' }, 404);
+    const d = household.data;
+    return c.json({
+      account: {
+        id,
+        test: d.demo,
+        phones: d.phones.map(p => ({ number: p.number, verified: p.verifiedAt !== null, texts: p.consentAt !== null, optedOut: p.optedOut })),
+        googleEmail: d.googleLogin?.email ?? null,
+        googleName: d.googleLogin?.name ?? null,
+        messages: d.messages.slice(0, 15),
+      },
+    });
+  });
+
   /** Counts per day for the last ?days= days (7 to 90, default 30). */
   app.get('/api/admin/history', async c => {
     const asked = Number(c.req.query('days') ?? 30);

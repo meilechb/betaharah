@@ -169,6 +169,7 @@ function parseHousehold(raw: unknown): HouseholdData {
     welcomedAt: typeof d.welcomedAt === 'number' ? d.welcomedAt : null,
     demo: d.demo === true,
     chat: parseChats(d.chat),
+    googleLogin: parseGoogleLogin(d.googleLogin),
   };
 }
 
@@ -181,6 +182,13 @@ function parseChats(raw: unknown): Record<string, ChatState> | null {
     if (chat) out[number] = chat;
   }
   return Object.keys(out).length > 0 ? out : null;
+}
+
+function parseGoogleLogin(input: unknown): HouseholdData['googleLogin'] {
+  if (typeof input !== 'object' || input === null) return null;
+  const o = input as { email?: unknown; name?: unknown };
+  if (typeof o.email !== 'string' || !o.email.includes('@')) return null;
+  return { email: o.email.slice(0, 120), name: typeof o.name === 'string' ? o.name.slice(0, 80) : '' };
 }
 
 async function linkHash(env: Env, data: HouseholdData): Promise<string | null> {
@@ -293,6 +301,7 @@ export async function deleteHousehold(db: D1Database, id: string): Promise<void>
     db.prepare('DELETE FROM join_codes WHERE household_id = ?').bind(id),
     db.prepare('DELETE FROM link_tokens WHERE household_id = ?').bind(id),
     db.prepare('DELETE FROM phones WHERE household_id = ?').bind(id),
+    db.prepare('DELETE FROM google_ids WHERE household_id = ?').bind(id),
     db.prepare('DELETE FROM households WHERE id = ?').bind(id),
   ]);
 }
@@ -334,6 +343,31 @@ export async function setPassword(db: D1Database, hash: string, password: string
 /** Ends every session of this phone. */
 export async function endSessions(db: D1Database, hash: string): Promise<void> {
   await db.prepare('UPDATE phones SET session_epoch = session_epoch + 1 WHERE hash = ?').bind(hash).run();
+}
+
+// ---------- Google sign-in identities ----------
+
+export interface GoogleRow {
+  hash: string;
+  household_id: string;
+  session_epoch: number;
+  created_at: number;
+}
+
+export const googleHash = (env: Env, sub: string): Promise<string> => fingerprint(env.ENCRYPTION_KEY, 'google-sub', sub);
+
+export async function getGoogleId(db: D1Database, hash: string): Promise<GoogleRow | null> {
+  return db.prepare('SELECT hash, household_id, session_epoch, created_at FROM google_ids WHERE hash = ?').bind(hash).first<GoogleRow>();
+}
+
+/** Registers a Google account for a household. Returns false if it already belongs to an account. */
+export async function insertGoogleId(db: D1Database, hash: string, householdId: string, now: number): Promise<boolean> {
+  const result = await db.prepare('INSERT OR IGNORE INTO google_ids (hash, household_id, created_at) VALUES (?, ?, ?)').bind(hash, householdId, now).run();
+  return result.meta.changes > 0;
+}
+
+export async function endGoogleSessions(db: D1Database, hash: string): Promise<void> {
+  await db.prepare('UPDATE google_ids SET session_epoch = session_epoch + 1 WHERE hash = ?').bind(hash).run();
 }
 
 // ---------- codes ----------

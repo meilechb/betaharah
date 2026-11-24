@@ -16,20 +16,25 @@ import {
   JOIN_FULL,
   simulateText,
   STRANGER_REPLIES_PER_DAY,
+  KEYWORD_REPLIES_PER_NUMBER,
   STRANGER_REPLIES_PER_NUMBER,
   TEXT_SIGNUPS_PER_DAY,
 } from '../src/app/conversation';
 import type { Env } from '../src/app/env';
 import { createApp } from '../src/app/index';
-import { DEFAULT_SITE_CONFIG, type HouseholdData, type SiteConfig } from '../src/app/model';
+import { DEFAULT_SITE_CONFIG as SHIPPED_SITE_CONFIG, type HouseholdData, type SiteConfig } from '../src/app/model';
 import { TABLES } from '../src/app/schema';
-import { HELP_REPLY, tick } from '../src/app/service';
+import { HELP_REPLY, START_REPLY, tick } from '../src/app/service';
 import { DEFAULT_APP_SETTINGS, PLACES } from '../src/app/settings';
 import { createInvitationWord, getPhone, loadHousehold, loadSite, phoneHash } from '../src/app/store';
 import { nearestPostal } from '../src/app/zip';
 import { localToInstant } from '../src/engine/civil';
 import { BASIC } from './helpers';
 import { makeEnv, makeWorld, MESSAGING_PROFILE, RCS_AGENT, startDb, TEST_PASSWORD, type TestDb, type World } from './fakes';
+
+// Sign-up by text ships switched off (the toll-free filing describes opting in on the website);
+// these tests are about it, so they run with it on unless a test turns it off.
+const DEFAULT_SITE_CONFIG: SiteConfig = { ...SHIPPED_SITE_CONFIG, textSignup: true };
 
 const TZ = 'America/New_York';
 const at = (m: number, d: number, hh: number, mi = 0): number => localToInstant({ y: 2026, m, d, hh, mi, ss: 0 }, TZ);
@@ -471,18 +476,21 @@ describe('sign-up by text, and its limits', () => {
     expect(await sms(WIFE, 'JOIN purim5787')).toEqual([T.SETUP_START]);
   });
 
-  it('closed: nothing is sent to anyone without an account, whatever they text', async () => {
+  it('closed: nothing is sent to anyone without an account, whatever they text, except the filed reply to HELP', async () => {
     await site({ config: { signup: 'closed' } });
     await createInvitationWord(env, { word: 'CLOSED01', now: START });
-    for (const t of ['hi', 'JOIN', 'JOIN CLOSED01', 'HELP', '9']) expect(await sms(HUSBAND, t), t).toEqual([]);
+    for (const t of ['hi', 'JOIN', 'JOIN CLOSED01', '9']) expect(await sms(HUSBAND, t), t).toEqual([]);
+    expect(await sms(HUSBAND, 'HELP')).toEqual([HELP_REPLY]);
     expect(await count('households')).toBe(0);
   });
 
-  it('sign-up by text switched off: nothing is sent and no account is made, in every mode', async () => {
+  it('sign-up by text switched off (as shipped): no account is made and nothing is sent but the filed reply to HELP, in every mode', async () => {
+    expect(SHIPPED_SITE_CONFIG.textSignup).toBe(false);
     for (const signup of ['open', 'invite'] as const) {
       await testDb.reset();
       await site({ config: { signup, textSignup: false } });
-      for (const t of ['hi', 'JOIN', 'HELP']) expect(await sms(HUSBAND, t), `${signup} ${t}`).toEqual([]);
+      for (const t of ['hi', 'JOIN']) expect(await sms(HUSBAND, t), `${signup} ${t}`).toEqual([]);
+      expect(await sms(HUSBAND, 'HELP'), signup).toEqual([HELP_REPLY]);
       expect(await count('households')).toBe(0);
     }
   });
@@ -496,12 +504,23 @@ describe('sign-up by text, and its limits', () => {
     expect(world.telnyx.sent).toEqual([]);
   });
 
-  it('HELP from a number without an account gets the description, within the same limits; STOP gets nothing from the site', async () => {
+  it('HELP and START from a number without an account get the filed replies, within their own limits; STOP gets nothing from the site', async () => {
     await site();
     expect(await sms(HUSBAND, 'STOP')).toEqual([]);
-    expect(await sms(HUSBAND, 'HELP', { autoresponseType: 'HELP' })).toEqual([]);
-    expect(await sms(HUSBAND, 'HELP')).toEqual([HELP_REPLY]);
+    // the filed wording is sent also when Telnyx marks the keyword as already answered
+    expect(await sms(HUSBAND, 'HELP', { autoresponseType: 'HELP' })).toEqual([HELP_REPLY]);
+    expect(await sms(HUSBAND, 'HELP', { eventId: 'help-twice' })).toEqual([HELP_REPLY]);
+    expect(await sms(HUSBAND, 'HELP', { eventId: 'help-twice' })).toEqual([]); // a repeated delivery
+    expect(await sms(HUSBAND, 'START')).toEqual([START_REPLY]);
+    // they do not use up the one reply a day to a number without an account
+    expect(await sms(HUSBAND, 'hello')).toHaveLength(1);
     expect(await sms(HUSBAND, 'hello')).toEqual([]);
+    // their own limit for one number
+    for (let i = 3; i < KEYWORD_REPLIES_PER_NUMBER; i++) expect(await sms(HUSBAND, 'HELP')).toEqual([HELP_REPLY]);
+    expect(await sms(HUSBAND, 'HELP')).toEqual([]);
+    expect(await sms(HUSBAND, 'START')).toEqual([]);
+    expect(await count('households')).toBe(0);
+    expect(await count('phones')).toBe(0);
   });
 
   it('a JOIN delivered twice creates one account and answers once', async () => {
@@ -690,21 +709,21 @@ describe('one account never reaches another by text', () => {
 });
 
 describe('carrier words in the middle of a conversation', () => {
-  it('behave exactly as before, and the question stays open', async () => {
+  it('get the filed replies, and the question stays open', async () => {
     await site();
     await textAccount(WIFE);
     expect((await sms(WIFE, 'CUSTOMS ALL'))[0]).toMatch(/^Custom 1 of 12: /);
     expect(await sms(WIFE, 'HELP')).toEqual([HELP_REPLY]);
-    expect(await sms(WIFE, 'HELP', { autoresponseType: 'HELP' })).toEqual([]);
+    expect(await sms(WIFE, 'HELP', { autoresponseType: 'HELP' })).toEqual([HELP_REPLY]);
     expect((await sms(WIFE, 'A'))[0]).toMatch(/^Kept: wait before hefsek: Five days\. Custom 2 of 12: /);
     expect(await sms(WIFE, 'STOP', { autoresponseType: 'STOP' })).toEqual([]);
     expect((await householdOf(WIFE))!.data.phones[0]!.optedOut).toBe(true);
     expect(await sms(WIFE, 'A')).toEqual([]); // not acted on while opted out
-    expect(await sms(WIFE, 'START', { autoresponseType: 'START' })).toEqual([]);
+    expect(await sms(WIFE, 'START', { autoresponseType: 'START' })).toEqual([START_REPLY]);
     expect((await householdOf(WIFE))!.data.phones[0]!.optedOut).toBe(false);
     expect((await sms(WIFE, 'A'))[0]).toMatch(/^Saved: onah beinonit day: Day 30 only\. Custom 3 of 12: /);
     expect(await sms(WIFE, 'unsubscribe')).toEqual([]);
-    expect(await sms(WIFE, 'unstop')).toEqual([]);
+    expect(await sms(WIFE, 'unstop')).toEqual([START_REPLY]);
     expect((await sms(WIFE, 'KEEP'))[0]).toMatch(/^Kept: onah beinonit length: /);
   });
 
@@ -721,7 +740,8 @@ describe('carrier words in the middle of a conversation', () => {
 
 describe('what can be read in the database', () => {
   it('no conversation, code, word, link, number or counter of a stranger is readable', async () => {
-    await site({ config: { signup: 'invite' } });
+    // "Betaharah" stands for the words of a text below, so the site's public contact name is another word here
+    await site({ config: { signup: 'invite', contactName: 'The Operator' } });
     const word = 'Tishrei87';
     await createInvitationWord(env, { word, now: START });
     await sms(HUSBAND, 'hello'); // a stranger: counters only

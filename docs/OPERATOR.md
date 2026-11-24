@@ -15,10 +15,11 @@ For the person who operates betaharah.com.
 ## The operator's console
 
 Open **https://betaharah.com/admin/** and sign in with `DASHBOARD_PASSWORD`
-(a session lasts 12 hours). It shows totals and the site's own settings,
-never any account's data, and it carries you through the setup. Each
-section is its own page (a side list on a computer, a menu at the top on a
-phone):
+(a session lasts 12 hours). It shows totals and the site's own settings, and
+it carries you through the setup. Under Accounts, opening one account lists
+its phone numbers, the Google email used to sign in, and its recent texts;
+it does not list the stored dates. Each section is its own page (a side list
+on a computer, a menu at the top on a phone):
 
 - **Overview**: the main numbers with their trend, the setup steps in
   order, each with its status (done, needs you, waiting on someone else)
@@ -186,21 +187,33 @@ proprietor"). Choose the closest option where the form has a list.
 |---|---|
 | Website | `https://betaharah.com` |
 | Use case | Account notifications (with two-factor sign-in codes) |
-| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign up either by texting the keyword JOIN to the number, or on the website with their mobile number and a one-time code sent by SMS. Users text short commands to record calendar dates, set up and manage their account, and receive a reply to each text. Users who turn on reminders (by texting REMINDERS ON, or in their account settings) receive reminders about dates in their own calendar. Nothing is ever sent to a number that has not texted the service or entered itself on the website. No marketing or promotional messages are sent. |
+| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign in with their mobile number and a one-time code sent by SMS. Users may text single-digit commands to record a calendar date and receive a confirmation reply. Users who turn on reminders in their account settings receive reminders about dates in their own calendar. No marketing or promotional messages are sent. |
 | Monthly volume | The lowest option offered |
-| How users opt in | (1) By text: the user texts the keyword JOIN to the number (the number and the keyword are published on https://betaharah.com/help). Any first text from a new number gets one reply describing the program, with message frequency, rates, STOP and HELP, and the terms link (sample message 4); JOIN then creates the account and the reply starts setup (sample message 5). A second phone joins an account only by texting JOIN and a code from its own phone. (2) Sign-in codes on the website: the user enters their own mobile number on https://betaharah.com/app/ and presses "Text me a code"; the page states that a code will be sent by text and that message and data rates may apply. (3) Reminders: off by default, also after JOIN. The user texts REMINDERS ON, and the reply confirms the consent with the full wording (sample message 6); or a signed-in user turns on "Send text reminders to this phone" under Settings for a phone whose number was verified, where the page shows the consent wording before saving, and a confirmation text is then sent. Consent is not a condition of any purchase; the service is free. |
+| How users opt in | (1) Sign-in codes: the user enters their own mobile number on https://betaharah.com/app/ and presses "Text me a code"; the page states that a code will be sent by text and that message and data rates may apply. (2) Reminders: off by default. A signed-in user turns on "Send text reminders to this phone" under Settings for a phone whose number was verified by code; the page shows the consent wording (program name, message frequency varies, message and data rates may apply, reply STOP to stop, HELP for help) before saving. A confirmation text is then sent. Consent is not a condition of any purchase; the service is free. |
 | Opt-in screenshots | `https://betaharah.com/sms-opt-in-1.png` (sign-in) and `https://betaharah.com/sms-opt-in-2.png` (reminders) |
 | Privacy policy | `https://betaharah.com/privacy` |
 | Terms | `https://betaharah.com/terms` |
 | Sample message 1 | `Betaharah code: 123456. It expires in 10 minutes. Do not share it.` |
-| Sample message 2 | `Betaharah: reminders are on for this number. Text ? for the list of commands. Msg&data rates may apply. Reply STOP to stop, HELP for help.` |
+| Sample message 2 | `Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.` |
 | Sample message 3 | `Mikvah night: Thu Dec 3, after 5:16 PM. Reply 4 after immersing.` |
+| Opt-in confirmation message | Sample message 2 |
+| HELP reply | `Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.` |
+
+The answers above describe opting in on the website, and they are what was
+filed. Sign-up by text (texting `JOIN`) is a second way to opt in and is
+**off** until you turn it on under Settings in the console. Before turning it
+on, amend the verification with Telnyx to add the keyword opt-in and these
+messages:
+
+| Field | Addition for sign-up by text |
+| --- | --- |
+| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign up either by texting the keyword JOIN to the number, or on the website with their mobile number and a one-time code sent by SMS. Users text short commands to record calendar dates, set up and manage their account, and receive a reply to each text. Users who turn on reminders (by texting REMINDERS ON, or in their account settings) receive reminders about dates in their own calendar. Nothing is ever sent to a number that has not texted the service or entered itself on the website. No marketing or promotional messages are sent. |
+| How users opt in | (1) By text: the user texts the keyword JOIN to the number (the number and the keyword are published on https://betaharah.com/help). Any first text from a new number gets one reply describing the program, with message frequency, rates, STOP and HELP, and the terms link (sample message 4); JOIN then creates the account and the reply starts setup (sample message 5). A second phone joins an account only by texting JOIN and a code from its own phone. (2) Sign-in codes on the website: the user enters their own mobile number on https://betaharah.com/app/ and presses "Text me a code"; the page states that a code will be sent by text and that message and data rates may apply. (3) Reminders: off by default, also after JOIN. The user texts REMINDERS ON, and the reply confirms the consent with the full wording (sample message 6); or a signed-in user turns on "Send text reminders to this phone" under Settings for a phone whose number was verified, where the page shows the consent wording before saving, and a confirmation text is then sent. Consent is not a condition of any purchase; the service is free. |
 | Sample message 4 (first reply to a new number) | `Betaharah is a mikvah calendar by text message. Reply JOIN to sign up. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help. Terms: betaharah.com/terms` |
 | Sample message 5 (reply to JOIN) | `Welcome to Betaharah. This phone is signed up. Step 1 of 3: reply with your ZIP code (in Canada, your postal code, e.g. H3W 1A1). It sets the times of sunset.` |
 | Sample message 6 (reply to REMINDERS ON) | `Reminders are on for this phone (ending 0101). This phone agrees to receive reminder texts from Betaharah. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help.` |
 | Opt-in keyword | JOIN |
-| Opt-in confirmation message | Sample message 5 for joining by text (sample message 6 when reminders are turned on by text); sample message 2 when reminders are turned on on the website |
-| HELP reply | `Betaharah: mikvah calendar reminders and replies. Text MENU for the commands. Help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.` |
+| Opt-in confirmation message | Sample message 5 for joining by text (sample message 6 when reminders are turned on by text) |
 | STOP | Handled by the carrier on toll-free numbers; the site also records it and sends nothing further to that phone until it texts START. |
 
 If the reviewer asks for changes, the wording that users see is in
@@ -214,19 +227,12 @@ works with Google Calendar too (Google refreshes subscribed calendars on its
 own schedule, up to about 12 hours). With it, an account's Google calendar
 is updated within about a minute.
 
-In [Google Cloud Console](https://console.cloud.google.com/):
-
-1. Create a project and enable the **Google Calendar API**.
-2. Set up the consent screen: user type **External**; app name Betaharah;
-   home page `https://betaharah.com`; privacy policy
-   `https://betaharah.com/privacy`; terms `https://betaharah.com/terms`.
-   Add the one scope the site uses,
-   `https://www.googleapis.com/auth/calendar.app.created`.
-3. Set the publishing status to **In production**. In "Testing" status
-   Google ends each person's access after seven days.
-4. Create an OAuth client of type **Web application** with the redirect
-   address the console shows (`https://betaharah.com/api/google/callback`).
-5. Paste the client ID and client secret into the console.
+The exact scopes and the two redirect URIs are in
+[GOOGLE_SETUP.md](GOOGLE_SETUP.md). In short: one Web client, redirect
+`https://betaharah.com/api/auth/google/callback` for sign-in (`openid email
+profile`) and `https://betaharah.com/api/google/callback` for the calendar
+(`https://www.googleapis.com/auth/calendar.app.created`). Paste the client
+ID and secret into the console. Publishing status **In production**.
 
 Until Google has verified the app, people see a "Google hasn't verified this
 app" page when they connect, and can continue past it; Google also limits an
@@ -263,11 +269,10 @@ and privacy policy above and proof that you own the domain.
 
 ## What you can and cannot see
 
-The console lists accounts by an internal id, with dates and the number of
-phones. It cannot show whose they are. The database holds each account's
-data encrypted; the key is the Worker's `ENCRYPTION_KEY` secret. Because you
-control the Cloudflare account you have the technical means to decrypt; the
-Privacy page tells users so.
+The console lists each account's phone numbers, Google email, and recent
+texts. The dates themselves stay in the encrypted record and are not listed.
+The key is the Worker's `ENCRYPTION_KEY` secret. The Privacy page tells
+users what the console shows.
 
 Worker logs record errors only (the kind of error and where in the code),
 not the addresses requested and not any account's data.

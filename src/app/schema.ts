@@ -39,6 +39,14 @@ const STATEMENTS = [
     created_at INTEGER NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS phones_household ON phones (household_id)`,
+  // One row per Google account that can sign in. hash is a fingerprint of Google's subject id.
+  `CREATE TABLE IF NOT EXISTS google_ids (
+    hash TEXT PRIMARY KEY,
+    household_id TEXT NOT NULL,
+    session_epoch INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS google_ids_household ON google_ids (household_id)`,
   // A sign-in or add-a-phone code that was texted and is waiting to be entered.
   `CREATE TABLE IF NOT EXISTS codes (
     phone_hash TEXT PRIMARY KEY,
@@ -108,4 +116,4 @@ export async function ensureSchema(db: D1Database): Promise<void> {
   ready.add(db);
 }
 
-export const TABLES = ['households', 'phones', 'codes', 'invites', 'join_codes', 'link_tokens', 'counters', 'site'] as const;
+export const TABLES = ['households', 'phones', 'google_ids', 'codes', 'invites', 'join_codes', 'link_tokens', 'counters', 'site'] as const;

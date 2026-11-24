@@ -13,13 +13,13 @@ It is a calculation aid. It does not rule on anything; see
 [docs/HALACHA.md](docs/HALACHA.md) for exactly what it calculates and what it
 leaves to a rav.
 
-If you run the site, read [docs/OPERATOR.md](docs/OPERATOR.md).
+If you run the site, read [docs/OPERATOR.md](docs/OPERATOR.md). The Google Cloud settings are in [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md).
 
 ## How people use it
 
 | Step | What happens |
 |---|---|
-| Sign up, and sign in each time | Text `JOIN` to the site's number and answer the setup questions by text, with no website at all; or enter a mobile number on the website, get a six-digit code by text, type it in. A password can be set as well, under Settings. Everything (location by ZIP code, customs, phones, reminders, calendar link, deleting the account) can be done by text: [docs/TEXTING.md](docs/TEXTING.md). |
+| Sign up, and sign in each time | Sign in with Google (when the operator has turned it on); or text `JOIN` to the site's number and answer the setup questions by text, with no website at all; or enter a mobile number on the website, get a six-digit code by text, type it in. A password can be set as well, under Settings. Everything (location by ZIP code, customs, phones, reminders, calendar link, deleting the account) can be done by text: [docs/TEXTING.md](docs/TEXTING.md). |
 | Location and customs | Sunrise, sunset and nightfall are calculated for the place chosen. Every point on which customs differ is a setting; until they are saved the stricter option of each is used. |
 | Recording | On the website, or by text: `1` flow, `2` hefsek, `3` count broken, `4` immersed, `5` stain, `9` status, `0` undo, `?` commands, `MENU` for every other word. After `1`, `3`, `5`: `day`, `night`, `yesterday night`, or a time such as `6:40am`. After `2`, `4`: `yesterday`. Past dates: `1 11/22 night`, `2 11/26`, `4 12/3`. By SMS, or by RCS with tap-to-reply buttons once the RCS agent is approved. |
 | Husband and wife | A second phone is added on the website with a code texted to it, or by text: a phone on the account texts `ADD` and gets a code, and the other phone texts `JOIN` and that code. Up to four phones share one account; each chooses its own reminders. |
@@ -75,7 +75,7 @@ money.
   calendar link, never from anything typed. The tests under `one account
   never sees another` check this, including copying one account's stored
   data over another's (it fails to decrypt).
-- **The operator's console shows no account's data**, only totals.
+- **The operator's console** lists each account's phone numbers, the Google email used to sign in, and recent texts, so the service can be supported. It does not list the stored dates. The Privacy page says so.
 - **What this does not do:** the server can decrypt, because it has to read
   the dates to calculate and to send reminders. Whoever controls the
   Cloudflare account can therefore read an account. Text messages are read

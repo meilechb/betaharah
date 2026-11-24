@@ -447,6 +447,8 @@ export async function adminState(env: Env, now: number, origin: string, cookieHe
     urls: {
       webhook: `${origin}/webhooks/telnyx`,
       redirect: `${origin}/api/google/callback`,
+      // The second redirect to register with Google: signing in with Google, apart from the calendar.
+      signInRedirect: `${origin}/api/auth/google/callback`,
       home: `${origin}/`,
       privacy: `${origin}/privacy`,
       terms: `${origin}/terms`,

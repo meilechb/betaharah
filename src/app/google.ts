@@ -13,6 +13,9 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const API = 'https://www.googleapis.com/calendar/v3';
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.app.created';
+/** Sign-in only. Calendar access is a separate request, with its own redirect. */
+export const SIGN_IN_SCOPE = 'openid email profile';
+const USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
 
 export class GoogleError extends Error {
   constructor(
@@ -26,15 +29,23 @@ export class GoogleError extends Error {
   }
 }
 
-export function authorizationUrl(args: { clientId: string; redirectUri: string; state: string }): string {
+export function authorizationUrl(args: {
+  clientId: string;
+  redirectUri: string;
+  state: string;
+  scope?: string;
+  /** Ask for a refresh token. Calendar connect needs one; sign-in does not. */
+  offline?: boolean;
+  prompt?: 'consent' | 'select_account';
+}): string {
   const u = new URL(AUTH_URL);
   u.searchParams.set('client_id', args.clientId);
   u.searchParams.set('redirect_uri', args.redirectUri);
   u.searchParams.set('response_type', 'code');
-  u.searchParams.set('scope', CALENDAR_SCOPE);
+  u.searchParams.set('scope', args.scope ?? CALENDAR_SCOPE);
   // offline access returns a refresh token; prompt=consent makes Google return it every time
-  u.searchParams.set('access_type', 'offline');
-  u.searchParams.set('prompt', 'consent');
+  if (args.offline !== false) u.searchParams.set('access_type', 'offline');
+  u.searchParams.set('prompt', args.prompt ?? 'consent');
   u.searchParams.set('state', args.state);
   return u.toString();
 }
@@ -61,8 +72,8 @@ async function tokenRequest(deps: Deps, params: Record<string, string>): Promise
 
 export async function exchangeCode(
   deps: Deps,
-  args: { clientId: string; clientSecret: string; redirectUri: string; code: string },
-): Promise<{ accessToken: string; refreshToken: string }> {
+  args: { clientId: string; clientSecret: string; redirectUri: string; code: string; requireRefresh?: boolean },
+): Promise<{ accessToken: string; refreshToken: string | null }> {
   const body = await tokenRequest(deps, {
     client_id: args.clientId,
     client_secret: args.clientSecret,
@@ -71,8 +82,29 @@ export async function exchangeCode(
     grant_type: 'authorization_code',
   });
   if (typeof body.access_token !== 'string') throw new GoogleError('Google did not return an access token', 200, null);
-  if (typeof body.refresh_token !== 'string') throw new GoogleError('Google did not return a refresh token', 200, 'no_refresh_token');
-  return { accessToken: body.access_token, refreshToken: body.refresh_token };
+  const refreshToken = typeof body.refresh_token === 'string' ? body.refresh_token : null;
+  if (args.requireRefresh !== false && refreshToken === null) throw new GoogleError('Google did not return a refresh token', 200, 'no_refresh_token');
+  return { accessToken: body.access_token, refreshToken };
+}
+
+/** The name and verified email of the Google account that just signed in. */
+export async function fetchGoogleIdentity(deps: Deps, accessToken: string): Promise<{ sub: string; email: string; name: string }> {
+  const res = await deps.fetch(USERINFO_URL, { headers: { authorization: `Bearer ${accessToken}` } });
+  const text = await res.text();
+  let body: Record<string, unknown> = {};
+  try {
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    // not JSON
+  }
+  if (!res.ok) throw new GoogleError('Google did not confirm the account', res.status, null);
+  const sub = typeof body.sub === 'string' ? body.sub : '';
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!sub || !email || body.email_verified !== true) {
+    throw new GoogleError('That Google account has no verified email address.', 200, 'unverified_email');
+  }
+  return { sub, email: email.slice(0, 120), name: name.slice(0, 80) };
 }
 
 export async function refreshAccessToken(deps: Deps, args: { clientId: string; clientSecret: string; refreshToken: string }): Promise<string> {

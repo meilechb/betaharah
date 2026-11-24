@@ -47,9 +47,14 @@ export function codeText(code: string): string {
   return `Betaharah code: ${code}. It expires in ${CODE_MINUTES} minutes. Do not share it.`;
 }
 
-/** Sent once when reminders are turned on for a phone. */
-export const REMINDERS_ON_TEXT = 'Betaharah: reminders are on for this number. Text ? for the list of commands. Msg&data rates may apply. Reply STOP to stop, HELP for help.';
-export const HELP_REPLY = 'Betaharah: mikvah calendar reminders and replies. Text MENU for the commands. Help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.';
+/**
+ * Sent when reminders are turned on, and when a phone texts START.
+ * Wording filed for the toll-free verification.
+ */
+export const START_REPLY = "Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.";
+export const REMINDERS_ON_TEXT = START_REPLY;
+/** Reply to HELP. Wording filed for the toll-free verification. */
+export const HELP_REPLY = 'Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.';
 export const TEST_TEXT = 'Betaharah: test message. Text 9 for status, ? for the list of commands.';
 
 // ---------- sending a text ----------

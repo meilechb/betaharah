@@ -88,6 +88,8 @@ export interface HouseholdData {
    * in the database.
    */
   chat: Record<string, ChatState> | null;
+  /** The Google account that can sign in, if one was connected. The subject id is not stored here. */
+  googleLogin: { email: string; name: string } | null;
 }
 
 export function newHousehold(): HouseholdData {
@@ -109,6 +111,7 @@ export function newHousehold(): HouseholdData {
     welcomedAt: null,
     demo: false,
     chat: null,
+    googleLogin: null,
   };
 }
 
@@ -158,15 +161,19 @@ export interface SiteConfig {
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   signup: 'open',
   smsEnabled: true,
-  textSignup: true,
+  textSignup: false,
   rcsEnabled: false,
   allowedPrefixes: ['+1'],
   dailyCodeLimit: 150,
   monthlyMessageLimit: 3000,
   householdMonthlyLimit: 200,
-  contactName: '',
-  contactEmail: '',
+  contactName: 'Betaharah',
+  contactEmail: 'privacy@betaharah.com',
 };
+
+/** Standing mailboxes. They are live even when the operator has not typed a contact. */
+export const PRIVACY_EMAIL = 'privacy@betaharah.com';
+export const ADMIN_EMAIL = 'admin@betaharah.com';
 
 export interface SiteSecrets {
   googleClientId?: string;
