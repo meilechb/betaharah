@@ -136,6 +136,7 @@ export const PAGES = [
   { id: 'settings', label: 'Site settings', icon: 'settings', group: 'Setup', desc: 'Who may sign up, the switches for texting, and the limits that cap the bill.' },
   { id: 'keys', label: 'Keys and connections', icon: 'lock', group: 'Setup', desc: 'Telnyx for texts, RCS, and Google for sign-in and the calendar. Keys are write-only.' },
   { id: 'test', label: 'Test account', icon: 'calendar', group: 'Tools', desc: 'A made-up household for trying every feature. It never texts a real phone.' },
+  { id: 'calc', label: 'Calculation test', icon: 'clock', group: 'Tools', desc: 'Add dates to a blank calendar and see what an account would show, as of any day you choose.' },
   { id: 'tools', label: 'Tools', icon: 'bell', group: 'Tools', desc: 'A test text to your own phone, and the public pages.' },
 ];
 

@@ -4,7 +4,9 @@
 //  - says "Open my calendar" instead of "Sign in" to someone signed in;
 //  - shows the links to the Donate page only when the server says it exists;
 //  - draws a line under the navigation once the page is scrolled;
-//  - fades sections in as they come into view (not with reduced motion).
+//  - fades sections in as they come into view (not with reduced motion);
+//  - turns "Try it" into a calendar the visitor can try (landing-try.js).
+import { startTry } from './landing-try.js';
 
 /** '+18885550100' -> '(888) 555-0100'; other numbers are shown as they are. */
 function pretty(number) {
@@ -135,3 +137,4 @@ function reveal() {
 navLine();
 reveal();
 fromServer();
+startTry();

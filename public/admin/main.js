@@ -14,6 +14,7 @@ import { settingsPage } from './sections/settings.js';
 import { keysPage } from './sections/keys.js';
 import { invitesPage } from './sections/invites.js';
 import { testPage } from './sections/test-account.js';
+import { calcPage, loadCalc } from './sections/calc.js';
 import { simulatorCards as simulatorPage } from './sections/tools.js';
 import { toolsPage } from './sections/tools.js';
 
@@ -26,11 +27,12 @@ const BUILDERS = {
   invites: invitesPage,
   simulator: simulatorPage,
   test: testPage,
+  calc: calcPage,
   tools: toolsPage,
 };
 
 /** What each page loads when it is opened; each is called with the part of the address after the page's id. */
-const LOADS = { overview: [() => loadHistory()], usage: [() => loadHistory()], accounts: [loadAccountsPage] };
+const LOADS = { overview: [() => loadHistory()], usage: [() => loadHistory()], accounts: [loadAccountsPage], calc: [loadCalc] };
 
 /** Pages with their own heading for a part of the address (#accounts/<id>). */
 const TITLES = { accounts: accountsTitle };

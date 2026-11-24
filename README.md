@@ -48,6 +48,7 @@ number from 555-0100 to 555-0199.
 | Wording of calendar events; wording of text messages | `src/engine/calendar.ts`, `src/engine/present.ts` |
 | Accounts, sign-in, storage, text commands, reminders, Google Calendar | `src/app/` |
 | Help, Privacy and Terms pages, and the Donate page (`/donate`, only once the operator has entered a way to give) | `src/app/pages.ts` |
+| The calculation test (console) and "Try it" (home page): a made-up household worked out in memory by the same code, nothing stored (`POST /api/admin/sandbox`, `POST /api/try`) | `src/app/sandbox.ts`, `public/admin/sections/calc.js`, `public/landing-try.js` |
 | The public page, the dashboard (`/app/`), the operator's console (`/admin/`) | `public/` |
 | Tests (`npm test`) | `test/` |
 

@@ -56,6 +56,7 @@ import {
   tick,
 } from './service';
 import { assertSunTimesExist, parseAppSettings, parsePhoneOptions, ValidationError } from './settings';
+import { runSandbox, sandboxChoices, TRY_CUSTOMS, TRY_LIMITS, TRY_PER_ADDRESS, TRY_WINDOW_MS, tryCustoms, tryMonths, tryPlace } from './sandbox';
 import { readTelnyxWebhook } from './sms';
 import {
   bump,
@@ -107,7 +108,6 @@ const LINK_FAILURES_PER_ADDRESS = 20;
 const LINK_FAILURE_WINDOW_MS = 15 * MINUTE;
 /** Looking up postal codes: at most this many per signed-in phone in an hour. */
 const POSTAL_LOOKUPS_PER_HOUR = 60;
-
 /** The answer when someone tries to text, or make an account for, a number reserved for fiction. */
 const FICTIONAL_MESSAGE = 'Numbers from 555-0100 to 555-0199 are reserved for fiction; they are never real phones and cannot receive texts.';
 
@@ -250,7 +250,9 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
   // ----- everything under /api -----
 
   app.use('/api/*', async (c, next) => {
-    if (c.req.path !== '/api/public' && !isConfigured(c.env)) return c.json({ error: 'The site is not set up yet.' }, 503);
+    // The public page reads /api/public and the choices for "Try it" even before the site is set up.
+    const open = c.req.path === '/api/public' || (c.req.path === '/api/try' && c.req.method === 'GET');
+    if (!open && !isConfigured(c.env)) return c.json({ error: 'The site is not set up yet.' }, 503);
     if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
       if (c.req.header(HEADER) !== '1') return c.json({ error: 'bad request' }, 400);
       const origin = c.req.header('origin');
@@ -280,6 +282,30 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       codeMinutes: CODE_MINUTES,
       resendSeconds: CODE_RESEND_SECONDS,
     });
+  });
+
+  // ----- "Try it" on the home page (sandbox.ts): no account, nothing stored but a counter per network address -----
+
+  app.get('/api/try', c => {
+    const all = sandboxChoices('en');
+    return c.json({
+      places: all.places,
+      labels: all.labels,
+      customs: all.choices.filter(ch => (TRY_CUSTOMS as readonly string[]).includes(ch.key)),
+      defaults: Object.fromEntries(TRY_CUSTOMS.map(k => [k, all.defaults[k]])),
+      maxEntries: TRY_LIMITS.maxEntries,
+      kinds: TRY_LIMITS.kinds,
+    });
+  });
+
+  app.post('/api/try', async c => {
+    const now = deps.now();
+    const key = `try-ip:${(await fingerprint(c.env.ENCRYPTION_KEY, 'ip', addressOf(c))).slice(0, 24)}`;
+    if ((await bump(c.env.DB, key, TRY_WINDOW_MS, now)) > TRY_PER_ADDRESS) throw new HttpError(429, 'Too many tries in the last few minutes. Please wait ten minutes and try again.');
+    const body = await readBody(c);
+    const result = runSandbox({ place: tryPlace(body.place), halachic: tryCustoms(body.customs), today: body.today, entries: body.entries, months: tryMonths(body.today) }, TRY_LIMITS);
+    const { reminders: _reminders, ...state } = result.state;
+    return c.json({ place: result.place.name, today: result.today, outcomes: result.outcomes, message: result.message, state });
   });
 
   // ----- sign-in -----
