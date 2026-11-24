@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href="https://betaharah.com/privacy" />
+    <title>Privacy policy — בטהרה</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <main class="legal-page">
+      <p class="kicker">Betaharah · betaharah.com</p>
+      <h1>Privacy policy</h1>
+      <p class="muted">Last updated 24 November 2026.</p>
+      <p lang="he" dir="rtl">
+        <strong>בטהרה</strong> הוא לוח פרטי לבית אחד, לרישום ולחשבון של טהרת המשפחה. הוא כלי חישוב בלבד, ואינו פוסק הלכה. הנוסח הקובע של מדיניות זו הוא באנגלית, שלהלן.
+      </p>
+      <p>
+        Betaharah is a private calendar for one household. It keeps a record of the cycle for taharas hamishpacha, calculates the dates and the times of day from that record, and can write them into a Google calendar and send reminders by text message. It is a calculation aid. It does not rule on halacha.
+      </p>
+      <p>
+        The record is intimate. It is kept for that household alone. This page says what is stored, where, and who else can receive it when you turn a feature on.
+      </p>
+
+      <h2>Who this is for</h2>
+      <p>
+        There is one dashboard, opened with one password. It is for the adult household that uses this site. It is not offered to the public, and it is not directed at children. Anyone with the password can see and change the record.
+      </p>
+
+      <h2>What is stored</h2>
+      <p>The application stores the following in its database:</p>
+      <ul>
+        <li>
+          <strong>The cycle record.</strong> Each entry is a flow, a stain (niddah without a flow), a hefsek taharah, a count that was broken, or an immersion. For each entry the database holds the Hebrew date, day or night where that applies, whether a flow is to be counted toward the vesatot, an optional note of up to 200 characters, the time it was entered, and whether it was entered from the dashboard or by text (and from which phone number).
+        </li>
+        <li>
+          <strong>Location.</strong> A place name, latitude, longitude, time zone, and elevation, and whether sunrise and sunset are adjusted for elevation. These are used to calculate sunrise, sunset, and nightfall. The latitude, longitude, and elevation are not sent to Google. The time zone is sent as the time zone of the calendar the app creates, and event times are written in that zone.
+        </li>
+        <li>
+          <strong>Halachic settings.</strong> The choices you confirm in the dashboard: the minimum wait, which vesatot are observed and for how long, Or Zarua, how the haflagah is counted, the rule for a flow on the 30th, whether long cycles are exempt, whether the vesatot are paused, one day of Yom Tov or two, and how nightfall is calculated, together with the time you last confirmed them. Until you confirm them, the program uses the stricter option.
+        </li>
+        <li>
+          <strong>Phones and reminders.</strong> Up to six phone numbers, a short name for each, whether that phone may record by text, and which reminders it receives. Also the reminder timings, and whether the wording is plain or limited to letters and times.
+        </li>
+        <li>
+          <strong>Calendar appearance.</strong> Whether event titles are written in Hebrew or as symbols only, and how many days of history to keep up to date in Google Calendar (400 by default, and you can set it between 30 and 800). That setting limits what is written to Google. It does not shorten the record in the database.
+        </li>
+        <li>
+          <strong>Text messages.</strong> The text of messages received and sent, the phone number, the time, and whether sending succeeded. A reply or a reminder states dates and status, so the message log contains that part of the record. The text is kept so a repeated delivery is not acted on twice. The dashboard shows the recent messages. The rows themselves stay until the whole record is deleted.
+        </li>
+        <li>
+          <strong>A reminder log.</strong> Which reminder was already sent to which phone, so it is not sent twice.
+        </li>
+        <li>
+          <strong>Sign-in failures.</strong> The time of each wrong password. Eight wrong passwords in 15 minutes lock sign-in for 15 minutes. A failure record older than 24 hours is deleted the next time a password is rejected. The password itself is not written in the database.
+        </li>
+        <li>
+          <strong>Connection secrets, encrypted.</strong> If you connect them: the Google OAuth client id, client secret, and refresh token; the Telnyx API key, the Telnyx webhook public key, and the Telnyx phone number. Also the id of the Google calendar the app created, and the time of the last successful or failed calendar update.
+        </li>
+      </ul>
+      <p>
+        The cycle record and the message log are stored as ordinary database rows. They are not encrypted at rest by the application. The Google and Telnyx secrets are encrypted before they are stored. The encryption key, and the dashboard password, are kept as secrets of the Cloudflare account. They are not stored in the database. If the encryption key is lost, the saved Google and Telnyx secrets cannot be read and have to be entered again. The cycle record is not affected.
+      </p>
+
+      <h2>Where it is stored</h2>
+      <p>
+        The site runs as a Cloudflare Worker named “betaharah”, and the data above is in a Cloudflare D1 database named “betaharah”, attached to that Worker. The application code does not write down IP addresses. Cloudflare, which hosts the site, can see connection data as part of running it, under Cloudflare’s own policy.
+      </p>
+      <p>
+        There is no separate analytics service, and the pages do not load third-party scripts.
+      </p>
+
+      <h2>Google Calendar</h2>
+      <p>
+        Google Calendar is optional. Nothing is sent to Google until you enter an OAuth client in the dashboard and press Connect, then sign in with the Google account that should own the calendar.
+      </p>
+      <p>
+        The app asks Google for one permission only:
+      </p>
+      <p><code>https://www.googleapis.com/auth/calendar.app.created</code></p>
+      <p>
+        That permission lets the app create a calendar named <strong>בטהרה</strong> in the Google account you sign in with, and create, change, and delete events on calendars this app created. It does not let the app see or change your other calendars. The app does not ask Google for your name, your email address, or your profile.
+      </p>
+      <p>
+        Events the app writes carry the dates it has calculated, with Hebrew titles and short descriptions, or with symbols only and no description if you choose discreet titles. Times come from the location you set. The calendar is brought up to date after a change, and at least every six hours. Events you add to that calendar by hand are not read and are not changed.
+      </p>
+      <p>
+        Google gives the app a refresh token so it can update the calendar without asking you to sign in each time. The refresh token is stored encrypted in the database. Short-lived access tokens are used in memory and are not stored. The app also stores the id of the calendar it created.
+      </p>
+      <p>
+        You can disconnect in the dashboard. That deletes the refresh token stored here. The calendar remains in your Google account until you delete it there. Sharing that calendar with your wife is done by you, in Google Calendar. The app does not share it.
+      </p>
+      <p>
+        <strong>Limited Use.</strong> Betaharah’s use and transfer to any other app of information received from Google APIs will adhere to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.
+      </p>
+      <p>
+        In practice, information received from Google — the permission to manage the calendar this app created, the tokens, and the list of events this app itself wrote — is used only to keep that calendar up to date for this household. It is not sold. It is not used for advertising. It is not used to train a model. It is not transferred to anyone except by being stored in this household’s own Cloudflare database so the calendar can be updated. It is not read for any other purpose.
+      </p>
+
+      <h2>Text messages</h2>
+      <p>
+        Text messages are optional. If you turn them on, the app uses <a href="https://telnyx.com/">Telnyx</a> to send and receive them. You set Telnyx’s inbound webhook to <code>https://betaharah.com/webhooks/telnyx</code>.
+      </p>
+      <p>
+        A delivery is accepted only when Telnyx’s signature on it is valid. A message is acted on only when it was sent to your Telnyx number, from a phone you listed, and that phone is allowed to record. Any other sender is not answered. The replies use the short commands the dashboard describes (a flow, a hefsek taharah, a broken count, an immersion, a stain, status, undo, and help). Reminders are sent to the phones you chose, and they are not sent on Shabbat or Yom Tov when that option is on.
+      </p>
+      <p>
+        Text messages are not private. The telephone company and Telnyx can read them. Telnyx keeps its own copies under Telnyx’s policy. You can set reminder texts to letters and times only, for a phone that other people may see.
+      </p>
+
+      <h2>Selling and sharing</h2>
+      <p>
+        The record is not sold, rented, or traded. It is not used for advertising. It is not sent to an analytics service. It is not shared with anyone except as follows, and only when you have turned that feature on:
+      </p>
+      <ul>
+        <li>Cloudflare, which hosts the site and holds the database.</li>
+        <li>Google, which holds the calendar you connected, as described above.</li>
+        <li>Telnyx, which carries the text messages you turned on, as described above.</li>
+      </ul>
+      <p>
+        The person who holds the Cloudflare account can read what is stored, because it is that household’s own database. There is no staff, and the record is not given to anyone else.
+      </p>
+
+      <h2>Cookies</h2>
+      <p>
+        This page and the terms page set no cookies. After a successful sign-in, the dashboard sets one cookie, named <code>mk_session</code>, for 30 days. It holds an expiry time and a signature. It does not hold the cycle record. It is HttpOnly and SameSite=Lax, and Secure when the site is served over HTTPS. Signing out clears it.
+      </p>
+
+      <h2>Deletion</h2>
+      <p>
+        You can remove an entry in the dashboard. It is then marked removed: it is left out of the calculations and out of the calendar, and it is no longer shown. The row stays in the database until the whole record is deleted. A text command can undo the latest entry within 48 hours, in the same way.
+      </p>
+      <p>
+        You can disconnect Google Calendar, clear the Telnyx keys, and remove phones yourself, in Settings.
+      </p>
+      <p>
+        To delete the whole stored record — the log, including entries already marked removed, the messages, the reminder log, the settings, the phones, the calendar id, and the encrypted keys — write to
+        <a href="mailto:privacy@betaharah.com">privacy@betaharah.com</a>.
+        There is one household record on this site, and that request deletes it from the Cloudflare database. A calendar already created in your Google account is not deleted by this; you delete that in Google. Messages already delivered remain subject to Telnyx’s and the carrier’s retention.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If this policy changes, the date at the top changes with it. The sign-in page links here.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions, and requests to see or delete what is stored:
+        <a href="mailto:privacy@betaharah.com">privacy@betaharah.com</a>.
+      </p>
+
+      <p class="site-nav"><a href="/">Home</a> · <a href="/terms">Terms</a></p>
+    </main>
+  </body>
+</html>
