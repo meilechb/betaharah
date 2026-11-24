@@ -750,7 +750,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       const where = whereOf(data);
       if (!where) throw new HttpError(400, rejectionText('no_place', null));
       const recorded = recordEntry(data, draftFromForm(body, where, now), 'dashboard', note, now);
-      if (!recorded.ok) throw new HttpError(400, rejectionText(recorded.reason, recorded.computed));
+      if (!recorded.ok) throw new HttpError(400, rejectionText(recorded.reason, recorded.computed, 'page'));
       return recorded;
     });
     return finish(c, site, household, result.computed, { message: confirmationText(result, null).replace(' 0 to undo.', ''), entryId: result.entry.id });

@@ -265,7 +265,7 @@ describe('the same picture as an account', () => {
     expect(pattern!.state.alerts.some(a => /Three intervals in a row of 29 days/.test(a.text))).toBe(true);
     expect(long!.state.alerts.some(a => /after day 31/.test(a.text))).toBe(true);
     expect(refusals!.outcomes.map(o => (o.ok ? 'ok' : o.error))).toEqual([
-      'Not recorded: no period is open. Send 1 or 5 first.',
+      'Not recorded: no period is open. Record when the period began first.',
       'ok',
       'Not recorded: there is no count in progress.',
       'ok',

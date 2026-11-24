@@ -195,7 +195,7 @@ export function runSandbox(input: unknown, limits: SandboxLimits) {
       outcomes[index] = { index, ok: true, entryId: added.entry.id };
       last = added;
     } else {
-      outcomes[index] = { index, ok: false, error: rejectionText(added.reason, added.computed) };
+      outcomes[index] = { index, ok: false, error: rejectionText(added.reason, added.computed, 'page') };
     }
   });
 

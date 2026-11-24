@@ -48,7 +48,9 @@ export function mark(e, opts) {
       glyph = filledIcon('droplet');
       break;
     case 'hefsek':
-      glyph = 'H';
+      // The day a hefsek taharah can be done is not one that was recorded: a question mark says so.
+      glyph = e.projected ? 'H?' : 'H';
+      if (e.projected) classes.push('wide');
       break;
     case 'clean_day':
       glyph = String(o.number || cleanDayNumber(e) || '');
@@ -71,13 +73,14 @@ export function mark(e, opts) {
 export function legendItems() {
   return [
     [mark({ kind: 'flow' }), cap1(t('{flow} or {stain}: the start of a period'))],
-    [mark({ kind: 'hefsek' }), term('hefsek')],
+    [mark({ kind: 'hefsek' }), cap1(t('{hefsek}, recorded'))],
+    [mark({ kind: 'hefsek', projected: true }), cap1(t('the day the {hefsek} can be done (not recorded)'))],
     [mark({ kind: 'clean_day' }, { number: 1 }), t('Day 1 to 7 of the {clean_days}')],
     [mark({ kind: 'mikvah' }), term('mikvah_night')],
     [mark({ kind: 'onah' }, { night: false }), cap1(t('{veset_onah} by day'))],
     [mark({ kind: 'onah' }, { night: true }), cap1(t('{veset_onah} at night'))],
     [mark({ kind: 'onah', light: true }, { night: true }), cap1(t('{or_zarua} only (lighter, outlined)'))],
-    [mark({ kind: 'clean_day', projected: true }, { number: 3 }), t('Dashed: projected. It assumes the {hefsek} is done on the first day it can be.')],
+    [mark({ kind: 'clean_day', projected: true }, { number: 3 }), t('Dashed: projected, not recorded. It assumes the {hefsek} is done on the first day it can be.')],
   ];
 }
 

@@ -105,32 +105,48 @@ Record form (the same refusals, in the same words), works the picture out
 with the same code as the dashboard, and forgets it. Nothing is saved on
 the server and no account is touched.
 
+How to use it:
+
+1. **Click a day** on the calendar. Beside the calendar (under it on a
+   phone) the day opens with "What happened on this day?".
+2. **Press one button**: flow by day, flow at night, hefsek taharah, or
+   immersion that evening. "Other things to add" has stain, count broken, a
+   flow at a clock time, and the switch for a flow that does not count for
+   the vesatot. The date is added at once. A date an account would refuse is
+   not kept, and the reason is shown where you added it.
+3. **Read the result**: the calendar marks the two months shown; "Where
+   things stand" gives the status, warnings and pattern alerts; "What the
+   calendar works out" lists the steps until the immersion and each onah of
+   separation with the reasons it is kept.
+
+What you entered and what the calendar works out are kept apart. A tick
+(`H✓`, `M✓`) marks a hefsek taharah or immersion you entered. `H?` with a
+dashed outline is the day the hefsek taharah can be done: the calendar shows
+it after a period is added, and it was not entered. Dashed clean days and
+mikvah night are what follows if the hefsek taharah is done on that day; the
+lists label them "not entered" and "expected".
+
+- **Today in the test** is the latest date you entered, so dates can be
+  added one after another as they would happen, and a date is never refused
+  for being in the future. The line "Shown as of …" says which day that is.
+  **Forward one onah**, **Forward one day** and **Choose another day as
+  today** move it ahead, to see what an account shows on a later day (a
+  count going on, mikvah night). It cannot be before the latest date
+  entered. By day, "now" is halfway between sunrise and sunset; at night,
+  half an hour after nightfall.
 - **Place**: one of the app's list, or any US ZIP or Canadian postal code.
-- **Pretend today is**: a date, by day or at night (the night that begins
-  that evening). By day, "now" is halfway between sunrise and sunset; at
-  night, half an hour after nightfall. The line under it says which moment
-  was used. **Previous onah**, **Next onah** and **Next day** step it, to
-  watch a count go on. A date after today is refused, as it is for a person.
-- **Calendar**: the month with the same marks people see; the arrows move
-  between months (two before today to four after). Choose a day to see what
-  falls on it, with the reason for each mark, and to add a date on it: flow,
-  stain, hefsek taharah, count broken or immersion, by day, at night or at
-  a time, as on the Record form. A refused date is not kept; the reason is
-  shown under the form, word for word what a person is told.
-- **Where things stand**, **Coming up**, the warnings, the pattern alerts
-  (a possible veset kavua) and the notes are the dashboard's own. The reminder
-  texts that would be sent are under Coming up.
-- **Log**: the dates as the Log shows them. Removing one works everything
-  out again from the remaining dates in the order they were added; a date
-  that would now be refused is listed under "Not recorded now" with the
-  reason.
-- **Customs**: the twelve settings, starting as a new account's. Each
-  change is worked out at once.
-- **Copy the scenario** puts the place, customs, today and dates on the
-  clipboard as text; **Load a scenario** runs such a text again, so a case
-  can be kept and checked later. The scenario also stays in this browser
-  tab (sessionStorage) across a reload. **Remove every date** and **Start
-  over** clear it.
+- **Calendar**: two months at a time, with the marks people see; the arrows
+  move between months (two before today to four after).
+- **Dates you entered**: as an account's Log shows them. Removing one works
+  everything out again from the remaining dates in the order they were
+  added; a date that would now be refused is listed under "Not recorded
+  now" with the reason.
+- **Customs** (closed until opened, below the calendar): the twelve
+  settings, starting as a new account's. Each change is worked out at once.
+- **Keep this scenario, or load one**: copies the place, customs, today and
+  dates as text, and runs such a text again, so a case can be kept and
+  checked later. The scenario also stays in this browser tab
+  (sessionStorage) across a reload. **Start over** clears it.
 
 The home page has a smaller version for visitors ("Try it",
 `POST /api/try`): a place from the list or a ZIP code, three customs

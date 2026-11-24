@@ -84,6 +84,14 @@ let root = null;
 
 // ---------- marks, as the calendar shows them ----------
 
+/** A title without the server's "(projected)": the page says it with a label beside the title. */
+const plainTitle = e => (e.title || '').replace(' (projected)', '');
+/** The label for something the calendar expects that was not entered; null otherwise. */
+function expectedLabel(e) {
+  if (!e.projected) return null;
+  return el('em', { class: 'try-tag' }, e.kind === 'hefsek' ? 'not entered' : 'expected');
+}
+
 const isNight = e => e.kind === 'mikvah' || (e.startDate && e.endDate && e.startDate !== e.endDate) || /\((night|לילה)\)/.test(e.title || '');
 
 function mark(e) {
@@ -93,7 +101,11 @@ function mark(e) {
   if (e.light) cls.push('light');
   let glyph = '•';
   if (e.kind === 'flow') glyph = svgIcon('i-drop');
-  else if (e.kind === 'hefsek') glyph = 'H';
+  else if (e.kind === 'hefsek') {
+    // the day it can be done is not a hefsek taharah that was entered: a question mark says so
+    glyph = e.projected ? 'H?' : 'H';
+    if (e.projected) cls.push('wide');
+  }
   else if (e.kind === 'mikvah') glyph = 'M';
   else if (e.kind === 'clean_day') {
     const m = /:(\d)$/.exec(e.key || '');
@@ -488,7 +500,7 @@ function upcoming(s) {
           'li',
           {},
           mark({ ...u, startDate: u.date, endDate: u.endDate }),
-          el('span', {}, el('b', { class: u.projected ? 'projected' : null }, u.title), el('small', {}, u.when)),
+          el('span', {}, el('b', {}, plainTitle(u), expectedLabel(u)), el('small', {}, u.when)),
         ),
       ),
     ),
@@ -559,11 +571,12 @@ function calendar(s) {
       { class: 'cal-legend' },
       [
         [mark({ kind: 'flow' }), 'Flow'],
-        [mark({ kind: 'hefsek' }), 'Hefsek taharah'],
+        [mark({ kind: 'hefsek' }), 'Hefsek taharah, done'],
+        [mark({ kind: 'hefsek', projected: true }), 'The day it can be done'],
         [mark({ kind: 'clean_day', key: ':1' }), 'Clean days'],
         [mark({ kind: 'mikvah' }), 'Mikvah night'],
         [[mark({ kind: 'onah', title: '' }), mark({ kind: 'onah', title: '(night)' })], 'Veset onah'],
-        [mark({ kind: 'clean_day', key: ':3', projected: true }), 'Projected'],
+        [mark({ kind: 'clean_day', key: ':3', projected: true }), 'Dashed: expected, not entered'],
       ].map(([m, text]) => el('span', {}, m, text)),
     ),
     dayDetail(i, grid),
@@ -660,7 +673,7 @@ function dayDetail(i, grid) {
       ? el(
           'ul',
           {},
-          events.map(e => el('li', {}, mark(e), el('span', {}, el('b', { class: e.projected ? 'projected' : null }, e.title), el('small', {}, eventTime(e)), e.description ? el('span', { class: 'try-desc' }, e.description) : null))),
+          events.map(e => el('li', {}, mark(e), el('span', {}, el('b', {}, plainTitle(e), expectedLabel(e)), el('small', {}, eventTime(e)), e.description ? el('span', { class: 'try-desc' }, e.description) : null))),
         )
       : el('p', { class: 'try-small' }, 'Nothing is marked on this day.'),
   );

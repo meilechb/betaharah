@@ -1540,3 +1540,314 @@ dl.texting-words dd {
 .calc .up-title {
   font-weight: var(--weight-medium);
 }
+
+/* ----- the calculation test, as rebuilt around the calendar ----- */
+
+/* Two columns from a wide screen: the calendar, and beside it the day that was clicked and what is worked out. */
+.calc-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .calc-main {
+    grid-template-columns: minmax(0, 11fr) minmax(0, 9fr);
+  }
+}
+.calc-col > * + * {
+  margin-top: var(--space-5);
+}
+.calc-setup-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4) var(--space-6);
+}
+.calc-setup-row .calc-place {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.calc-setup-row .field {
+  margin: 0;
+}
+.calc-setup-end {
+  margin-left: auto;
+}
+.calc-terms {
+  display: grid;
+  gap: var(--space-1);
+}
+.calc-how {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+/* which day the test treats as today */
+.calc-todaybar {
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+.calc-today-text {
+  margin: 0;
+  flex: 1 1 320px;
+}
+.calc-todaybar .calc-pick,
+.calc-todaybar > .error {
+  flex: 1 1 100%;
+  margin-top: 0;
+}
+.calc-todaybar .calc-steps {
+  margin: 0;
+  gap: var(--space-2);
+}
+.calc-pick {
+  margin-top: var(--space-2);
+}
+.calc-pick > summary {
+  cursor: pointer;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--accent);
+}
+.calc-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.calc-pick-row .field {
+  margin: 0;
+}
+
+/* the months, one above the other */
+.calc .calc-cal .month-nav {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.calc-range {
+  text-align: center;
+}
+.calc-month + .calc-month {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.calc-month .month-title {
+  margin-bottom: var(--space-2);
+}
+
+/* marks that say whether a thing was entered */
+.calc .mk.wide {
+  width: auto;
+  min-width: 18px;
+  padding: 0 3px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.calc table.month .day .mk.wide {
+  width: auto;
+  padding: 0 2px;
+}
+.calc .mk.mikvah.plan {
+  background: transparent;
+  border: 2px solid var(--mikvah);
+  color: var(--mikvah);
+}
+.calc-pair {
+  display: inline-flex;
+  gap: 2px;
+  flex: none;
+}
+
+/* the two groups of the legend */
+.calc-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.calc-legend h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+.calc-legend ul.legend {
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+}
+
+/* the day that was clicked */
+.calc-day-head h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+.calc-day-sub {
+  margin: 0;
+  color: var(--muted);
+  font-weight: var(--weight-medium);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.calc-day .sun-times {
+  margin: var(--space-1) 0 0;
+}
+.calc-q {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-base);
+}
+.calc-addgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: var(--space-2);
+}
+.calc-addbtn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+.calc-addbtn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.calc-addbtn[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+.calc-night-note {
+  margin: var(--space-2) 0 0;
+}
+.calc-add-result:focus {
+  outline: none;
+}
+.calc-add-result .alert {
+  margin: var(--space-3) 0 0;
+}
+.calc-more {
+  margin-top: var(--space-3);
+}
+.calc-more > summary {
+  cursor: pointer;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+}
+.calc-more .calc-addgrid {
+  margin-bottom: var(--space-2);
+}
+.calc-timeform {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 var(--space-1);
+}
+.calc-timeform .field {
+  margin: 0;
+}
+.calc .ev-title .tag {
+  font-style: normal;
+  font-weight: var(--weight-normal);
+}
+
+/* what the calendar works out */
+.calc-group + .calc-group {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.calc-group h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+}
+.calc-assume {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+}
+.calc-each {
+  margin-top: var(--space-1);
+}
+.calc-each > summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--accent);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.calc-each ul.events {
+  margin-top: var(--space-2);
+}
+
+/* customs, and keeping a scenario: closed until wanted */
+.calc-folds {
+  display: grid;
+  gap: var(--space-3);
+}
+.calc-fold {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.calc-fold > summary {
+  cursor: pointer;
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-3);
+}
+.calc-fold-title {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-lg);
+}
+.calc-fold-body {
+  padding: 0 var(--space-4) var(--space-4);
+}
+.calc-fold-body .field + .field,
+.calc-fold-body .field + form,
+.calc-fold-body form + .actions,
+.calc-fold-body .field + .actions {
+  margin-top: var(--space-4);
+}
+.calc-paste {
+  margin-top: var(--space-4);
+}
+
+/* the test tool says "expected" with a label, so the titles stay upright */
+.calc .ev.projected .ev-title {
+  font-style: normal;
+}
+/* shorter days, so that a whole month and the start of the next fit a screen */
+@media (min-width: 700px) {
+  .calc .calc-cal table.month .day {
+    min-height: 62px;
+  }
+}
+.calc-how {
+  margin-top: calc(-1 * var(--space-1));
+}
+

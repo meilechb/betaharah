@@ -312,7 +312,11 @@ export const NO_PLACE_TEXT = 'Not recorded: no location is set yet. Text LOCATIO
 /** UNDO (0) with nothing recent: older entries are erased by text (HISTORY) or on the website. */
 export const NOTHING_TO_UNDO = 'Nothing recent to undo. Older entries can be erased by text: send HISTORY. Or remove them on the website.';
 
-export function rejectionText(reason: RejectReason, computed: Computed | null): string {
+/**
+ * Why a date was not recorded. `by` is how it was entered: a reply by text names the digit to send first; on a page,
+ * where there are no digits, it names the thing to record first.
+ */
+export function rejectionText(reason: RejectReason, computed: Computed | null, by: 'text' | 'page' = 'text'): string {
   switch (reason) {
     case 'no_place':
       return NO_PLACE_TEXT;
@@ -321,7 +325,7 @@ export function rejectionText(reason: RejectReason, computed: Computed | null): 
     case 'future':
       return 'Not recorded: that time has not come yet.';
     case 'hefsek_without_niddah':
-      return 'Not recorded: no period is open. Send 1 or 5 first.';
+      return by === 'page' ? 'Not recorded: no period is open. Record when the period began first.' : 'Not recorded: no period is open. Send 1 or 5 first.';
     case 'hefsek_before_start':
       return 'Not recorded: that is before the period began.';
     case 'broken_without_count':
@@ -329,7 +333,7 @@ export function rejectionText(reason: RejectReason, computed: Computed | null): 
     case 'mikvah_without_niddah':
       return 'Not recorded: no period is open.';
     case 'mikvah_without_hefsek':
-      return 'Not recorded: no hefsek is recorded. Send 2 first.';
+      return by === 'page' ? 'Not recorded: no hefsek taharah is recorded. Record the hefsek taharah first.' : 'Not recorded: no hefsek is recorded. Send 2 first.';
     case 'mikvah_too_early': {
       const s = computed?.timeline.status;
       if (computed && s?.state === 'niddah') {

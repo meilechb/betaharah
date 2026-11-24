@@ -58,35 +58,38 @@ async function console_(browser) {
   const headline = () => page.textContent('#calc-headline');
   const waitHeadline = text => page.waitForFunction(t => (document.getElementById('calc-headline') || {}).textContent === t, text);
   const settled = () => page.waitForFunction(() => !document.querySelector('.calc-cal.busy'));
+  const todayWords = () => page.textContent('#calc-today-words');
+  const waitToday = text => page.waitForFunction(t => (document.getElementById('calc-today-words') || {}).textContent === t, text);
+  /** Chooses another day as the test's today, with the date box. */
   const setToday = async (date, part) => {
+    if (!(await page.evaluate(() => document.getElementById('calc-pick').open))) await page.click('#calc-pick summary');
+    // filling a date box sends its change event, as choosing a date does
     await page.fill('#calc-today', date);
-    await page.dispatchEvent('#calc-today', 'change');
     await settled();
     if (part && (await page.getAttribute('#calc-part-' + part, 'aria-pressed')) !== 'true') {
       await page.click('#calc-part-' + part);
       await settled();
     }
-    await page.waitForFunction(d => (document.getElementById('calc-today') || {}).value === d, date);
   };
-  /** Shows the month of a date with the month buttons, as the operator would. */
+  /** Shows the month of a date with the month buttons, as the operator would (two months are shown at a time). */
   const showMonth = async date => {
     for (let k = 0; k < 8 && (await page.locator('#calc-day-' + date).count()) === 0; k++) {
       const shown = await page.evaluate(() => document.querySelector('table.month button.day').id.slice(9, 16));
       await page.click(date.slice(0, 7) < shown ? '#calc-prev' : '#calc-next');
     }
   };
-  const add = async (date, kind, how) => {
+  /** Clicks a day, then one button of "What happened on this day?". */
+  const add = async (date, button) => {
     await showMonth(date);
     await page.click('#calc-day-' + date);
-    await page.check('#r-calc-kind-' + kind);
-    if (how) await page.check('#r-calc-how-' + how);
-    await page.click('#calc-add');
+    await page.waitForSelector('#calc-day-title:has-text("' + new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric' }) + '")');
+    await page.click('#calc-add-' + button);
     await settled();
     await page.waitForSelector('.calc-recorded, .calc-refused');
   };
   const logCount = () => page.locator('#calc-entries li').count();
 
-  await step('signs in and opens a blank calendar', async () => {
+  await step('signs in and opens a blank calendar, with the calendar and the buttons on the first screen', async () => {
     await page.goto(base + '/admin/');
     await page.fill('#pw', PASSWORD);
     await page.click('button[type=submit]');
@@ -95,95 +98,131 @@ async function console_(browser) {
     await page.waitForSelector('#page-title:text-is("Calculation test")');
     await page.waitForSelector('#calc-headline');
     if (!(await page.textContent('.calc-note')).includes('This runs the same calculation as people’s accounts, and saves nothing.')) throw new Error('no note');
-    await setToday('2026-11-18', 'day');
+    if (!(await page.textContent('#calc-how')).includes('Click a day, then choose what happened on it.')) throw new Error('no instruction');
+    // without scrolling: the first week of the calendar, and the four buttons
+    for (const sel of ['table.month button.day', '#calc-add-flow-day', '#calc-add-flow-night', '#calc-add-hefsek', '#calc-add-mikvah']) {
+      const box = await page.locator(sel).first().boundingBox();
+      if (!box || box.y + box.height > 900) throw new Error(sel + ' is not on the first screen');
+    }
+    // the test begins on a day of its own choosing, so that it does not depend on the day it is run
+    await setToday('2026-11-10', 'day');
+    await waitToday('Tuesday, November 10, 2026, by day');
     if ((await headline()) !== 'Tehorah') throw new Error('not blank: ' + (await headline()));
-    if (!(await page.textContent('#calc-log-title')).includes('No dates yet')) throw new Error('the Log is not empty');
+    if (!(await page.textContent('#calc-log-title')).includes('None yet')) throw new Error('the list of dates is not empty');
     if ((await page.locator('table.month .mk').count()) !== 0) throw new Error('marks on a blank calendar');
+    if (!(await page.textContent('#calc-onot')).includes('None yet. Click the day a period began and add it.')) throw new Error('no hint to begin');
   });
 
-  await step('a period: recorded, the hefsek projected, the next month marked', async () => {
-    await add('2026-11-10', 'flow', 'day');
+  await step('a period, with one click: recorded; the hefsek taharah is shown as not entered; the next month is marked', async () => {
+    await add('2026-11-10', 'flow-day');
     const msg = await page.textContent('.calc-recorded');
     if (!/^Recorded: flow Tue Nov 10 by day\. Hefsek from Sat Nov 14\./.test(msg)) throw new Error('message: ' + msg);
     await waitHeadline('Niddah, before the hefsek taharah');
+    if ((await todayWords()) !== 'Tuesday, November 10, 2026, by day') throw new Error('today: ' + (await todayWords()));
+    if (!(await page.textContent('#calc-today-why')).includes('the latest date you entered')) throw new Error('today is not explained');
     if ((await page.locator('#calc-day-2026-11-10 .mk.flow').count()) !== 1) throw new Error('no flow mark');
-    // the hefsek could be done from Nov 14; the next possible day is today
-    if ((await page.locator('#calc-day-2026-11-18 .mk.hefsek.projected').count()) !== 1) throw new Error('no projected hefsek today');
-    await page.click('#calc-next');
-    await page.waitForSelector('#calc-month-title:text-is("December 2026")');
-    // onah beinonit, day 30 and 31 from Nov 10
+    // the day the hefsek taharah can be done: a question mark, a dashed outline, and the words "not entered"
+    if ((await page.textContent('#calc-day-2026-11-14 .mk.hefsek.projected')) !== 'H?') throw new Error('the expected hefsek is not marked H?');
+    if ((await page.locator('table.month .mk.hefsek.done').count()) !== 0) throw new Error('a hefsek is shown as done');
+    if (!(await page.getAttribute('#calc-day-2026-11-14', 'aria-label')).includes('not entered: the day it can be done')) throw new Error('the day does not say the hefsek was not entered');
+    const steps = await page.textContent('#calc-steps');
+    if (!/Hefsek taharah \(by \d+:\d\d PM\)\s*not entered/.test(steps)) throw new Error('"What the calendar works out" does not say not entered: ' + steps.slice(0, 120));
+    if ((await page.textContent('#calc-assume')) !== 'This assumes the hefsek taharah is done on the first day it can be.') throw new Error('the assumption is not stated');
+    if (!/Seven clean days: day 1 to day 7\s*expected/.test(steps)) throw new Error('the clean days are not one row marked expected');
+    if (/\(projected\)/.test(await page.textContent('.calc'))) throw new Error('the word "projected" is still used in a title');
+    // onah beinonit, day 30 and 31 from Nov 10, in the month below
     if ((await page.locator('#calc-day-2026-12-09 .mk.onah').count()) < 1) throw new Error('no onah on Dec 9');
     if ((await page.locator('#calc-day-2026-12-10 .mk.onah').count()) < 1) throw new Error('no onah on Dec 10');
+    if (!/Onah beinonit \(day 30\)/.test(await page.textContent('#calc-onot'))) throw new Error('the onot do not say why they are kept');
     await page.click('#calc-day-2026-12-09');
-    const detail = await page.textContent('.day-detail');
-    if (!/Onah beinonit/.test(detail)) throw new Error('the day does not say why it is marked');
-    if (await logCount() !== 1) throw new Error('the Log does not list it');
+    await page.waitForSelector('#calc-day-events:has-text("Onah beinonit")');
+    if ((await logCount()) !== 1) throw new Error('the date is not listed');
   });
 
-  await step('the hefsek, then the count day by day', async () => {
+  await step('a date an account would refuse is refused with a page’s wording, and not kept', async () => {
+    await add('2026-11-12', 'mikvah');
+    const text = (await page.textContent('.calc-refused')).trim();
+    if (text !== 'Not recorded: no hefsek taharah is recorded. Record the hefsek taharah first.') throw new Error('refusal: ' + text);
+    if ((await logCount()) !== 1) throw new Error('the refused date was kept');
+    // today went ahead for that date and came back with it
+    await waitToday('Tuesday, November 10, 2026, by day');
+  });
+
+  await step('the hefsek taharah: today follows it; then the count, onah by onah', async () => {
     await add('2026-11-14', 'hefsek');
-    await waitHeadline('Seven clean days: day 4');
+    await waitToday('Saturday, November 14, 2026, by day');
+    await waitHeadline('Niddah, after the hefsek taharah');
+    if ((await page.textContent('#calc-day-2026-11-14 .mk.hefsek.done')) !== 'H✓') throw new Error('the entered hefsek is not marked H✓');
+    if ((await page.isEnabled('#calc-prev-onah')) !== false) throw new Error('today could go back before the latest date');
     await page.click('#calc-next-onah');
-    await settled();
-    if ((await page.getAttribute('#calc-part-night', 'aria-pressed')) !== 'true') throw new Error('not night');
+    await waitToday('Saturday, November 14, 2026, at night');
+    if (!(await page.textContent('#calc-today-why')).includes('moved ahead by you')) throw new Error('moving ahead is not said');
     await page.click('#calc-next-onah');
-    await waitHeadline('Seven clean days: day 5');
+    await waitHeadline('Seven clean days: day 1');
     await page.click('#calc-next-day');
-    await waitHeadline('Seven clean days: day 6');
+    await waitHeadline('Seven clean days: day 2');
+    // not before the latest date
+    await setToday('2026-11-12');
+    await page.waitForSelector('#calc-today-error:has-text("Today cannot be before the latest date entered")');
+    if ((await todayWords()) !== 'Monday, November 16, 2026, by day') throw new Error('today moved back: ' + (await todayWords()));
   });
 
-  await step('an immersion too early is refused with the sentence a person gets, and not kept', async () => {
+  await step('an immersion too early is refused with the sentence a person gets, and today stays where it was', async () => {
     const before = await logCount();
     await add('2026-11-17', 'mikvah');
     const text = await page.textContent('.calc-refused');
     if (!/^Not recorded: the count is not complete\. Mikvah night is Sat Nov 21 after \d+:\d\d (AM|PM)\.$/.test(text.trim())) throw new Error('refusal: ' + text);
     if ((await logCount()) !== before) throw new Error('the refused date was kept');
+    await waitToday('Monday, November 16, 2026, by day');
   });
 
   await step('mikvah night, then the immersion', async () => {
-    await page.click('#calc-next-day');
-    await waitHeadline('Seven clean days: day 7');
-    await page.click('#calc-next-onah');
+    await setToday('2026-11-21', 'night');
     await waitHeadline('Mikvah night');
+    if ((await page.textContent('#calc-day-2026-11-21 .mk.mikvah')) !== 'M') throw new Error('mikvah night is not marked M');
     await add('2026-11-21', 'mikvah');
     await waitHeadline('Tehorah');
+    if ((await page.textContent('#calc-day-2026-11-21 .mk.mikvah.done')) !== 'M✓') throw new Error('the immersion is not marked M✓');
+    // today is the immersion's own evening again: nothing says it was moved ahead
+    if ((await page.locator('#calc-follow').count()) !== 0) throw new Error('today is still said to be moved ahead');
   });
 
-  await step('three more periods 28 days apart: a pattern alert', async () => {
-    await setToday('2027-01-06', 'day');
-    await page.click('#calc-prev');
-    await add('2026-12-08', 'flow', 'day');
-    await page.click('#calc-to-today');
-    await add('2027-01-05', 'flow', 'day');
-    await setToday('2027-02-03', 'day');
-    await add('2027-02-02', 'flow', 'day');
+  await step('three more periods 28 days apart, each added with one click on a later day: a pattern alert', async () => {
+    await add('2026-12-08', 'flow-day');
+    await waitToday('Tuesday, December 8, 2026, by day');
+    await add('2027-01-05', 'flow-day');
+    await add('2027-02-02', 'flow-day');
+    await waitToday('Tuesday, February 2, 2027, by day');
     await page.waitForSelector('#calc-alerts .alert:has-text("Three intervals in a row of 29 days, by day. A veset kavua for the interval may have been established. Ask a rav.")');
-    if ((await logCount()) !== 6) throw new Error('not six dates in the Log');
+    if ((await logCount()) !== 6) throw new Error('not six dates listed');
   });
 
   await step('a custom changed is worked out at once', async () => {
-    if (!(await page.textContent('#calc-upcoming')).includes('Or Zarua')) throw new Error('no Or Zarua before');
+    if (!(await page.textContent('#calc-onot')).includes('Or Zarua')) throw new Error('no Or Zarua before');
+    if (!(await page.textContent('#calc-customs-state')).includes('As a new account has them')) throw new Error('customs not as a new account’s');
+    await page.click('#calc-customs summary');
     await page.selectOption('#calc-c-orZarua', 'no');
     await settled();
-    await page.waitForFunction(() => !document.getElementById('calc-upcoming').textContent.includes('Or Zarua'));
-    if (!(await page.textContent('.calc-customs .tag')).includes('1 changed')) throw new Error('not marked as changed');
+    await page.waitForFunction(() => !document.getElementById('calc-onot').textContent.includes('Or Zarua'));
+    if (!(await page.textContent('#calc-customs-state')).includes('1 changed')) throw new Error('not marked as changed');
     await page.selectOption('#calc-c-orZarua', 'yes');
     await settled();
-    await page.waitForFunction(() => document.getElementById('calc-upcoming').textContent.includes('Or Zarua'));
+    await page.waitForFunction(() => document.getElementById('calc-onot').textContent.includes('Or Zarua'));
   });
 
   let copied = '';
   await step('the scenario is copied, cleared, and pasted back', async () => {
+    await page.click('#calc-keep-box summary');
     await page.click('#calc-copy');
     await page.waitForSelector('.toast:has-text("The scenario was copied")');
     copied = await page.evaluate(() => navigator.clipboard.readText());
     const s = JSON.parse(copied);
-    if (s.entries.length !== 6 || s.today.date !== '2027-02-03') throw new Error('copied: ' + copied.slice(0, 80));
+    if (s.entries.length !== 6 || s.today.date !== '2027-02-02') throw new Error('copied: ' + copied.slice(0, 80));
     const before = await headline();
     await page.click('#calc-reset');
     await page.click('dialog button:has-text("Start over")');
     await page.waitForFunction(() => document.querySelectorAll('#calc-entries li').length === 0);
-    await page.click('#calc-paste-box summary');
+    if (!(await page.evaluate(() => document.getElementById('calc-keep-box').open))) await page.click('#calc-keep-box summary');
     await page.fill('#calc-paste', 'not a scenario');
     await page.click('#calc-load');
     await page.waitForSelector('#calc-paste-error:has-text("This is not a scenario copied from this page.")');
@@ -197,14 +236,15 @@ async function console_(browser) {
     await page.reload();
     await page.waitForSelector('#calc-entries li');
     await page.waitForFunction(() => document.querySelectorAll('#calc-entries li').length === 6);
-    if ((await page.inputValue('#calc-today')) !== '2027-02-03') throw new Error('today was lost');
+    await waitToday('Tuesday, February 2, 2027, by day');
   });
 
-  await step('removing a date works it out again', async () => {
+  await step('removing a date works it out again, and today goes back to the latest date left', async () => {
     await page.click('#calc-remove-5');
     await settled();
     await page.waitForFunction(() => document.querySelectorAll('#calc-entries li').length === 5);
     if ((await page.locator('#calc-alerts .alert:has-text("Three intervals")').count()) !== 0) throw new Error('the pattern alert stayed');
+    await waitToday('Tuesday, January 5, 2027, by day');
   });
 
   await step('a place by ZIP code, and Hebrew script', async () => {
@@ -219,6 +259,20 @@ async function console_(browser) {
     await settled();
   });
 
+  await step('other things to add: a stain, and a flow at a known time', async () => {
+    await page.click('#calc-reset');
+    await page.click('dialog button:has-text("Start over")');
+    await page.waitForFunction(() => document.querySelectorAll('#calc-entries li').length === 0);
+    await setToday('2026-11-10', 'day');
+    await page.click('#calc-day-2026-11-10');
+    await page.click('#calc-more summary');
+    await page.fill('#calc-time', '21:30');
+    await page.click('#calc-add-time');
+    await settled();
+    await page.waitForSelector('.calc-recorded:has-text("Recorded: flow Tue Nov 10 night")');
+    await waitToday('Tuesday, November 10, 2026, at night');
+  });
+
   if (out) {
     for (const [width, scheme] of [[1280, 'light'], [1280, 'dark'], [390, 'light'], [390, 'dark']]) {
       await page.emulateMedia({ colorScheme: scheme });
@@ -229,14 +283,14 @@ async function console_(browser) {
     await page.emulateMedia({ colorScheme: 'light' });
   }
 
-  await step('at 360 px: no sideways scrolling, and a day can still be added', async () => {
+  await step('at 360 px: no sideways scrolling, and a day can still be added with one tap', async () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.waitForTimeout(200);
     const wide = await sideways(page);
     if (wide > 0) throw new Error('scrolls sideways by ' + wide + 'px');
-    await page.click('#calc-remove-4');
-    await settled();
-    await page.waitForFunction(() => document.querySelectorAll('#calc-entries li').length === 4);
+    await add('2026-11-15', 'hefsek');
+    await page.waitForFunction(() => document.querySelectorAll('#calc-entries li').length === 2);
+    if ((await sideways(page)) > 0) throw new Error('scrolls sideways after adding');
   });
 
   if (errors.length) {

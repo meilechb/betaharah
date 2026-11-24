@@ -1103,7 +1103,7 @@ describe('recording on the website', () => {
     expect(flow.json.state.entries[0]).toMatchObject({ kind: 'flow', source: 'dashboard' });
 
     // too early for an immersion, and no hefsek yet
-    expect((await c.post('/api/entries', { kind: 'mikvah', when: 'now' })).json.error).toBe('Not recorded: no hefsek is recorded. Send 2 first.');
+    expect((await c.post('/api/entries', { kind: 'mikvah', when: 'now' })).json.error).toBe('Not recorded: no hefsek taharah is recorded. Record the hefsek taharah first.');
 
     world.clock.now = at(11, 26, 16);
     const hefsek = await c.post('/api/entries', { kind: 'hefsek', when: 'now' });

@@ -290,6 +290,14 @@ details > summary:focus-visible {
 .mk.projected.clean {
   border-style: dashed;
 }
+/* "H?": the day a hefsek taharah can be done, wider than one letter */
+.mk.wide {
+  width: auto;
+  min-width: 18px;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
 
 /* ======================= Today ======================= */
 

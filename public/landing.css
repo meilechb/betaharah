@@ -2758,3 +2758,25 @@ body.lp {
     transform: translateY(-6px);
   }
 }
+
+/* Try it: what the calendar expects next is labelled, so that it is not taken for something entered. */
+.try .mk.wide {
+  width: auto;
+  min-width: 18px;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.try .try-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-style: normal;
+  font-weight: var(--weight-normal);
+  color: var(--muted);
+  vertical-align: middle;
+}
+
