@@ -49,10 +49,11 @@ import {
   codeText,
   messageStatus,
   refreshHousehold,
-  REMINDERS_ON_TEXT,
+  startReply,
   requestCode,
   sendHouseholdText,
-  TEST_TEXT,
+  testText,
+  toSend,
   tick,
 } from './service';
 import { assertSunTimesExist, parseAppSettings, parsePhoneOptions, ValidationError } from './settings';
@@ -750,10 +751,10 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       const where = whereOf(data);
       if (!where) throw new HttpError(400, rejectionText('no_place', null));
       const recorded = recordEntry(data, draftFromForm(body, where, now), 'dashboard', note, now);
-      if (!recorded.ok) throw new HttpError(400, rejectionText(recorded.reason, recorded.computed, 'page'));
+      if (!recorded.ok) throw new HttpError(400, rejectionText(recorded.reason, recorded.computed));
       return recorded;
     });
-    return finish(c, site, household, result.computed, { message: confirmationText(result, null).replace(' 0 to undo.', ''), entryId: result.entry.id });
+    return finish(c, site, household, result.computed, { message: confirmationText(result, null), entryId: result.entry.id });
   });
 
   app.delete('/api/entries/:id', async c => {
@@ -788,7 +789,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     if (demo && result.code) {
       // Nothing is sent: the code is recorded as a simulated text and shown on the page.
       const code = result.code;
-      await change(c, data => addMessage(data, { direction: 'out', phone: lastFour(number), body: codeText(code), at: now, status: 'simulated' }));
+      await change(c, data => addMessage(data, { direction: 'out', phone: lastFour(number), body: codeText(code, site.texts), at: now, status: 'simulated' }));
       return c.json({ ok: true, number, demoCode: code });
     }
     const outcome = await result.delivery;
@@ -837,10 +838,11 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     });
     const { confirm } = changed;
     if (confirm) {
-      const outcome = await sendHouseholdText(c.env, deps, site, changed.demo, { to: confirm, text: REMINDERS_ON_TEXT, now });
+      const start = startReply(site.texts);
+      const outcome = await sendHouseholdText(c.env, deps, site, changed.demo, { to: confirm, text: start, now });
       await change(c, data => {
         if (!outcome.ok) refundText(data, now);
-        addMessage(data, { direction: 'out', phone: lastFour(confirm), body: REMINDERS_ON_TEXT, at: now, status: messageStatus(outcome) });
+        addMessage(data, { direction: 'out', phone: lastFour(confirm), body: start, at: now, status: messageStatus(outcome) });
         const phone = data.phones.find(p => p.number === confirm);
         if (phone && !outcome.ok && outcome.reason === 'blocked') phone.optedOut = true;
       });
@@ -889,10 +891,11 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       return { to: phone.number, demo: data.demo };
     });
     const { to } = taken;
-    const outcome = await sendHouseholdText(c.env, deps, site, taken.demo, { to, text: TEST_TEXT, now });
+    const test = testText(site.texts);
+    const outcome = await sendHouseholdText(c.env, deps, site, taken.demo, { to, ...toSend(test), now });
     const { household: after } = await change(c, data => {
       if (!outcome.ok) refundText(data, now);
-      addMessage(data, { direction: 'out', phone: lastFour(to), body: TEST_TEXT, at: now, status: messageStatus(outcome) });
+      addMessage(data, { direction: 'out', phone: lastFour(to), body: test.text, at: now, status: messageStatus(outcome) });
       const p = data.phones.find(x => x.number === to);
       if (p && !outcome.ok && outcome.reason === 'blocked') p.optedOut = true;
     });

@@ -1,24 +1,16 @@
 /**
  * Everything that is worked out from one household's data, with no access
  * to the database or the network: the current picture, recording and
- * removing entries, and the reply to a text command.
+ * removing entries, and the wording of what was recorded.
  */
 import { buildCalendar, type CalendarEvent } from '../engine/calendar';
 import { localAbs } from '../engine/civil';
 import { processLog, sortLog, type LogEntry, type LogWarningCode } from '../engine/cycle';
-import { buildReminders, clock12, englishDate, statusText, type Reminder, type ReminderContext } from '../engine/present';
+import { buildReminders, clock12, englishDate, type Reminder, type ReminderContext } from '../engine/present';
 import type { GeoPoint } from '../engine/sun';
 import { buildTimeline, type Timeline } from '../engine/timeline';
 import { dayTimes, onahWindow, type ZmanimOptions } from '../engine/zmanim';
-import {
-  HELP_TEXT,
-  parseCommand,
-  resolveHefsekDay,
-  resolveMikvahNight,
-  resolveWhen,
-  type ResolveContext,
-  type ResolvedOnah,
-} from './commands';
+import type { ResolvedOnah } from './commands';
 import { randomId } from './crypto';
 import { MAX_REMOVED_KEPT, type HouseholdData, type StoredEntry } from './model';
 
@@ -299,9 +291,7 @@ function boundaryNote(resolved: ResolvedOnah, timeZone: string): string {
   // Only a time shortly *after* sunrise or sunset leaves a doubt about which side it began on.
   if (resolved.nearBoundary.boundary !== resolved.window.start) return '';
   const t = clock12(resolved.nearBoundary.boundary, timeZone, 'floor');
-  return resolved.onah.part === 'night'
-    ? ` Counted as night (sunset was ${t}). If it began before sunset send 0, then the same with: day.`
-    : ` Counted as day (sunrise was ${t}). If it began before sunrise send 0, then the same with: night.`;
+  return resolved.onah.part === 'night' ? ` Counted as night: sunset was ${t}.` : ` Counted as day: sunrise was ${t}.`;
 }
 
 /**
@@ -310,14 +300,8 @@ function boundaryNote(resolved: ResolvedOnah, timeZone: string): string {
  */
 export const NO_PLACE_TEXT = 'Not recorded: no location is set yet. Text LOCATION and your ZIP code, e.g. LOCATION 08701, or choose it on the website.';
 
-/** UNDO (0) with nothing recent: older entries are erased by text (HISTORY) or on the website. */
-export const NOTHING_TO_UNDO = 'Nothing recent to undo. Older entries can be erased by text: send HISTORY. Or remove them on the website.';
-
-/**
- * Why a date was not recorded. `by` is how it was entered: a reply by text names the digit to send first; on a page,
- * where there are no digits, it names the thing to record first.
- */
-export function rejectionText(reason: RejectReason, computed: Computed | null, by: 'text' | 'page' = 'text'): string {
+/** Why a date was not recorded, in the website's words (the texts use the registry, src/app/chat/messages.ts). */
+export function rejectionText(reason: RejectReason, computed: Computed | null): string {
   switch (reason) {
     case 'no_place':
       return NO_PLACE_TEXT;
@@ -326,7 +310,7 @@ export function rejectionText(reason: RejectReason, computed: Computed | null, b
     case 'future':
       return 'Not recorded: that time has not come yet.';
     case 'hefsek_without_niddah':
-      return by === 'page' ? 'Not recorded: no period is open. Record when the period began first.' : 'Not recorded: no period is open. Send 1 or 5 first.';
+      return 'Not recorded: no period is open. Record when the period began first.';
     case 'hefsek_before_start':
       return 'Not recorded: that is before the period began.';
     case 'broken_without_count':
@@ -334,114 +318,71 @@ export function rejectionText(reason: RejectReason, computed: Computed | null, b
     case 'mikvah_without_niddah':
       return 'Not recorded: no period is open.';
     case 'mikvah_without_hefsek':
-      return by === 'page' ? 'Not recorded: no hefsek taharah is recorded. Record the hefsek taharah first.' : 'Not recorded: no hefsek is recorded. Send 2 first.';
+      return 'Not recorded: no hefsek taharah is recorded. Record the hefsek taharah first.';
     case 'mikvah_too_early': {
-      // the period the immersion was refused for: the latest, which has a hefsek and no recorded immersion
-      const last = computed?.timeline.periods.at(-1);
-      if (computed && last && last.mikvahDoneAbs === null && !last.closedByNextPeriod) {
-        const m = last.planMikvah;
-        return `Not recorded: the count is not complete. Mikvah night is ${englishDate(m.eveningAbs)} after ${clock12(m.tzeit, computed.place.timeZone, 'ceil')}.`;
-      }
-      return 'Not recorded: the count is not complete.';
+      const night = tooEarlyNight(computed);
+      return night ? `Not recorded: the count is not complete. Mikvah night is ${night.day} after ${night.time}.` : 'Not recorded: the count is not complete.';
     }
     default:
       return 'Not recorded.';
   }
 }
 
-export function confirmationText(result: Extract<RecordResult, { ok: true }>, resolved: ResolvedOnah | null): string {
+/** For an immersion refused as too early: the mikvah night of the latest period, which has a hefsek and no recorded immersion. */
+export function tooEarlyNight(computed: Computed | null): { day: string; time: string } | null {
+  const last = computed?.timeline.periods.at(-1);
+  if (!computed || !last || last.mikvahDoneAbs !== null || last.closedByNextPeriod) return null;
+  const m = last.planMikvah;
+  return { day: englishDate(m.eveningAbs), time: clock12(m.tzeit, computed.place.timeZone, 'ceil') };
+}
+
+/**
+ * What was recorded, in parts: the entry ("flow Tue Nov 24 night") and the
+ * details after it (" Hefsek from Sun Nov 29."), each sentence information
+ * only. The texts put them in the registry's wording; the website joins them.
+ */
+export function confirmationParts(result: Extract<RecordResult, { ok: true }>, resolved: ResolvedOnah | null): { entry: string; details: string } {
   const { entry, computed, notes } = result;
   const tz = computed.place.timeZone;
   const status = computed.timeline.status;
   const period = status.state === 'niddah' ? status.period : null;
-  const undo = ' 0 to undo.';
+  const boundary = resolved ? boundaryNote(resolved, tz) : '';
+  let details = '';
   switch (entry.kind) {
     case 'flow':
-    case 'stain': {
-      let text = `Recorded: ${entryEnglish(entry)}.`;
-      if (notes.includes('count_cancelled_by_flow')) text += ' The count is cancelled; a new hefsek is needed.';
+    case 'stain':
+      if (notes.includes('count_cancelled_by_flow')) details += ' The count is cancelled; a new hefsek is needed.';
       else {
-        if (notes.includes('period_began_without_hefsek')) text += ' No hefsek was recorded before it, so it is a new period.';
-        if (period && period.startId === entry.id) text += ` Hefsek from ${englishDate(period.earliestHefsekAbs)}.`;
+        if (notes.includes('period_began_without_hefsek')) details += ' No hefsek was recorded before it, so it is a new period.';
+        if (period && period.startId === entry.id) details += ` Hefsek from ${englishDate(period.earliestHefsekAbs)}.`;
       }
-      return text + undo + (resolved ? boundaryNote(resolved, tz) : '');
-    }
+      details += boundary;
+      break;
     case 'broken':
-      return `Recorded: ${entryEnglish(entry)}. A new hefsek is needed.${undo}${resolved ? boundaryNote(resolved, tz) : ''}`;
+      details += boundary;
+      break;
     case 'hefsek': {
-      let text = `Recorded: ${entryEnglish(entry)}.`;
       // its period, also when its mikvah night has already passed
       const own = computed.timeline.periods.find(p => p.hefsekId === entry.id);
       if (own && own.cleanDays) {
         const m = own.planMikvah;
-        text += ` Clean days ${englishDate(own.cleanDays[0] as number)} - ${englishDate(own.cleanDays[6] as number)}. Mikvah ${englishDate(m.eveningAbs)} after ${clock12(m.tzeit, tz, 'ceil')}.`;
+        details += ` Clean days ${englishDate(own.cleanDays[0] as number)} - ${englishDate(own.cleanDays[6] as number)}. Mikvah ${englishDate(m.eveningAbs)} after ${clock12(m.tzeit, tz, 'ceil')}.`;
       }
-      if (notes.includes('hefsek_early')) text += ' It was before the wait ended.';
-      return text + undo;
+      if (notes.includes('hefsek_early')) details += ' It was before the wait ended.';
+      break;
     }
-    case 'mikvah': {
-      let text = `Recorded: ${entryEnglish(entry)}.`;
-      if (notes.includes('mikvah_on_fast_night')) text += ' Note: that was a fast night.';
-      return text + undo;
-    }
+    case 'mikvah':
+      if (notes.includes('mikvah_on_fast_night')) details += ' Note: that was a fast night.';
+      break;
   }
+  return { entry: entryEnglish(entry), details };
 }
 
-// ---------- text commands ----------
-
-/** Entries older than this cannot be removed by text message. */
-const UNDO_WINDOW_MS = 48 * 3_600_000;
-
-export interface Reply {
-  text: string;
-  /** True if the household's data changed. */
-  changed: boolean;
-  /** The picture after the change, or the current one when it was worked out for the reply. */
-  computed?: Computed;
+/** What was recorded, for the website. */
+export function confirmationText(result: Extract<RecordResult, { ok: true }>, resolved: ResolvedOnah | null): string {
+  const { entry, details } = confirmationParts(result, resolved);
+  return `Recorded: ${entry}.${result.entry.kind === 'broken' ? ' A new hefsek is needed.' : ''}${details}`;
 }
 
-/** Carries out a text command on the household's data and returns the reply. */
-export function runCommand(data: HouseholdData, text: string, now: number): Reply {
-  const command = parseCommand(text);
-  if (command.kind === 'unknown') return { text: `Not understood; nothing was changed. ${HELP_TEXT}`, changed: false };
-  if (command.kind === 'help') return { text: HELP_TEXT, changed: false };
-
-  const where = whereOf(data);
-  if (!where) return { text: rejectionText('no_place', null), changed: false };
-  const tz = where.place.timeZone;
-
-  if (command.kind === 'status') {
-    const computed = compute(data, now);
-    return { text: computed ? statusText(computed.timeline, tz) : rejectionText('no_place', null), changed: false, computed: computed ?? undefined };
-  }
-
-  if (command.kind === 'undo') {
-    const last = [...data.entries].sort((a, b) => b.createdAt - a.createdAt)[0];
-    if (!last || now - last.createdAt > UNDO_WINDOW_MS) {
-      return { text: NOTHING_TO_UNDO, changed: false };
-    }
-    removeEntry(data, last.entry.id, now);
-    const after = compute(data, now);
-    return {
-      text: `Removed: ${entryEnglish(last.entry)}. ${after ? statusText(after.timeline, tz) : ''}`.trim(),
-      changed: true,
-      computed: after ?? undefined,
-    };
-  }
-
-  const ctx: ResolveContext = { now, place: where.place, zopts: where.zopts, boundaryMarginMs: data.app.boundaryMarginMinutes * 60_000 };
-  let draft: DraftEntry;
-  let resolved: ResolvedOnah | null = null;
-  if (command.kind === 'hefsek') {
-    draft = { kind: 'hefsek', abs: resolveHefsekDay(command.yesterday, ctx) };
-  } else if (command.kind === 'mikvah') {
-    draft = { kind: 'mikvah', abs: resolveMikvahNight(command.yesterday, ctx) };
-  } else {
-    resolved = resolveWhen(command.when, ctx);
-    if (!resolved.ok) return { text: rejectionText('future', null), changed: false };
-    draft = command.kind === 'flow' ? { kind: 'flow', onah: resolved.onah, veset: true } : { kind: command.kind, onah: resolved.onah };
-  }
-  const result = recordEntry(data, draft, 'sms', null, now);
-  if (!result.ok) return { text: rejectionText(result.reason, result.computed), changed: false };
-  return { text: confirmationText(result, resolved), changed: true, computed: result.computed };
-}
+/** Entries older than this cannot be removed by UNDO by text (HISTORY can erase them). */
+export const UNDO_WINDOW_MS = 48 * 3_600_000;

@@ -10,10 +10,8 @@
  */
 import type { Hono } from 'hono';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import * as T from '../src/app/chat/texts';
-import { WELCOME_OPEN } from '../src/app/chat/texts';
+import { compose, NO_TEXTS, type Piece } from '../src/app/chat/site-texts';
 import {
-  JOIN_FULL,
   simulateText,
   STRANGER_REPLIES_PER_DAY,
   KEYWORD_REPLIES_PER_NUMBER,
@@ -30,6 +28,20 @@ import { createInvitationWord, getPhone, loadHousehold, loadSite, phoneHash } fr
 import { nearestPostal } from '../src/app/zip';
 import { localToInstant } from '../src/engine/civil';
 import { BASIC } from './helpers';
+
+/** A text as the site sends it by SMS in the shipped wording: messages of the registry joined, with the options of the last. */
+const tx = (...pieces: Array<Piece | string>): string => compose(NO_TEXTS, pieces.map(p => (typeof p === 'string' ? { key: p } : p)))[0]!.text;
+/** The same text as an RCS phone shows it: the words alone, above the buttons. */
+const rcsBody = (...pieces: Array<Piece | string>): string => compose(NO_TEXTS, pieces.map(p => (typeof p === 'string' ? { key: p } : p)))[0]!.body;
+const WELCOME_OPEN = tx('signup.welcome');
+const SETUP_START = tx('setup.start');
+const SETUP_DONE = tx('setup.done');
+const BAD_INVITATION = tx('signup.bad_word');
+const ALREADY_ON_ACCOUNT = tx('join.other_account');
+const JOINED = tx({ key: 'setup.joined', vars: { others: ' with the phone ending 0102' } });
+const WEB_TEXT = 'Betaharah sign-in link for this phone. It works once, within 10 minutes: ';
+/** The secret of the sign-in link in the text sent for WEB LINK. */
+const tokenIn = (t: string): string => new URL(t.slice(WEB_TEXT.length).split('\n')[0]!).searchParams.get('k')!;
 import { makeEnv, makeWorld, MESSAGING_PROFILE, RCS_AGENT, startDb, TEST_PASSWORD, type TestDb, type World } from './fakes';
 
 // Sign-up by text ships switched off (the toll-free filing describes opting in on the website);
@@ -207,10 +219,10 @@ async function webAccount(number: string, client = new Client()): Promise<Client
 
 /** An account made by text: JOIN, a ZIP code, customs kept, setup skipped. */
 async function textAccount(number: string): Promise<void> {
-  expect(await sms(number, 'JOIN')).toEqual([T.SETUP_START]);
+  expect(await sms(number, 'JOIN')).toEqual([SETUP_START]);
   expect((await sms(number, '08701'))[0]).toMatch(/^Location set: Lakewood, NJ 08701\./);
-  await sms(number, 'A');
-  expect(await sms(number, 'SKIP')).toEqual([T.SETUP_DONE]);
+  await sms(number, 'KEEP FOR NOW');
+  expect(await sms(number, 'SKIP')).toEqual([SETUP_DONE]);
 }
 
 // ---------------------------------------------------------------------------
@@ -224,35 +236,35 @@ describe('the whole life of an account, by text message alone', () => {
     expect(await count('households')).toBe(0);
 
     // JOIN: the account is created with this phone, verified; reminders are not on; setup starts.
-    expect(await sms(WIFE, 'JOIN')).toEqual([T.SETUP_START]);
+    expect(await sms(WIFE, 'JOIN')).toEqual([SETUP_START]);
     let h = (await householdOf(WIFE))!;
     expect(h.data.phones).toEqual([expect.objectContaining({ number: WIFE, canUpdate: true, consentAt: null, optedOut: false })]);
     expect(h.data.phones[0]!.verifiedAt).toBe(START + 10_000);
     expect(h.data.welcomedAt).toBeNull();
     expect(h.data.demo).toBe(false);
-    expect(h.data.chat?.[WIFE]?.q).toEqual({ kind: 'zip' });
+    expect(h.data.chat?.[WIFE]).toMatchObject({ key: 'setup.start', expect: 'zip', ctx: { setup: true } });
 
     // Step 1: the ZIP code.
-    expect(await sms(WIFE, '99999')).toEqual([T.unknownZip('99999')]);
-    expect(await sms(WIFE, '08701')).toEqual([`Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`]);
+    expect(await sms(WIFE, '99999')).toEqual([tx({ key: 'location.unknown', vars: { code: '99999' }, offer: ['skip_place', 'web', 'menu'] })]);
+    expect(await sms(WIFE, '08701')).toEqual([tx({ key: 'location.set', vars: { place: 'Lakewood, NJ 08701' } }, 'setup.customs')]);
     h = (await householdOf(WIFE))!;
     expect(h.data.app.place).toMatchObject({ name: 'Lakewood, NJ 08701', timeZone: TZ });
 
     // Step 2: keep the customs.
-    expect(await sms(WIFE, 'A')).toEqual([`${T.CUSTOMS_KEPT} ${T.RECENT_ASK}`]);
+    expect(await sms(WIFE, 'KEEP FOR NOW')).toEqual([tx('setup.recent')]);
 
     // Step 3: dated entries.
-    const flow = await sms(WIFE, '1 11/19 day');
+    const flow = await sms(WIFE, 'Nov 19 day');
     expect(flow).toHaveLength(1);
-    expect(flow[0]).toBe(`Recorded: flow Thu Nov 19 by day, 2026. Hefsek from Mon Nov 23. 0 to undo. ${T.RECENT_NEXT}`);
-    expect(await sms(WIFE, 'DONE')).toEqual([T.SETUP_DONE]);
+    expect(flow[0]).toBe('Recorded: flow Thu Nov 19 by day, 2026. Hefsek from Mon Nov 23. Hefsek done? Its date, for example: Nov 27.\nReply: NOT YET');
+    expect(await sms(WIFE, 'NOT YET')).toEqual([SETUP_DONE]);
     h = (await householdOf(WIFE))!;
     expect(h.data.entries.map(e => [e.entry.kind, e.source])).toEqual([['flow', 'sms']]);
-    expect(h.data.chat).toBeNull();
+    expect(h.data.chat?.[WIFE]?.key).toBe('setup.done'); // the options of the last text
 
     // Status, and reminders turned on by text (the consent).
-    expect((await sms(WIFE, '9'))[0]).toMatch(/^Niddah since Thu Nov 19\./);
-    expect(await sms(WIFE, 'REMINDERS ON')).toEqual([T.remindersOn('0102')]);
+    expect((await sms(WIFE, 'status'))[0]).toMatch(/^Niddah since Thu Nov 19\./);
+    expect(await sms(WIFE, 'REMINDERS ON')).toEqual([tx({ key: 'reminders.on', vars: { last4: '0102' } })]);
     h = (await householdOf(WIFE))!;
     expect(h.data.phones[0]!.consentAt).not.toBeNull();
     const hefsekReminder = h.data.queue.find(q => q.status === 'pending' && q.key.includes('hefsek'));
@@ -265,17 +277,17 @@ describe('the whole life of an account, by text message alone', () => {
     const reminder = world.telnyx.sent.slice(beforeTick);
     expect(reminder).toHaveLength(1);
     expect(reminder[0]).toMatchObject({ to: WIFE, endpoint: 'sms' });
-    expect(reminder[0]!.text).toMatch(/^Hefsek tahara: Mon Nov 23, before sunset at 4:3\d PM\. Reply 2 when done\.$/);
+    expect(reminder[0]!.text).toMatch(/^Hefsek tahara: Mon Nov 23, before sunset at 4:3\d PM\.\nReply: DONE, STATUS$/);
 
     // ADD: the person who asks gets a code; nothing is sent to anyone else.
     const added = await sms(WIFE, 'ADD');
     expect(added).toHaveLength(1);
     const code = codeIn(added[0]!);
-    expect(added[0]).toBe(T.addCode(code, 7));
+    expect(added[0]).toBe(tx({ key: 'phones.add_code', vars: { code, days: '7' } }));
     expect(world.telnyx.sent.filter(s => s.to === HUSBAND)).toEqual([]);
 
     // The second phone joins by texting the code itself.
-    expect(await sms(HUSBAND, `join ${code.toLowerCase()}`)).toEqual([T.joinedText(' with the phone ending 0102')]);
+    expect(await sms(HUSBAND, `join ${code.toLowerCase()}`)).toEqual([JOINED]);
     h = (await householdOf(HUSBAND))!;
     expect(h.id).toBe((await householdOf(WIFE))!.id);
     expect(h.data.phones.map(p => [p.number, p.verifiedAt !== null, p.consentAt])).toEqual([
@@ -285,24 +297,25 @@ describe('the whole life of an account, by text message alone', () => {
     expect(await count('join_codes')).toBe(0); // used up
 
     // Both record.
-    expect((await sms(HUSBAND, '2'))[0]).toMatch(/^Recorded: hefsek Mon Nov 23\. Clean days Tue Nov 24 - Mon Nov 30\./);
-    expect((await sms(WIFE, 'HISTORY'))[0]).toBe('Latest entries: A hefsek Mon Nov 23. B flow Thu Nov 19 by day. To erase one, reply ERASE and its letter, e.g. ERASE A.');
+    expect((await sms(HUSBAND, 'hefsek today'))[0]).toMatch(/^Recorded: hefsek Mon Nov 23\. Clean days Tue Nov 24 - Mon Nov 30\./);
+    expect((await sms(WIFE, 'HISTORY'))[0]).toBe('Latest: first: hefsek Mon Nov 23; second: flow Thu Nov 19 by day. Erase one?\nReply: FIRST, SECOND, MENU');
     expect((await sms(HUSBAND, 'PHONES'))[0]).toBe(
-      'Phones: A ending 0102 (reminders on), B ending 0101 (this phone, reminders off). ADD gives a code to add a phone. REMOVE and a letter removes one. LEAVE takes this phone off.',
+      'Phones: first ending 0102 (reminders on); second ending 0101 (this phone, reminders off).\nReply: ADD, REMOVE, LEAVE, MENU',
     );
 
     // The calendar link, by text.
     const cal = await sms(WIFE, 'CALENDAR LINK');
     const calUrl = /(https:\/\/cal\.example\/cal\/[A-Za-z0-9_-]+\.ics)/.exec(cal[0]!)![1]!;
-    expect(cal[0]).toBe(T.calendarCreated(calUrl));
+    expect(cal[0]).toBe(tx({ key: 'calendar.link', vars: { url: calUrl } }));
     const feed = await new Client().get(new URL(calUrl).pathname);
     expect(feed.status).toBe(200);
 
     // WEB: a one-time link that signs in on the website, as the phone that asked.
     const web = await sms(HUSBAND, 'WEB');
     expect(web).toHaveLength(1);
-    expect(web[0]!.startsWith(T.WEB_LINK_TEXT)).toBe(true);
-    const link = new URL(web[0]!.slice(T.WEB_LINK_TEXT.length));
+    expect(web[0]!.startsWith(WEB_TEXT)).toBe(true);
+    expect(web[0]!.endsWith('\nReply: MENU')).toBe(true);
+    const link = new URL(web[0]!.slice(WEB_TEXT.length).split('\n')[0]!);
     expect(`${link.origin}${link.pathname}`).toBe('https://cal.example/app/');
     const token = link.searchParams.get('k')!;
     expect(token).toMatch(/^[A-Za-z0-9_-]{32}$/);
@@ -327,22 +340,22 @@ describe('the whole life of an account, by text message alone', () => {
     expect((await householdOf(WIFE))!.data.google).not.toBeNull();
 
     // DELETE ACCOUNT asks first; NO keeps it; YES deletes everything.
-    expect(await sms(WIFE, 'DELETE ACCOUNT')).toEqual([T.DELETE_ASK]);
-    expect(await sms(WIFE, 'NO')).toEqual([T.NO_CHANGE]);
+    expect(await sms(WIFE, 'DELETE ACCOUNT')).toEqual([tx('delete.ask')]);
+    expect(await sms(WIFE, 'NO')).toEqual([tx('confirm.no')]);
     expect(await count('households')).toBe(1);
     await sms(WIFE, 'ADD'); // a waiting code
     await sms(WIFE, 'WEB'); // a waiting link
     expect(await count('join_codes')).toBe(1);
     expect(await count('link_tokens')).toBe(1);
-    expect(await sms(WIFE, 'DELETE ACCOUNT')).toEqual([T.DELETE_ASK]);
-    expect(await sms(WIFE, 'YES')).toEqual([T.DELETED]);
+    expect(await sms(WIFE, 'DELETE ACCOUNT')).toEqual([tx('delete.ask')]);
+    expect(await sms(WIFE, 'YES')).toEqual([tx('delete.done')]);
     for (const table of ['households', 'phones', 'join_codes', 'link_tokens', 'codes']) expect(await count(table), table).toBe(0);
     expect(world.google.revoked).toContain('refresh-1');
     expect((await browser.get('/api/state')).status).toBe(401);
     expect((await new Client().get(new URL(calUrl).pathname)).status).toBe(404);
     // the numbers are strangers again: a text gets the greeting (one a day)
     world.clock.now += DAY;
-    expect(await sms(HUSBAND, '9')).toEqual([WELCOME_OPEN]);
+    expect(await sms(HUSBAND, 'status')).toEqual([WELCOME_OPEN]);
   });
 });
 
@@ -354,42 +367,45 @@ describe('the same conversation over RCS', () => {
 
   it('suggestion taps, a shared location, a fallback on every send, and an SMS-only phone served alike', async () => {
     const hello = await rcs(WIFE, { text: 'hello' });
-    expect(hello).toEqual([{ text: WELCOME_OPEN, suggestions: ['Join=JOIN'], endpoint: 'rcs', delivered: 'rcs' }]);
+    expect(hello).toEqual([{ text: rcsBody('signup.welcome'), suggestions: ['JOIN=JOIN'], endpoint: 'rcs', delivered: 'rcs' }]);
 
-    expect(await rcs(WIFE, tap('JOIN', 'Join'))).toEqual([{ text: T.SETUP_START, suggestions: undefined, endpoint: 'rcs', delivered: 'rcs' }]);
+    expect(await rcs(WIFE, tap('JOIN'))).toEqual([{ text: rcsBody('setup.start'), suggestions: ['SKIP=SKIP'], endpoint: 'rcs', delivered: 'rcs' }]);
 
     // A shared location answers the ZIP question with the nearest ZIP code.
     const near = nearestPostal(40.0821, -74.2097)!;
     const located = await rcs(WIFE, { location: { latitude: 40.0821, longitude: -74.2097 } });
-    expect(located.map(m => m.text)).toEqual([`Location set: ${near.name}. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`]);
-    expect(located[0]!.suggestions).toEqual(['A: Keep for now=A', 'B: Answer by text=B', 'C: Later, website=C']);
+    expect(located.map(m => m.text)).toEqual([rcsBody({ key: 'location.set', vars: { place: near.name } }, 'setup.customs')]);
+    expect(located[0]!.suggestions).toEqual(['KEEP FOR NOW=KEEP FOR NOW', 'ANSWER BY TEXT=ANSWER BY TEXT', 'LATER=LATER']);
     expect((await householdOf(WIFE))!.data.app.place).toMatchObject({ name: near.name, latitude: near.latitude });
 
-    const kept = await rcs(WIFE, tap('A', 'A: Keep for now'));
-    expect(kept).toEqual([{ text: `${T.CUSTOMS_KEPT} ${T.RECENT_ASK}`, suggestions: ['Skip=SKIP'], endpoint: 'rcs', delivered: 'rcs' }]);
-    expect((await rcs(WIFE, { text: '1 11/19 day' }))[0]!.suggestions).toEqual(['Done=DONE']);
-    expect(await rcs(WIFE, tap('DONE', 'Done'))).toEqual([
-      { text: T.SETUP_DONE, suggestions: ['Status=STATUS', 'History=HISTORY', 'Customs=CUSTOMS', 'Reminders=REMINDERS'], endpoint: 'rcs', delivered: 'rcs' },
+    const kept = await rcs(WIFE, tap('KEEP FOR NOW'));
+    expect(kept).toEqual([{ text: rcsBody('setup.recent'), suggestions: ['SKIP=SKIP'], endpoint: 'rcs', delivered: 'rcs' }]);
+    expect((await rcs(WIFE, { text: 'Nov 19 day' }))[0]!.suggestions).toEqual(['NOT YET=NOT YET']);
+    expect(await rcs(WIFE, tap('NOT YET'))).toEqual([
+      { text: rcsBody('setup.done'), suggestions: ['PERIOD=PERIOD', 'HEFSEK=HEFSEK', 'REMINDERS=REMINDERS', 'MORE=MORE'], endpoint: 'rcs', delivered: 'rcs' },
     ]);
+    // the options are answered by buttons and by words alike
+    expect((await rcs(WIFE, tap('PERIOD')))[0]).toMatchObject({ text: 'When did it begin?', suggestions: ['NOW=NOW', 'LAST NIGHT=LAST NIGHT', 'ANOTHER DAY=ANOTHER DAY'] });
+    expect((await rcs(WIFE, { text: 'menu' }))[0]!.text).toBe('Betaharah.');
 
     // A file or picture is not read: the usual "not understood", nothing changes.
     const before = JSON.stringify((await householdOf(WIFE))!.data.entries);
-    expect((await rcs(WIFE, { user_file: { payload: { file_name: 'photo.jpg', mime_type: 'image/jpeg', file_uri: 'https://example.invalid/x', file_size_bytes: 10 } } })).map(m => m.text)).toEqual([T.UNKNOWN]);
+    expect((await rcs(WIFE, { user_file: { payload: { file_name: 'photo.jpg', mime_type: 'image/jpeg', file_uri: 'https://example.invalid/x', file_size_bytes: 10 } } })).map(m => m.text)).toEqual(['Not understood; nothing was changed.']);
     expect(JSON.stringify((await householdOf(WIFE))!.data.entries)).toBe(before);
 
     // A yes-or-no question by buttons.
-    expect((await rcs(WIFE, { text: 'PAUSE VESATOT' }))[0]!.suggestions).toEqual(['Yes=YES', 'No=NO']);
-    expect((await rcs(WIFE, tap('NO', 'No')))[0]!.text).toBe(T.NO_CHANGE);
+    expect((await rcs(WIFE, { text: 'PAUSE VESATOT' }))[0]!.suggestions).toEqual(['YES=YES', 'NO=NO']);
+    expect((await rcs(WIFE, tap('NO')))[0]!.text).toBe(rcsBody('confirm.no'));
 
     // A location shared later asks first.
     const asked = await rcs(WIFE, { location: { latitude: 40.6326, longitude: -73.9967 } });
-    expect(asked[0]!.text).toMatch(/^Set your location to Brooklyn, NY \d{5}\? Reply YES to set it, NO to keep /);
-    expect((await rcs(WIFE, tap('NO')))[0]!.text).toBe(T.NO_CHANGE);
+    expect(asked[0]!.text).toMatch(/^Set the location to Brooklyn, NY \d{5}\? Now: /);
+    expect((await rcs(WIFE, tap('NO')))[0]!.text).toBe(rcsBody('confirm.no'));
 
     // A phone without RCS, texting by SMS, gets the same texts by the RCS endpoint's SMS fallback.
     const code = codeIn((await rcs(WIFE, { text: 'ADD' }))[0]!.text);
     const joined = await sms(HUSBAND, `JOIN ${code}`);
-    expect(joined).toEqual([T.joinedText(' with the phone ending 0102')]);
+    expect(joined).toEqual([JOINED]);
     const last = world.telnyx.sent.at(-1)!;
     expect(last).toMatchObject({ to: HUSBAND, endpoint: 'rcs', delivered: 'sms', fallback: { from: OUR_NUMBER, text: joined[0] } });
     expect((await sms(HUSBAND, 'STATUS'))[0]).toMatch(/^Niddah since Thu Nov 19\./);
@@ -403,11 +419,14 @@ describe('the same conversation over RCS', () => {
     expect(web).toHaveLength(1);
     expect(web[0]).toMatchObject({ endpoint: 'sms', delivered: 'sms' });
 
-    // Every RCS send carried the same text as its SMS fallback, from the site's number.
+    // Every RCS send carried its SMS fallback from the site's number: the same words, with the options as the last line.
     const viaRcs = world.telnyx.sent.filter(s => s.endpoint === 'rcs');
     expect(viaRcs.length).toBeGreaterThan(10);
     for (const s of viaRcs) {
-      expect(s.fallback).toEqual({ from: OUR_NUMBER, text: s.text });
+      const labels = (s.suggestions ?? []).map(x => x.reply.text);
+      expect(labels.length).toBeGreaterThan(0);
+      for (const x of s.suggestions ?? []) expect(x.reply.postback_data).toBe(x.reply.text); // a tap sends the label
+      expect(s.fallback).toEqual({ from: OUR_NUMBER, text: s.delivered === 'rcs' ? `${s.text}\nReply: ${labels.join(', ')}` : s.text });
       expect(s.agentId).toBe(RCS_AGENT);
       expect(s.messagingProfileId).toBe(MESSAGING_PROFILE);
       for (const sug of s.suggestions ?? []) expect(sug.reply.text.length).toBeLessThanOrEqual(20);
@@ -417,26 +436,26 @@ describe('the same conversation over RCS', () => {
   it('a message to another agent is ignored; a repeated delivery is acted on once; the hourly limit counts both channels', async () => {
     await textAccount(HUSBAND);
     world.telnyx.rcsPhones.add(HUSBAND);
-    expect(await rcs(HUSBAND, { text: '9' }, { agentId: 'someone-else' })).toEqual([]);
-    expect((await rcs(HUSBAND, { text: '1' }, { eventId: 'same' })).map(m => m.text)[0]).toMatch(/^Recorded: flow /);
-    expect(await rcs(HUSBAND, { text: '1' }, { eventId: 'same' })).toEqual([]);
+    expect(await rcs(HUSBAND, { text: 'status' }, { agentId: 'someone-else' })).toEqual([]);
+    expect((await rcs(HUSBAND, { text: 'period now' }, { eventId: 'same' })).map(m => m.text)[0]).toMatch(/^Recorded: flow /);
+    expect(await rcs(HUSBAND, { text: 'period now' }, { eventId: 'same' })).toEqual([]);
     expect((await householdOf(HUSBAND))!.data.entries).toHaveLength(1);
     world.clock.now += 2 * HOUR;
     let replies = 0;
-    for (let i = 0; i < 31; i++) replies += (i % 2 ? await rcs(HUSBAND, { text: '9' }) : await sms(HUSBAND, '9')).length;
+    for (let i = 0; i < 31; i++) replies += (i % 2 ? await rcs(HUSBAND, { text: 'status' }) : await sms(HUSBAND, 'status')).length;
     expect(replies).toBe(30);
   });
 
   it('while RCS is switched off, everything goes by SMS; RCS messages are still answered', async () => {
     await config({ rcsEnabled: false });
     await rcs(WIFE, tap('JOIN'));
-    expect(world.telnyx.sent.at(-1)).toMatchObject({ to: WIFE, endpoint: 'sms', text: T.SETUP_START });
+    expect(world.telnyx.sent.at(-1)).toMatchObject({ to: WIFE, endpoint: 'sms', text: SETUP_START });
     // while no agent id is saved, an RCS message is taken as it comes (Telnyx signed it) and answered by SMS;
     // once one is saved, only that agent's messages are taken (the test above)
     const op = await operator();
     expect((await op.put('/api/admin/secrets', { rcsAgentId: null })).status).toBe(200);
     const before = world.telnyx.sent.length;
-    await rcs(WIFE, { text: '9' });
+    await rcs(WIFE, { text: 'status' });
     expect(world.telnyx.sent.slice(before)).toHaveLength(1);
     expect(world.telnyx.sent.at(-1)).toMatchObject({ to: WIFE, endpoint: 'sms' });
   });
@@ -447,22 +466,22 @@ describe('sign-up by text, and its limits', () => {
     await site({ config: { signup: 'invite' } });
     const made = await createInvitationWord(env, { word: 'Spring26', days: 3, maxUses: 2, note: 'shul', now: START });
     expect(made).toMatchObject({ word: 'SPRING26', maxUses: 2 });
-    expect(await sms(HUSBAND, 'hello')).toEqual([T.WELCOME_INVITE]);
+    expect(await sms(HUSBAND, 'hello')).toEqual([tx('signup.invite')]);
     expect(await sms(HUSBAND, 'JOIN')).toEqual([]); // one reply a day to a number without an account
     world.clock.now += DAY;
-    expect(await sms(HUSBAND, 'JOIN autumn26')).toEqual([T.BAD_INVITATION]);
+    expect(await sms(HUSBAND, 'JOIN autumn26')).toEqual([BAD_INVITATION]);
     expect(await count('households')).toBe(0);
-    expect(await sms(HUSBAND, 'join spring26')).toEqual([T.SETUP_START]); // any case
-    expect(await sms(WIFE, 'JOIN SPRING26')).toEqual([T.SETUP_START]);
+    expect(await sms(HUSBAND, 'join spring26')).toEqual([SETUP_START]); // any case
+    expect(await sms(WIFE, 'JOIN SPRING26')).toEqual([SETUP_START]);
     expect(await count('households')).toBe(2);
-    expect(await sms(OTHER, 'JOIN Spring26')).toEqual([T.BAD_INVITATION]); // used up
+    expect(await sms(OTHER, 'JOIN Spring26')).toEqual([BAD_INVITATION]); // used up
     expect(await count('households')).toBe(2);
     // the operator sees it among the invitations, used twice
     expect((await (await operator()).get('/api/admin/state')).json.invites).toEqual([]);
     // an expired word
     await createInvitationWord(env, { word: 'WINTER27', days: 1, now: world.clock.now });
     world.clock.now += 2 * DAY;
-    expect(await sms(FOURTH, 'JOIN WINTER27')).toEqual([T.BAD_INVITATION]);
+    expect(await sms(FOURTH, 'JOIN WINTER27')).toEqual([BAD_INVITATION]);
     expect(await count('households')).toBe(2);
   });
 
@@ -475,15 +494,15 @@ describe('sign-up by text, and its limits', () => {
     await expect(createInvitationWord(env, { word: 'PURIM5787', now: START })).rejects.toThrow(/already in use/);
     await expect(createInvitationWord(env, { word: 'Lag2BOmer', days: 91, now: START })).rejects.toThrow(/days/);
     // while sign-up is open, a valid word also creates (and an invalid word never does)
-    expect(await sms(HUSBAND, 'JOIN NOTAWORD')).toEqual([T.BAD_INVITATION]);
+    expect(await sms(HUSBAND, 'JOIN NOTAWORD')).toEqual([BAD_INVITATION]);
     expect(await count('households')).toBe(0);
-    expect(await sms(WIFE, 'JOIN purim5787')).toEqual([T.SETUP_START]);
+    expect(await sms(WIFE, 'JOIN purim5787')).toEqual([SETUP_START]);
   });
 
   it('closed: nothing is sent to anyone without an account, whatever they text, except the filed reply to HELP', async () => {
     await site({ config: { signup: 'closed' } });
     await createInvitationWord(env, { word: 'CLOSED01', now: START });
-    for (const t of ['hi', 'JOIN', 'JOIN CLOSED01', '9']) expect(await sms(HUSBAND, t), t).toEqual([]);
+    for (const t of ['hi', 'JOIN', 'JOIN CLOSED01', 'status']) expect(await sms(HUSBAND, t), t).toEqual([]);
     expect(await sms(HUSBAND, 'HELP')).toEqual([HELP_REPLY]);
     expect(await count('households')).toBe(0);
   });
@@ -529,7 +548,7 @@ describe('sign-up by text, and its limits', () => {
 
   it('a JOIN delivered twice creates one account and answers once', async () => {
     await site();
-    expect(await sms(WIFE, 'JOIN', { eventId: 'twice' })).toEqual([T.SETUP_START]);
+    expect(await sms(WIFE, 'JOIN', { eventId: 'twice' })).toEqual([SETUP_START]);
     expect(await sms(WIFE, 'JOIN', { eventId: 'twice' })).toEqual([]);
     expect(await count('households')).toBe(1);
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
@@ -546,7 +565,7 @@ describe('sign-up by text, and its limits', () => {
     world.clock.now += DAY;
     expect(await sms(HUSBAND, 'hi')).toEqual([WELCOME_OPEN]);
     // a JOIN is not a reply: it still creates the account
-    expect(await sms(HUSBAND, 'JOIN')).toEqual([T.SETUP_START]);
+    expect(await sms(HUSBAND, 'JOIN')).toEqual([SETUP_START]);
   });
 
   it(`at most ${STRANGER_REPLIES_PER_DAY} replies a day to numbers without an account, for the whole site`, async () => {
@@ -565,7 +584,7 @@ describe('sign-up by text, and its limits', () => {
     expect(created).toBe(TEXT_SIGNUPS_PER_DAY);
     expect(await count('households')).toBe(TEXT_SIGNUPS_PER_DAY);
     world.clock.now = at(11, 24, 10);
-    expect(await sms('+17327009999', 'JOIN')).toEqual([T.SETUP_START]);
+    expect(await sms('+17327009999', 'JOIN')).toEqual([SETUP_START]);
   });
 });
 
@@ -577,38 +596,38 @@ describe('adding a phone with a code', () => {
 
   it('a code works once; then, or after 7 days, it is refused and changes nothing', async () => {
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
-    expect(await sms(HUSBAND, `JOIN ${code}`)).toEqual([T.joinedText(' with the phone ending 0102')]);
-    expect(await sms(OTHER, `JOIN ${code}`)).toEqual([T.BAD_INVITATION]);
+    expect(await sms(HUSBAND, `JOIN ${code}`)).toEqual([JOINED]);
+    expect(await sms(OTHER, `JOIN ${code}`)).toEqual([BAD_INVITATION]);
     expect(await householdOf(OTHER)).toBeNull();
     expect((await householdOf(WIFE))!.data.phones).toHaveLength(2);
 
     const late = codeIn((await sms(WIFE, 'ADD'))[0]!);
     world.clock.now += 7 * DAY + MINUTE;
-    expect(await sms(FOURTH, `JOIN ${late}`)).toEqual([T.BAD_INVITATION]);
+    expect(await sms(FOURTH, `JOIN ${late}`)).toEqual([BAD_INVITATION]);
     expect(await householdOf(FOURTH)).toBeNull();
   });
 
   it('a new code replaces the one before', async () => {
     const first = codeIn((await sms(WIFE, 'ADD'))[0]!);
     const second = codeIn((await sms(WIFE, 'ADD'))[0]!);
-    expect(await sms(HUSBAND, `JOIN ${first}`)).toEqual([T.BAD_INVITATION]);
+    expect(await sms(HUSBAND, `JOIN ${first}`)).toEqual([BAD_INVITATION]);
     world.clock.now += DAY;
-    expect(await sms(HUSBAND, `JOIN ${second}`)).toEqual([T.joinedText(' with the phone ending 0102')]);
+    expect(await sms(HUSBAND, `JOIN ${second}`)).toEqual([JOINED]);
   });
 
   it('from a number that already has an account: the reply says so, nothing changes, and the code still works', async () => {
     await textAccount(OTHER);
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
-    expect(await sms(OTHER, `JOIN ${code}`)).toEqual([T.ALREADY_ON_ACCOUNT]);
+    expect(await sms(OTHER, `JOIN ${code}`)).toEqual([ALREADY_ON_ACCOUNT]);
     expect((await householdOf(WIFE))!.data.phones.map(p => p.number)).toEqual([WIFE]);
     expect((await householdOf(OTHER))!.data.phones.map(p => p.number)).toEqual([OTHER]);
-    expect(await sms(HUSBAND, `JOIN ${code}`)).toEqual([T.joinedText(' with the phone ending 0102')]);
+    expect(await sms(HUSBAND, `JOIN ${code}`)).toEqual([JOINED]);
   });
 
   it('works while sign-up is closed or sign-up by text is off, because it adds to an existing account', async () => {
     await config({ signup: 'closed', textSignup: false });
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
-    expect(await sms(HUSBAND, `JOIN ${code}`)).toEqual([T.joinedText(' with the phone ending 0102')]);
+    expect(await sms(HUSBAND, `JOIN ${code}`)).toEqual([JOINED]);
   });
 
   it('an account that became full in the meantime: the phone is not added, and is told so', async () => {
@@ -618,28 +637,29 @@ describe('adding a phone with a code', () => {
       expect(await sms(n, `JOIN ${c}`)).toHaveLength(1);
     }
     expect((await householdOf(WIFE))!.data.phones).toHaveLength(4);
-    expect(await sms(WIFE, 'ADD')).toEqual(['This account already has 4 phones, the most allowed. Send PHONES to remove one first. Nothing was changed.']);
+    expect(await sms(WIFE, 'ADD')).toEqual(['This account already has 4 phones, the most allowed. Nothing was changed.\nReply: PHONES, MENU']);
     const fifth = '+17324440105';
-    expect(await sms(fifth, `JOIN ${code}`)).toEqual([T.BAD_INVITATION]); // replaced by the later codes
+    expect(await sms(fifth, `JOIN ${code}`)).toEqual([BAD_INVITATION]); // replaced by the later codes
     expect(await householdOf(fifth)).toBeNull();
-    expect(JOIN_FULL.length).toBeLessThanOrEqual(160);
+    expect(tx('signup.join_full').length).toBeLessThanOrEqual(160);
   });
 
   it('LEAVE and REMOVE by text take a phone off, as on the website', async () => {
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
     await sms(HUSBAND, `JOIN ${code}`);
-    expect(await sms(HUSBAND, 'LEAVE')).toEqual([T.LEAVE_ASK]);
-    expect(await sms(HUSBAND, 'YES')).toEqual([T.LEFT]);
+    expect(await sms(HUSBAND, 'LEAVE')).toEqual([tx('phones.leave_ask')]);
+    expect(await sms(HUSBAND, 'YES')).toEqual([tx('phones.left')]);
     expect(await householdOf(HUSBAND)).toBeNull();
     expect((await householdOf(WIFE))!.data.phones.map(p => p.number)).toEqual([WIFE]);
     const again = codeIn((await sms(WIFE, 'ADD'))[0]!);
     world.clock.now += DAY;
     await sms(HUSBAND, `JOIN ${again}`);
     await sms(WIFE, 'PHONES');
-    expect(await sms(WIFE, 'REMOVE B')).toEqual([T.removeAsk('0101')]);
-    expect(await sms(WIFE, 'YES')).toEqual([T.removed('0101')]);
+    expect(await sms(WIFE, 'REMOVE')).toEqual([tx({ key: 'phones.remove_which', vars: { list: 'second ending 0101' }, offer: ['second', 'menu'] })]);
+    expect(await sms(WIFE, 'second')).toEqual([tx({ key: 'phones.remove_ask', vars: { last4: '0101' } })]);
+    expect(await sms(WIFE, 'YES')).toEqual([tx({ key: 'phones.removed', vars: { last4: '0101' } })]);
     expect(await householdOf(HUSBAND)).toBeNull();
-    expect(await sms(WIFE, 'LEAVE')).toEqual([T.LAST_PHONE]);
+    expect(await sms(WIFE, 'LEAVE')).toEqual([tx('phones.last')]);
   });
 });
 
@@ -651,11 +671,11 @@ describe('one account never reaches another by text', () => {
   });
 
   it('a text reads and changes only its own phone\'s account', async () => {
-    await sms(WIFE, '1 11/19 day');
-    expect((await sms(OTHER, '9'))[0]).toMatch(/^Tehorah\./);
-    expect((await sms(OTHER, 'HISTORY'))[0]).toBe(T.HISTORY_EMPTY);
-    expect((await sms(OTHER, 'PHONES'))[0]).toMatch(/^Phones: A ending 0199 \(this phone, reminders off\)\. /);
-    expect(await sms(OTHER, 'ERASE A')).toEqual([T.ERASE_NEEDS_LIST]);
+    await sms(WIFE, 'period 11/19 day');
+    expect((await sms(OTHER, 'status'))[0]).toMatch(/^Tehorah\./);
+    expect((await sms(OTHER, 'HISTORY'))[0]).toBe(tx('history.empty'));
+    expect((await sms(OTHER, 'PHONES'))[0]).toMatch(/^Phones: first ending 0199 \(this phone, reminders off\)\./);
+    expect(await sms(OTHER, 'FIRST')).toEqual([tx('not_understood')]);
     expect(await sms(OTHER, 'UNDO')).toHaveLength(1);
     expect((await householdOf(WIFE))!.data.entries).toHaveLength(1);
     expect((await householdOf(OTHER))!.data.entries).toHaveLength(0);
@@ -663,19 +683,19 @@ describe('one account never reaches another by text', () => {
 
   it('a code attaches a phone only to the household that made it', async () => {
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
-    expect(await sms(OTHER, `JOIN ${code}`)).toEqual([T.ALREADY_ON_ACCOUNT]);
-    expect(await sms(HUSBAND, `JOIN ${code}`)).toEqual([T.joinedText(' with the phone ending 0102')]);
+    expect(await sms(OTHER, `JOIN ${code}`)).toEqual([ALREADY_ON_ACCOUNT]);
+    expect(await sms(HUSBAND, `JOIN ${code}`)).toEqual([JOINED]);
     expect((await householdOf(HUSBAND))!.id).toBe((await householdOf(WIFE))!.id);
     expect((await householdOf(OTHER))!.data.phones.map(p => p.number)).toEqual([OTHER]);
     // a code from a deleted account is gone with it
     const code2 = codeIn((await sms(OTHER, 'ADD'))[0]!);
     await sms(OTHER, 'DELETE ACCOUNT');
     await sms(OTHER, 'YES');
-    expect(await sms(FOURTH, `JOIN ${code2}`)).toEqual([T.BAD_INVITATION]);
+    expect(await sms(FOURTH, `JOIN ${code2}`)).toEqual([BAD_INVITATION]);
   });
 
   it('a sign-in link works once, only for the phone and household that asked', async () => {
-    const tokenOf = (t: string) => new URL(t.slice(T.WEB_LINK_TEXT.length)).searchParams.get('k')!;
+    const tokenOf = tokenIn;
     const mine = tokenOf((await sms(WIFE, 'WEB'))[0]!);
     const theirs = tokenOf((await sms(OTHER, 'WEB'))[0]!);
     const a = new Client('203.0.113.60');
@@ -705,7 +725,7 @@ describe('one account never reaches another by text', () => {
   it('wrong sign-in links from one address are limited', async () => {
     const c = new Client('203.0.113.70');
     for (let i = 0; i < 20; i++) await c.post('/api/auth/link', { token: `${'a'.repeat(31)}${String.fromCharCode(65 + (i % 26))}` });
-    const tokenOf = (t: string) => new URL(t.slice(T.WEB_LINK_TEXT.length)).searchParams.get('k')!;
+    const tokenOf = tokenIn;
     const good = tokenOf((await sms(WIFE, 'WEB'))[0]!);
     expect((await c.post('/api/auth/link', { token: good })).status).toBe(400);
     expect((await new Client('203.0.113.71').post('/api/auth/link', { token: good })).status).toBe(200);
@@ -719,13 +739,13 @@ describe('carrier words in the middle of a conversation', () => {
     expect((await sms(WIFE, 'CUSTOMS ALL'))[0]).toMatch(/^Custom 1 of 12: /);
     expect(await sms(WIFE, 'HELP')).toEqual([HELP_REPLY]);
     expect(await sms(WIFE, 'HELP', { autoresponseType: 'HELP' })).toEqual([HELP_REPLY]);
-    expect((await sms(WIFE, 'A'))[0]).toMatch(/^Kept: wait before hefsek: Five days\. Custom 2 of 12: /);
+    expect((await sms(WIFE, 'FIVE DAYS'))[0]).toMatch(/^Kept: wait before hefsek: five days\. Custom 2 of 12: /);
     expect(await sms(WIFE, 'STOP', { autoresponseType: 'STOP' })).toEqual([]);
     expect((await householdOf(WIFE))!.data.phones[0]!.optedOut).toBe(true);
-    expect(await sms(WIFE, 'A')).toEqual([]); // not acted on while opted out
+    expect(await sms(WIFE, 'DAY 30')).toEqual([]); // not acted on while opted out
     expect(await sms(WIFE, 'START', { autoresponseType: 'START' })).toEqual([START_REPLY]);
     expect((await householdOf(WIFE))!.data.phones[0]!.optedOut).toBe(false);
-    expect((await sms(WIFE, 'A'))[0]).toMatch(/^Saved: onah beinonit day: Day 30 only\. Custom 3 of 12: /);
+    expect((await sms(WIFE, 'DAY 30'))[0]).toMatch(/^Saved: onah beinonit day: day 30\. Custom 3 of 12: /);
     expect(await sms(WIFE, 'unsubscribe')).toEqual([]);
     expect(await sms(WIFE, 'unstop')).toEqual([START_REPLY]);
     expect((await sms(WIFE, 'KEEP'))[0]).toMatch(/^Kept: onah beinonit length: /);
@@ -738,7 +758,7 @@ describe('carrier words in the middle of a conversation', () => {
     expect(await sms(WIFE, 'MENU')).toEqual([]);
     expect((await householdOf(WIFE))!.data.phones[0]!.optedOut).toBe(true);
     const out = (await householdOf(WIFE))!.data.messages.find(m => m.direction === 'out');
-    expect(out).toMatchObject({ body: T.MENU, status: 'not sent' });
+    expect(out).toMatchObject({ body: tx('menu.main'), status: 'not sent' });
   });
 });
 
@@ -749,15 +769,15 @@ describe('what can be read in the database', () => {
     const word = 'Tishrei87';
     await createInvitationWord(env, { word, now: START });
     await sms(HUSBAND, 'hello'); // a stranger: counters only
-    expect(await sms(WIFE, `JOIN ${word}`)).toEqual([T.SETUP_START]);
+    expect(await sms(WIFE, `JOIN ${word}`)).toEqual([SETUP_START]);
     expect(await sms(WIFE, '08701')).toHaveLength(1); // the location and the next question in one text
-    expect((await sms(WIFE, 'B'))[0]).toMatch(/^Custom 1 of 12/); // a pending custom question
+    expect((await sms(WIFE, 'ANSWER BY TEXT'))[0]).toMatch(/^Custom 1 of 12/); // a pending custom question
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
     const web = (await sms(WIFE, 'WEB'))[0]!;
-    const token = new URL(web.slice(T.WEB_LINK_TEXT.length)).searchParams.get('k')!;
+    const token = tokenIn(web);
     expect((await sms(WIFE, 'CUSTOMS ALL'))[0]).toMatch(/^Custom 1 of 12/);
     const h = (await householdOf(WIFE))!;
-    expect(h.data.chat?.[WIFE]?.q).toEqual({ kind: 'custom', index: 0, walk: true }); // it is stored, encrypted
+    expect(h.data.chat?.[WIFE]).toMatchObject({ key: 'custom.minWaitDays', ctx: { index: 0, walk: true } }); // it is stored, encrypted
     // a simulated account too
     await simulateText(env, world.deps, await loadSite(env), { from: FICTIONAL, text: 'JOIN' }).catch(() => undefined);
 
@@ -774,10 +794,11 @@ describe('what can be read in the database', () => {
       '7325550142',
       '0101',
       '0102',
-      '"custom"',
+      '"custom.minWaitDays"',
       '"walk"',
       '"zip"',
-      '"q"',
+      '"opts"',
+      'FIVE DAYS',
       '"setup"',
       'Lakewood',
       'JOIN ',
@@ -803,24 +824,24 @@ describe('the operator\'s simulator', () => {
     const before = await counters();
     const say = async (text: string) => simulateText(env, world.deps, s, { from: FICTIONAL, text, origin: 'https://cal.example' });
 
-    expect(await say('hello')).toEqual({ outcome: 'replied', replies: [{ text: WELCOME_OPEN, suggestions: [{ label: 'Join', send: 'JOIN' }] }], householdId: null });
+    expect(await say('hello')).toEqual({ outcome: 'replied', replies: [{ text: WELCOME_OPEN, suggestions: [{ label: 'JOIN', send: 'JOIN' }] }], householdId: null });
     const joined = await say('JOIN');
-    expect(joined).toMatchObject({ outcome: 'created', replies: [{ text: T.SETUP_START }] });
+    expect(joined).toMatchObject({ outcome: 'created', replies: [{ text: SETUP_START, suggestions: [{ label: 'SKIP', send: 'SKIP' }] }] });
     const h = (await householdOf(FICTIONAL))!;
     expect(h.id).toBe(joined.householdId);
     expect(h.data.demo).toBe(true);
-    expect((await say('08701')).replies.map(r => r.text)).toEqual([`Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`]);
-    expect((await say('A')).outcome).toBe('conversed');
-    expect((await say('1 11/19 day')).replies[0]!.text).toMatch(/^Recorded: flow Thu Nov 19 by day, 2026\./);
-    expect((await say('DONE')).replies).toEqual([{ text: T.SETUP_DONE, suggestions: T.MENU_SUGGEST }]);
-    expect((await say('REMINDERS ON')).replies[0]!.text).toBe(T.remindersOn('0142'));
+    expect((await say('08701')).replies.map(r => r.text)).toEqual([tx({ key: 'location.set', vars: { place: 'Lakewood, NJ 08701' } }, 'setup.customs')]);
+    expect((await say('KEEP FOR NOW')).outcome).toBe('conversed');
+    expect((await say('Nov 19 day')).replies[0]!.text).toMatch(/^Recorded: flow Thu Nov 19 by day, 2026\./);
+    expect((await say('NOT YET')).replies).toEqual([{ text: SETUP_DONE, suggestions: ['PERIOD', 'HEFSEK', 'REMINDERS', 'MORE'].map(l => ({ label: l, send: l })) }]);
+    expect((await say('REMINDERS ON')).replies[0]!.text).toBe(tx({ key: 'reminders.on', vars: { last4: '0142' } }));
     // a second made-up phone joins with a code
     const code = codeIn((await say('ADD')).replies[0]!.text);
     const spouse = await simulateText(env, world.deps, s, { from: '+17325550143', text: `JOIN ${code}` });
     expect(spouse).toMatchObject({ outcome: 'joined', householdId: h.id });
     // the sign-in link is returned, and works
     const web = (await say('WEB')).replies[0]!.text;
-    const token = new URL(web.slice(T.WEB_LINK_TEXT.length)).searchParams.get('k')!;
+    const token = tokenIn(web);
     const browser = new Client();
     expect((await browser.post('/api/auth/link', { token })).status).toBe(200);
     expect((await browser.get('/api/state')).json.state.demo).toBe(true);
@@ -836,7 +857,7 @@ describe('the operator\'s simulator', () => {
     expect(await counters()).toBe(before);
     // deleting it by text
     await say('DELETE ACCOUNT');
-    expect((await say('YES')).replies[0]!.text).toBe(T.DELETED);
+    expect((await say('YES')).replies[0]!.text).toBe(tx('delete.done'));
     expect(await householdOf(FICTIONAL)).toBeNull();
     expect(world.telnyx.sent).toEqual([]);
   });
@@ -849,12 +870,12 @@ describe('the operator\'s simulator', () => {
     await textAccount(WIFE);
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
     // a real household's code cannot bring a made-up phone in
-    expect(await simulateText(env, world.deps, s, { from: FICTIONAL, text: `JOIN ${code}` })).toEqual({ outcome: 'replied', replies: [{ text: T.BAD_INVITATION }], householdId: null });
+    expect(await simulateText(env, world.deps, s, { from: FICTIONAL, text: `JOIN ${code}` })).toEqual({ outcome: 'replied', replies: [{ text: BAD_INVITATION, suggestions: [{ label: 'JOIN', send: 'JOIN' }] }], householdId: null });
     expect((await householdOf(WIFE))!.data.phones).toHaveLength(1);
     // and a test account's code cannot bring a real phone in
     await simulateText(env, world.deps, s, { from: FICTIONAL, text: 'JOIN' });
     const demoCode = codeIn((await simulateText(env, world.deps, s, { from: FICTIONAL, text: 'ADD' })).replies[0]!.text);
-    expect(await sms(HUSBAND, `JOIN ${demoCode}`)).toEqual([T.BAD_INVITATION]);
+    expect(await sms(HUSBAND, `JOIN ${demoCode}`)).toEqual([BAD_INVITATION]);
     expect(await householdOf(HUSBAND)).toBeNull();
   });
 });
@@ -865,32 +886,32 @@ describe('the test account\'s text box', () => {
     expect((await op.post('/api/admin/demo')).status).toBe(200);
     const r = await op.post('/api/demo/text', { text: 'MENU' });
     expect(r.status).toBe(200);
-    expect(r.json.reply).toBe(T.MENU);
-    expect(r.json.replies).toEqual([{ text: T.MENU, suggestions: T.MENU_SUGGEST }]);
+    expect(r.json.reply).toBe(tx('menu.main'));
+    expect(r.json.replies).toEqual([{ text: tx('menu.main'), suggestions: ['PERIOD', 'HEFSEK', 'STATUS', 'MORE'].map(l => ({ label: l, send: l })) }]);
     const customs = await op.post('/api/demo/text', { text: 'CUSTOMS ALL' });
     expect(customs.json.replies[0].text).toMatch(/^Custom 1 of 12: /);
-    expect(customs.json.replies[0].suggestions.map((s: any) => s.send)).toEqual(['A', 'B', 'KEEP']);
+    expect(customs.json.replies[0].suggestions.map((s: any) => s.send)).toEqual(['FIVE DAYS', 'FOUR DAYS', 'KEEP']);
     const add = await op.post('/api/demo/text', { text: 'ADD' });
     expect(add.json.reply).toMatch(/^Have that phone text JOIN [A-Z]{8} to this number within 7 days\./);
     const cal = await op.post('/api/demo/text', { text: 'CALENDAR LINK' });
-    expect(cal.json.reply).toMatch(/^Calendar link created: https:\/\/cal\.example\/cal\/[A-Za-z0-9_-]+\.ics /);
+    expect(cal.json.reply).toMatch(/^Calendar link: https:\/\/cal\.example\/cal\/[A-Za-z0-9_-]+\.ics /);
     expect(cal.json.state.calendar.link).toBeTruthy();
     const web = await op.post('/api/demo/text', { text: 'WEB' });
-    expect(web.json.reply.startsWith(T.WEB_LINK_TEXT)).toBe(true);
-    expect(web.json.state.messages[0].body).toBe(`${T.WEB_LINK_TEXT}(link)`); // the link itself is not kept
+    expect(web.json.reply.startsWith(WEB_TEXT)).toBe(true);
+    expect(web.json.state.messages[0].body).toBe(`${WEB_TEXT}(link)\nReply: MENU`); // the link itself is not kept
     // an effect the server cannot carry out: its "could not" text is sent instead, and recorded so
-    expect((await op.post('/api/demo/text', { text: 'LEAVE' })).json.reply).toBe(T.LEAVE_ASK);
+    expect((await op.post('/api/demo/text', { text: 'LEAVE' })).json.reply).toBe(tx('phones.leave_ask'));
     const leave = await op.post('/api/demo/text', { text: 'YES' });
-    expect(leave.json.replies).toEqual([{ text: T.LEAVE_FAILED }]); // the test phone stays on the test account
+    expect(leave.json.replies.map((x: any) => x.text)).toEqual([tx('phones.leave_failed')]); // the test phone stays on the test account
     expect(leave.json.state.messages.slice(0, 2).map((m: any) => [m.direction, m.body, m.status])).toEqual([
-      ['out', T.LEAVE_FAILED, 'simulated'],
+      ['out', tx('phones.leave_failed'), 'simulated'],
       ['in', 'YES', 'simulated'],
     ]);
     expect(leave.json.state.phones).toHaveLength(2);
     const del = await op.post('/api/demo/text', { text: 'DELETE ACCOUNT' });
-    expect(del.json.reply).toBe(T.DELETE_ASK);
+    expect(del.json.reply).toBe(tx('delete.ask'));
     const yes = await op.post('/api/demo/text', { text: 'YES' });
-    expect(yes.json).toEqual({ reply: T.DELETED, replies: [{ text: T.DELETED }], signedOut: true });
+    expect(yes.json).toEqual({ reply: tx('delete.done'), replies: [{ text: tx('delete.done'), suggestions: [{ label: 'JOIN', send: 'JOIN' }] }], signedOut: true });
     expect((await op.get('/api/state')).status).toBe(401);
     expect(world.telnyx.sent).toEqual([]);
   });

@@ -126,13 +126,13 @@ describe('cost of one request', () => {
       await encrypt(KEY, JSON.stringify(doc), 'household:h');
       return out;
     };
-    const first = await handle('1 night');
+    const first = await handle('period night');
     expect(first.changed).toBe(true);
     expect(first.computed).toBeDefined(); // passed on: no second calculation
-    const record = await best(() => handle('1 night'));
-    const status = await best(() => handle('STATUS'));
-    const menu = await best(() => handle('MENU'));
-    const place = await best(() => handle('LOCATION 11219'));
+    const record = await best(() => handle('period night'));
+    const status = await best(() => handle('status'));
+    const menu = await best(() => handle('menu'));
+    const place = await best(() => handle('location 11219'));
     console.log(
       `one text by the engine: recording ${record.toFixed(2)} ms, status ${status.toFixed(2)} ms, a word ${menu.toFixed(2)} ms, a new location (picture worked out by the server) ${place.toFixed(2)} ms`,
     );

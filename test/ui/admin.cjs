@@ -464,37 +464,140 @@ async function seed() {
     await page.waitForFunction(n => document.querySelectorAll('#invites ul.list li').length === n - 1, count);
   });
 
-  // ----- the text simulator -----
-  await step('simulator: a complete sign-up by text, then DELETE ACCOUNT', async () => {
-    await open('simulator');
-    if ((await page.locator('#simulator .alert:has-text("Sign-up by text is off")').count()) !== 0) throw new Error('the note stayed after switching it on');
-    // the HELP and START replies as filed (docs/OPERATOR.md)
-    const words = await page.textContent('#simulator dl.texting-words');
-    if (!words.includes('Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.')) throw new Error('HELP wording');
-    if (!words.includes("Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.")) throw new Error('START wording');
+  // ----- the texts -----
+  const simSay = async (text, expect) => {
+    const before = await page.locator('#sim-log .sim-msg.site').count();
+    await page.fill('#sim-text', text);
+    await page.click('.sim-form button[type=submit]');
+    await page.waitForFunction(b => document.querySelectorAll('#sim-log .sim-msg.site').length > b, before);
+    if (expect) await page.waitForSelector(`#sim-log .sim-msg.site:last-child:has-text("${expect}")`);
+  };
+  /** Taps an option of the last reply, as on an RCS phone; the label is what is sent. */
+  const tap = async (label, expect) => {
+    const before = await page.locator('#sim-log .sim-msg.site').count();
+    await page.click(`#sim-log .sim-msg.site:last-child .chip:text-is("${label}")`);
+    await page.waitForFunction(b => document.querySelectorAll('#sim-log .sim-msg.site').length > b, before);
+    await page.waitForSelector(`#sim-log .sim-msg.me:has-text("${label}")`);
+    if (expect) await page.waitForSelector(`#sim-log .sim-msg.site:last-child:has-text("${expect}")`);
+  };
+  const newNumber = async () => {
     const n = String(10 + (Date.now() % 80)).padStart(2, '0');
     await page.click('button:has-text("Start over with another number")');
     await page.fill('#sim-from', '(732) 555-01' + n);
-    const say = async (text, expect) => {
-      const before = await page.locator('#sim-log .sim-msg.site').count();
-      await page.fill('#sim-text', text);
-      await page.click('.sim-form button[type=submit]');
-      await page.waitForFunction(b => document.querySelectorAll('#sim-log .sim-msg.site').length > b, before);
-      if (expect) await page.waitForSelector(`#sim-log .sim-msg.site:has-text("${expect}")`);
-    };
-    await say('JOIN', 'Step 1 of 3');
-    await say('08701', 'Lakewood, NJ 08701');
-    // the RCS buttons send their text
-    const before = await page.locator('#sim-log .sim-msg.site').count();
-    await page.click('#sim-log .sim-msg.site:last-child .chip:has-text("A:")');
-    await page.waitForFunction(b => document.querySelectorAll('#sim-log .sim-msg.site').length > b, before);
-    await page.waitForSelector('#sim-log .sim-msg.me:has-text("A")');
-    await say('1 11/19 day', 'Recorded');
-    await say('MENU', 'Words:');
+  };
+
+  await step('texts: every group, the filed texts marked, search', async () => {
+    await open('texts');
+    await page.waitForSelector('#texts .tx-row');
+    for (const g of ['sign-up', 'recording', 'status', 'reminders', 'settings', 'phones', 'calendar', 'carrier-words', 'other']) {
+      if ((await page.locator('#tx-group-' + g).count()) !== 1) throw new Error('no group ' + g);
+    }
+    const all = await page.locator('#texts .tx-row').count();
+    if (all < 100) throw new Error('only ' + all + ' texts');
+    if (!(await page.textContent('#tx-shown')).startsWith(all + ' of ' + all)) throw new Error('count line');
+    if ((await page.locator('#tx-group-carrier-words .tx-filed').count()) !== 3) throw new Error('the three filed texts are not marked');
+    if (!(await page.textContent('#tx-group-carrier-words')).includes('Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.')) throw new Error('HELP wording');
+    // every text shows its options line and its count
+    const main = await page.textContent('#tx-menu-main-sms');
+    if (main !== 'Betaharah.\nReply: PERIOD, HEFSEK, STATUS, MORE') throw new Error('main menu text: ' + JSON.stringify(main));
+    if (!/^46 characters · 1 SMS$/.test((await page.textContent('#tx-menu-main .tx-count')).trim())) throw new Error('count');
+    await page.fill('#tx-search', 'hefsek tahara');
+    await page.waitForFunction(n => document.querySelectorAll('#texts .tx-row').length < n, all);
+    const found = await page.locator('#texts .tx-row').count();
+    if (found < 2 || found > 8) throw new Error(found + ' found');
+    if ((await page.locator('#tx-reminder-hefsek').count()) !== 1) throw new Error('the hefsek reminder is not found');
+    await page.fill('#tx-search', 'no such words at all');
+    await page.waitForSelector('#texts .empty');
+    await page.fill('#tx-search', '');
+    await page.waitForFunction(n => document.querySelectorAll('#texts .tx-row').length === n, all);
+    await noSideways();
+  });
+
+  await step('texts: edit a body and a label with a preview and count, a validation error, save; the simulator uses it; reset', async () => {
+    await open('texts');
+    await page.click('#tx-edit-setup-start');
+    await page.waitForSelector('#tx-body');
+    // the placeholders and the labels
+    await page.fill('#tx-body', 'Welcome. Setup step 1 of 3: the ZIP code.');
+    await page.waitForFunction(() => document.querySelector('#tx-edit-sms').textContent === 'Welcome. Setup step 1 of 3: the ZIP code.\nReply: SKIP');
+    if (!/^\d+ characters · 1 SMS$/.test((await page.textContent('#tx-edit-count')).trim())) throw new Error('no count');
+    await page.fill('#tx-label-skip_place', 'STOP');
+    await page.waitForFunction(() => document.querySelector('#tx-edit-sms').textContent.endsWith('Reply: STOP'));
+    await page.click('#tx-save');
+    await page.waitForSelector('#texts .field .error:has-text("STOP is a word the carrier acts on")');
+    if ((await page.getAttribute('#tx-label-skip_place', 'aria-invalid')) !== 'true') throw new Error('the label is not marked');
+    await page.fill('#tx-label-skip_place', 'NOT NOW');
+    await page.click('#tx-save');
+    await toast('Saved');
+    await page.waitForSelector('#tx-setup-start .tag:has-text("changed")');
+    if ((await page.textContent('#tx-setup-start-sms')) !== 'Welcome. Setup step 1 of 3: the ZIP code.\nReply: NOT NOW') throw new Error('not shown as saved');
+    // an editor with a placeholder: a chip inserts it, and the server refuses a missing one
+    await page.click('#tx-edit-location-set');
+    await page.fill('#tx-body', 'Location set.');
+    await page.click('#tx-save');
+    await page.waitForSelector('#texts .error:has-text("{place} must stay in the text.")');
+    await page.click('#tx-var-place');
+    await page.waitForFunction(() => document.querySelector('#tx-body').value.includes('{place}'));
+    await page.click('#tx-cancel');
+    // the simulator uses the new wording, and its option
+    await open('simulator');
+    await newNumber();
+    await simSay('JOIN', 'Welcome. Setup step 1 of 3: the ZIP code.');
+    await page.waitForSelector('#sim-log .sim-msg.site:last-child .chip:text-is("NOT NOW")');
+    await tap('NOT NOW', 'Step 2 of 3');
+    // back to the original
+    await open('texts');
+    await page.click('#tx-edit-setup-start');
+    await page.click('#tx-reset');
+    await toast('Back to the original');
+    if ((await page.textContent('#tx-setup-start-sms')).endsWith('Reply: SKIP') !== true) throw new Error('not reset');
+    if ((await page.locator('#tx-setup-start .tag:has-text("changed")').count()) !== 0) throw new Error('still marked changed');
+  });
+
+  await step('texts: the general words and the options prefix, with an error beside the field', async () => {
+    await open('texts');
+    await page.waitForSelector('#tx-words-status');
+    await page.fill('#tx-words-status', 'status, where, hefsek');
+    await page.click('#tx-words-save');
+    await page.waitForSelector('#tx-words .error:has-text("already a word for")');
+    await page.fill('#tx-words-status', 'status, where, situation');
+    await page.click('#tx-words-save');
+    await toast('Saved');
+    await open('simulator');
+    await newNumber();
+    await simSay('JOIN', 'Step 1 of 3');
+    await simSay('situation', 'No location is set yet.');
+    await open('texts');
+    await page.fill('#tx-words-status', 'status, where');
+    await page.click('#tx-words-save');
+    await toast('Saved');
+  });
+
+  // ----- the text simulator -----
+  await step('simulator: a whole conversation walked by tapping the options, then DELETE ACCOUNT', async () => {
+    await open('simulator');
+    if ((await page.locator('#simulator .alert:has-text("Sign-up by text is off")').count()) !== 0) throw new Error('the note stayed after switching it on');
+    if (!(await page.textContent('#simulator dl.texting-words')).includes('Every text ends with its options')) throw new Error('what people text');
+    await newNumber();
+    await simSay('JOIN', 'Step 1 of 3');
+    await simSay('08701', 'Lakewood, NJ 08701');
+    await tap('KEEP FOR NOW', 'Step 3 of 3');
+    await tap('SKIP', 'Setup is done.');
+    await tap('PERIOD', 'When did it begin?');
+    await tap('NOW', 'Recorded: flow');
+    // the reply shows its options as the SMS line and as buttons
+    if (!(await page.textContent('#sim-log .sim-msg.site:last-child .sim-bubble')).endsWith('Reply: UNDO, STATUS')) throw new Error('no options line');
+    await tap('STATUS', 'Niddah since');
+    await tap('MORE', 'More:');
     await noSideways();
     await page.screenshot({ path: out + '/admin-simulator.png', fullPage: false });
-    await say('DELETE ACCOUNT');
-    await say('YES');
+    // only the buttons of the last reply can be pressed
+    if (!(await page.isDisabled('#sim-log .sim-msg.site .chip >> nth=0'))) throw new Error('an old button is live');
+    await simSay('9', 'Not understood');
+    await tap('MORE', 'More:');
+    await tap('ACCOUNT', 'Account:');
+    await tap('DELETE ACCOUNT', 'Delete the account?');
+    await tap('YES', 'The account is deleted.');
     // the account list reloads after the deletion and redraws the page; wait for it before typing
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(300);

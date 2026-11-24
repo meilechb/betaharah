@@ -2,8 +2,8 @@
 
 A free tool for family and friends, at **https://betaharah.com**.
 
-A couple signs up with a phone number. They record dates by texting one
-digit, or on the website. The site works out the onot perishah, the hefsek
+A couple signs up with a phone number. They record dates by text, answering
+the options each text lists, or on the website. The site works out the onot perishah, the hefsek
 taharah, the seven clean days and mikvah night by the Hebrew calendar, the
 sun at their location and their own customs, shows them in their own
 calendar (Google Calendar, or any calendar app through a subscription link),
@@ -21,7 +21,7 @@ If you run the site, read [docs/OPERATOR.md](docs/OPERATOR.md). The Google Cloud
 |---|---|
 | Sign up, and sign in each time | Sign in with Google (when the operator has turned it on); or text `JOIN` to the site's number and answer the setup questions by text, with no website at all; or enter a mobile number on the website, get a six-digit code by text, type it in. A password can be set as well, under Settings. Everything (location by ZIP code, customs, phones, reminders, calendar link, deleting the account) can be done by text: [docs/TEXTING.md](docs/TEXTING.md). |
 | Location and customs | Sunrise, sunset and nightfall are calculated for the place chosen. Every point on which customs differ is a setting; until they are saved the stricter option of each is used. |
-| Recording | On the website, or by text: `1` flow, `2` hefsek, `3` count broken, `4` immersed, `5` stain, `9` status, `0` undo, `?` commands, `MENU` for every other word. After `1`, `3`, `5`: `day`, `night`, `yesterday night`, or a time such as `6:40am`. After `2`, `4`: `yesterday`. Past dates: `1 11/22 night`, `2 11/26`, `4 12/3`. By SMS, or by RCS with tap-to-reply buttons once the RCS agent is approved. |
+| Recording | On the website, or by text: every text ends with its options (`Reply: PERIOD, HEFSEK, STATUS, MORE`), answered by word: `period last night`, `hefsek yesterday`, `period Nov 22 night`. No digit commands. By SMS, or by RCS with the options as buttons once the RCS agent is approved. Every text and its options are on the console's Texts page, where the operator can change them. |
 | Husband and wife | A second phone is added on the website with a code texted to it, or by text: a phone on the account texts `ADD` and gets a code, and the other phone texts `JOIN` and that code. Up to four phones share one account; each chooses its own reminders. |
 | Calendar (optional) | Connect Google Calendar (the site creates one calendar and can see only that one), or create a subscription link for any calendar app. Titles in words, or as symbols only. |
 | Reminders (optional) | Off until turned on for a phone. Nothing is sent on Shabbat or Yom Tov. STOP stops them. |
@@ -46,7 +46,7 @@ number from 555-0100 to 555-0199.
 | The rules: dates, sun times, vesatot, the count | `src/engine/` |
 | The two forms of each halachic term | `src/engine/terms.ts` |
 | Wording of calendar events; wording of text messages | `src/engine/calendar.ts`, `src/engine/present.ts` |
-| Accounts, sign-in, storage, text commands, reminders, Google Calendar | `src/app/` |
+| Accounts, sign-in, storage, texts and replies, reminders, Google Calendar | `src/app/` |
 | Help, Privacy and Terms pages, and the Donate page (`/donate`, only once the operator has entered a way to give) | `src/app/pages.ts` |
 | The calculation test (console) and "Try it" (home page): a made-up household worked out in memory by the same code, nothing stored (`POST /api/admin/sandbox`, `POST /api/try`) | `src/app/sandbox.ts`, `public/admin/sections/calc.js`, `public/landing-try.js` |
 | The public page, the dashboard (`/app/`), the operator's console (`/admin/`) | `public/` |

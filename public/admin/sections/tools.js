@@ -59,20 +59,14 @@ function link(href, label, note) {
   return h('li', {}, h('a', { href, target: '_blank', rel: 'noopener' }, label, ' ', icon('chevron-right', { size: 'sm' })), note ? h('span', { class: 'small muted' }, ' ' + note) : null);
 }
 
-/** The fixed replies to START and HELP, as filed for the toll-free verification (docs/OPERATOR.md; src/app/service.ts). */
-const START_TEXT = '“Betaharah: you\'re subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.”';
-const HELP_TEXT = '“Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.”';
-
-/** The words people text, in short. The full reference is docs/TEXTING.md in the repository. */
+/** What people text, in short. Every text, with its options, is on the Texts page. */
 function whatPeopleText() {
   const rows = [
-    ['JOIN', 'Signs up while sign-up is open. While it is by invitation: JOIN and an invitation word. JOIN and a code (from ADD on an account) adds a phone to that account.'],
-    ['MENU', 'Lists the words. Each word sent alone shows its own options: STATUS, HISTORY, UNDO, LOCATION, CUSTOMS, NIGHTFALL, REMINDERS, PHONES, CALENDAR, TERMS, WEB, SETUP, DELETE ACCOUNT.'],
-    ['1 2 3 4 5', 'Record: 1 flow began, 2 hefsek done, 3 count broken, 4 immersion (optional), 5 stain. After 1, 3 or 5 add day, night, yesterday night or a time (9pm). A date also works: 1 11/22 night.'],
-    ['9, 0, ?', '9 status, 0 undo the last entry, ? the short list of digits.'],
-    ['REMINDERS ON', 'Turns reminders on for that phone. That text is the consent; reminders are off until then.'],
-    ['WEB', 'Texts back a one-time link that signs in on the website.'],
-    ['STOP, START, HELP', 'STOP ends all texts to that phone until it texts START. START gets the reply filed with the toll-free verification: ' + START_TEXT + ' HELP gets: ' + HELP_TEXT + ' HELP and START are answered also from a number without an account.'],
+    ['Options', 'Every text ends with its options, e.g. "Reply: PERIOD, HEFSEK, STATUS, MORE". A reply is the option\'s word, or a few words that contain it. By RCS the options are buttons.'],
+    ['PERIOD, HEFSEK', 'Ask when, with options; or with the time in words: "period last night", "hefsek yesterday", "period Nov 22 night".'],
+    ['STATUS, MORE', 'Where things stand; and the rest: history, undo, a stain, settings, the account.'],
+    ['JOIN', 'Signs up while sign-up is open. By invitation: JOIN and an invitation word. JOIN and a code (from ADD on an account) adds a phone to that account.'],
+    ['STOP, START, HELP', 'STOP ends all texts to that phone until START. START and HELP get the replies filed with the toll-free verification, also from a number without an account.'],
   ];
   return h('dl', { class: 'texting-words' }, rows.map(([word, what]) => h('div', {}, h('dt', {}, h('code', {}, word)), h('dd', {}, what))));
 }
@@ -92,7 +86,7 @@ export function simulatorCards() {
     'div',
     { class: 'grid-2 sim-grid' },
     card({ title: 'Try signing up by text', icon: 'phone' }, signupOffNote(), simulator()),
-    card({ title: 'What people can text', icon: 'list', intro: 'Capitals or not does not matter. The full list, with every reply, is docs/TEXTING.md in the repository.' }, whatPeopleText()),
+    card({ title: 'What people can text', icon: 'list', intro: 'Capitals and punctuation do not matter. Every text and its options: ' }, whatPeopleText(), h('p', { class: 'help' }, h('a', { href: '#texts' }, 'Texts'))),
   );
 }
 

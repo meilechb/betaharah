@@ -779,7 +779,7 @@ describe('an account made by the operator for one number, with a password and no
     expect((await c.put('/api/phones', { number: HUSBAND, name: '', canUpdate: true, reminders: [], texts: true })).status).toBe(400);
     await op.put('/api/admin/secrets', { telnyxApiKey: 'telnyx-key', telnyxPublicKey: world.telnyx.publicKey, telnyxNumber: OUR_NUMBER });
     await c.put('/api/app', appSettings());
-    await text(HUSBAND, '1', 'ev-unverified');
+    await text(HUSBAND, 'period now', 'ev-unverified');
     expect((await c.state()).entries).toEqual([]);
     expect(world.telnyx.sent).toEqual([]);
 
@@ -787,7 +787,7 @@ describe('an account made by the operator for one number, with a password and no
     await fresh.post('/api/auth/code', { number: HUSBAND });
     expect((await fresh.post('/api/auth/verify', { number: HUSBAND, code: lastCode(HUSBAND) })).json).toEqual({ ok: true, created: false });
     expect((await fresh.state()).phones[0]).toMatchObject({ number: HUSBAND, verified: true });
-    await text(HUSBAND, '1', 'ev-verified');
+    await text(HUSBAND, 'period now', 'ev-verified');
     expect((await c.state()).entries).toHaveLength(1);
   });
 });
@@ -971,7 +971,7 @@ describe('one account never sees another', () => {
   });
 
   it('a text changes only the account its phone belongs to', async () => {
-    await text(OTHER, '2 yesterday', 'ev-b'); // B is niddah since the 10th; a hefsek on the 22nd is in order
+    await text(OTHER, 'hefsek yesterday', 'ev-b'); // B is niddah since the 10th; a hefsek on the 22nd is in order
     expect((await a.state()).entries).toHaveLength(1);
     expect((await b.state()).entries).toHaveLength(2);
     expect((await a.state()).messages).toEqual([]);
@@ -1171,12 +1171,11 @@ describe('recording on the website', () => {
     expect(after.alerts).toEqual([]);
   });
 
-  it('lists the text commands as rows, in the words the texts use', async () => {
+  it('gives the main options by text, as the texts show them (no digits)', async () => {
     const s = await c.state();
-    expect(s.sms.commandList.map((r: any) => r.text)).toEqual(['1', '2', '3', '4', '5', '9', '0', '?', 'MENU', 'STOP', 'START']);
-    expect(s.sms.commandNote).toContain('After 2 or 4: yesterday.');
-    await c.put('/api/app', { ...s.app, terms: 'he' });
-    expect((await c.state()).sms.commandList[1].meaning).toBe('the hefsek is done');
+    expect(s.sms.mainOptions).toEqual(['PERIOD', 'HEFSEK', 'STATUS', 'MORE']);
+    expect(s.sms.commandList.map((r: any) => r.text)).toEqual(['PERIOD', 'HEFSEK', 'STATUS', 'MORE']);
+    expect(JSON.stringify(s.sms)).not.toMatch(/"\d"/);
   });
 
   it('removes an entry, and the picture follows', async () => {
@@ -1224,7 +1223,7 @@ describe('husband and wife on one account', () => {
 
     // and either can record by text
     world.clock.now = at(11, 27, 15);
-    await text(WIFE, '2', 'ev-w1');
+    await text(WIFE, 'hefsek today', 'ev-w1');
     expect((await husband.state()).entries).toHaveLength(2);
     expect(textsTo(WIFE).at(-1)).toMatch(/^Recorded: hefsek Fri Nov 27\./);
   });
@@ -1252,9 +1251,9 @@ describe('husband and wife on one account', () => {
     expect(r.json.state.phones[0]).toMatchObject({ number: HUSBAND, name: '', canUpdate: true });
     expect((await husband.put('/api/phones', { number: WIFE, name: 'R', canUpdate: true, reminders: ['everything'], texts: false })).status).toBe(400);
     // a phone that may not record by text is told so, and nothing changes (it can still use the words that do not record)
-    await text(WIFE, '1', 'ev-w');
+    await text(WIFE, 'period now', 'ev-w');
     expect((await husband.state()).entries).toEqual([]);
-    expect(textsTo(WIFE).filter(t => !t.startsWith('Betaharah code'))).toEqual(['This phone may not record entries (see Settings on the website).']);
+    expect(textsTo(WIFE).filter(t => !t.startsWith('Betaharah code'))).toEqual(['This phone may not record entries. That is set on the website.\nReply: STATUS, MENU']);
   });
 
   it('turning reminders on for a phone records the consent and sends one confirmation', async () => {
@@ -1281,7 +1280,7 @@ describe('husband and wife on one account', () => {
     expect(removed.status).toBe(200);
     expect(removed.json.state.phones.map((p: any) => p.number)).toEqual([HUSBAND]);
     expect((await wife.get('/api/state')).status).toBe(401);
-    await text(WIFE, '1', 'ev-gone');
+    await text(WIFE, 'period now', 'ev-gone');
     expect((await husband.state()).entries).toEqual([]);
     // her number now starts an account of its own
     world.clock.now += 2 * MINUTE;
@@ -1325,17 +1324,17 @@ describe('text messages', () => {
   const replies = (): string[] => textsTo(HUSBAND).filter(t => !t.startsWith('Betaharah code'));
 
   it('records a command and replies', async () => {
-    expect(await text(HUSBAND, '1', 'ev1')).toBe(200);
-    expect(replies()).toEqual(['Recorded: flow Mon Nov 23 by day. Hefsek from Fri Nov 27. 0 to undo.']);
+    expect(await text(HUSBAND, 'period now', 'ev1')).toBe(200);
+    expect(replies()).toEqual(['Recorded: flow Mon Nov 23 by day. Hefsek from Fri Nov 27.\nReply: UNDO, STATUS']);
     const s = await c.state();
     expect(s.entries[0]).toMatchObject({ kind: 'flow', source: 'sms' });
     expect(s.messages.map((m: any) => [m.direction, m.phone, m.body, m.status])).toEqual([
-      ['out', '0101', 'Recorded: flow Mon Nov 23 by day. Hefsek from Fri Nov 27. 0 to undo.', 'sent'],
-      ['in', '0101', '1', 'received'],
+      ['out', '0101', 'Recorded: flow Mon Nov 23 by day. Hefsek from Fri Nov 27.\nReply: UNDO, STATUS', 'sent'],
+      ['in', '0101', 'period now', 'received'],
     ]);
-    await text(HUSBAND, '9', 'ev2');
+    await text(HUSBAND, 'status', 'ev2');
     expect(replies().at(-1)).toMatch(/^Niddah since Mon Nov 23\./);
-    await text(HUSBAND, '0', 'ev3');
+    await text(HUSBAND, 'undo', 'ev3');
     expect(replies().at(-1)).toMatch(/^Removed: flow Mon Nov 23 by day\. Tehorah\./);
     expect((await c.state()).entries).toEqual([]);
     await text(HUSBAND, 'what?', 'ev4');
@@ -1343,8 +1342,8 @@ describe('text messages', () => {
   });
 
   it('acts once on a message that is delivered twice', async () => {
-    await text(HUSBAND, '1', 'same');
-    await text(HUSBAND, '1', 'same');
+    await text(HUSBAND, 'period now', 'same');
+    await text(HUSBAND, 'period now', 'same');
     expect(replies()).toHaveLength(1);
     expect((await c.state()).entries).toHaveLength(1);
   });
@@ -1352,9 +1351,9 @@ describe('text messages', () => {
   it('ignores a number it does not know while sign-up by text is off, and a message for another number', async () => {
     const op = await operator();
     await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, textSignup: false });
-    expect(await text(OTHER, '1', 'ev1')).toBe(200);
+    expect(await text(OTHER, 'period now', 'ev1')).toBe(200);
     expect(await text(OTHER, 'JOIN', 'ev1b')).toBe(200);
-    expect(await text(HUSBAND, '1', 'ev2', { to: '+18885550999' })).toBe(200);
+    expect(await text(HUSBAND, 'period now', 'ev2', { to: '+18885550999' })).toBe(200);
     expect(await text(OTHER, 'JOIN', 'ev3', { to: '+18885550999' })).toBe(200);
     expect(world.telnyx.sent.filter(s => !s.text.startsWith('Betaharah code'))).toEqual([]);
     expect((await c.state()).entries).toEqual([]);
@@ -1363,7 +1362,7 @@ describe('text messages', () => {
 
   it('records an RCS text sent to either webhook address, before the agent is saved in the console', async () => {
     // An RCS agent's inbound webhook may be set to /webhooks/telnyx/rcs; one handler reads both shapes at both addresses.
-    const req = await world.telnyx.inboundRcs({ from: HUSBAND, agentId: 'agent-betaharah', eventId: 'rcs1', nowMs: world.clock.now, body: { text: '1' } });
+    const req = await world.telnyx.inboundRcs({ from: HUSBAND, agentId: 'agent-betaharah', eventId: 'rcs1', nowMs: world.clock.now, body: { text: 'period now' } });
     const unsigned = await new Client().call('POST', '/webhooks/telnyx/rcs', undefined, { raw: req.body, header: false });
     expect(unsigned.status).toBe(401);
     expect((await c.state()).entries).toEqual([]);
@@ -1381,8 +1380,8 @@ describe('text messages', () => {
   });
 
   it('refuses a webhook that Telnyx did not sign', async () => {
-    const req = await world.telnyx.inbound({ from: HUSBAND, to: OUR_NUMBER, text: '1', eventId: 'ev1', nowMs: world.clock.now });
-    const forged = await new Client().call('POST', '/webhooks/telnyx', undefined, { raw: req.body.replace('"1"', '"4"'), headers: req.headers, header: false });
+    const req = await world.telnyx.inbound({ from: HUSBAND, to: OUR_NUMBER, text: 'period now', eventId: 'ev1', nowMs: world.clock.now });
+    const forged = await new Client().call('POST', '/webhooks/telnyx', undefined, { raw: req.body.replace('"period now"', '"hefsek today"'), headers: req.headers, header: false });
     expect(forged.status).toBe(401);
     const unsigned = await new Client().call('POST', '/webhooks/telnyx', undefined, { raw: req.body, header: false });
     expect(unsigned.status).toBe(401);
@@ -1409,7 +1408,7 @@ describe('text messages', () => {
     expect(await count('households', 'wake_at IS NOT NULL')).toBe(0);
 
     // commands are not acted on while opted out, and nothing is sent
-    await text(HUSBAND, '9', 'ev-status');
+    await text(HUSBAND, 'status', 'ev-status');
     expect(world.telnyx.sent).toHaveLength(before);
     expect((await c.post('/api/phones/test', { number: HUSBAND })).status).toBe(400);
 
@@ -1419,7 +1418,7 @@ describe('text messages', () => {
     s = await c.state();
     expect(s.phones[0]).toMatchObject({ optedOut: false, texts: true });
     expect(await waiting()).toBeGreaterThan(0);
-    await text(HUSBAND, '9', 'ev-status-2');
+    await text(HUSBAND, 'status', 'ev-status-2');
     expect(world.telnyx.sent).toHaveLength(before + 2);
   });
 
@@ -1438,7 +1437,7 @@ describe('text messages', () => {
     await text(HUSBAND, 'HELP', 'ev2', { autoresponseType: 'HELP' });
     expect(replies()).toEqual([HELP_REPLY, HELP_REPLY]);
     await text(HUSBAND, '?', 'ev3');
-    expect(replies().at(-1)).toMatch(/^1 flow, 2 hefsek, 3 count broken, 4 mikvah \(optional\)/);
+    expect(replies().at(-1)).toBe('Betaharah.\nReply: PERIOD, HEFSEK, STATUS, MORE');
   });
 
   it('HELP and START from a number with no account get the filed replies, and the number is not stored', async () => {
@@ -1449,7 +1448,7 @@ describe('text messages', () => {
     expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
     expect(await text(stranger, 'STOP', 'kw-stop')).toBe(200);
     expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
-    expect(await text(stranger, '1', 'kw-command')).toBe(200);
+    expect(await text(stranger, 'period now', 'kw-command')).toBe(200);
     expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
     expect(await count('phones')).toBe(1);
     expect(await count('households')).toBe(1);
@@ -1460,7 +1459,7 @@ describe('text messages', () => {
 
   it('when the carrier says a number has opted out, the site notes it', async () => {
     world.telnyx.blocked.add(HUSBAND);
-    await text(HUSBAND, '9', 'ev1');
+    await text(HUSBAND, 'status', 'ev1');
     const s = await c.state();
     expect(s.phones[0].optedOut).toBe(true);
     expect(s.messages.find((m: any) => m.direction === 'out')).toMatchObject({ status: 'not sent' });
@@ -1470,32 +1469,32 @@ describe('text messages', () => {
     const op = await operator();
     await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, householdMonthlyLimit: 2 });
     world.telnyx.failNext = 1;
-    await text(HUSBAND, '9', 'ev0'); // fails at the provider: not counted
+    await text(HUSBAND, 'status', 'ev0'); // fails at the provider: not counted
     expect((await c.state()).sms.usedThisMonth).toBe(0);
-    await text(HUSBAND, '9', 'ev1');
-    await text(HUSBAND, '9', 'ev2');
+    await text(HUSBAND, 'status', 'ev1');
+    await text(HUSBAND, 'status', 'ev2');
     expect(replies()).toHaveLength(2);
-    await text(HUSBAND, '9', 'ev3');
+    await text(HUSBAND, 'status', 'ev3');
     expect(replies()).toHaveLength(2);
     const s = await c.state();
     expect(s.sms).toMatchObject({ usedThisMonth: 2, monthlyLimit: 2 });
     expect(s.messages.find((m: any) => m.direction === 'out')).toMatchObject({ status: 'not sent' });
     // another account is not affected
     const other = await account(OTHER, new Client('203.0.113.2'));
-    await text(OTHER, '9', 'ev4');
-    expect(textsTo(OTHER).at(-1)).toBe('Tehorah.');
+    await text(OTHER, 'status', 'ev4');
+    expect(textsTo(OTHER).at(-1)).toBe('Tehorah.\nReply: PERIOD, HEFSEK, HISTORY, MORE');
     expect((await other.state()).sms.usedThisMonth).toBe(1);
     // a new month starts a new count
     world.clock.now = at(12, 2, 10);
-    await text(HUSBAND, '9', 'ev5');
+    await text(HUSBAND, 'status', 'ev5');
     expect(replies()).toHaveLength(3);
   });
 
   it('more than thirty texts in an hour from one phone are ignored', async () => {
-    for (let i = 0; i < 31; i++) await text(HUSBAND, '9', `ev${i}`);
+    for (let i = 0; i < 31; i++) await text(HUSBAND, 'status', `ev${i}`);
     expect(replies()).toHaveLength(30);
     world.clock.now += HOUR + MINUTE;
-    await text(HUSBAND, '9', 'later');
+    await text(HUSBAND, 'status', 'later');
     expect(replies()).toHaveLength(31);
   });
 });
@@ -1519,7 +1518,7 @@ describe('reminders', () => {
     world.clock.now = at(11, 26, 14, 34);
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
-    expect(reminders(WIFE)[0]).toMatch(/^Hefsek tahara: Thu Nov 26, before sunset at 4:33 PM\. Reply 2 when done\.$/);
+    expect(reminders(WIFE)[0]).toBe('Hefsek tahara: Thu Nov 26, before sunset at 4:33 PM.\nReply: DONE, STATUS');
     expect(reminders(HUSBAND)).toEqual([]); // he did not turn reminders on
     world.clock.now += MINUTE;
     await run();
@@ -1529,26 +1528,60 @@ describe('reminders', () => {
     expect(s.sms.usedThisMonth).toBe(2); // the confirmation and the reminder
   });
 
+  it('the hefsek reminder offers DONE, which records the hefsek on that day; the others offer STATUS', async () => {
+    await textsOn(c, WIFE);
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    world.clock.now = at(11, 26, 14, 34);
+    await run();
+    expect(reminders(WIFE).at(-1)).toBe('Hefsek tahara: Thu Nov 26, before sunset at 4:33 PM.\nReply: DONE, STATUS');
+    // DONE, written in words, an hour later
+    world.clock.now = at(11, 26, 15, 40);
+    await text(WIFE, 'Done.', 'ev-done');
+    expect(reminders(WIFE).at(-1)).toMatch(/^Recorded: hefsek Thu Nov 26\. Clean days Fri Nov 27 - Thu Dec 3\. Mikvah Thu Dec 3 after 5:1\d PM\.\nReply: UNDO, STATUS$/);
+    const s = await c.state();
+    expect(s.entries.map((e: any) => e.kind)).toEqual(['hefsek', 'flow']);
+    // the next reminder (a clean day) offers STATUS, which answers with the status
+    world.clock.now = at(11, 27, 8, 1);
+    await run();
+    expect(reminders(WIFE).at(-1)).toMatch(/^Clean day 1 of 7 is Fri Nov 27: bedikah in the morning and again before sunset at 4:3\d PM\. Required on this day\.\nReply: STATUS$/);
+    await text(WIFE, 'STATUS', 'ev-status');
+    expect(reminders(WIFE).at(-1)).toMatch(/^Clean day 1 of 7\. Mikvah Thu Dec 3 after 5:1\d PM\.\nReply: PERIOD, HEFSEK, HISTORY, MORE$/);
+    // DONE now matches nothing: the options of the last text are the status's
+    await text(WIFE, 'DONE', 'ev-late');
+    expect(reminders(WIFE).at(-1)).toBe('Not understood; nothing was changed.\nReply: PERIOD, HEFSEK, STATUS, MORE');
+  });
+
+  it('the discreet hefsek reminder keeps its options, and DONE still records', async () => {
+    await textsOn(c, WIFE, ['hefsek']);
+    await c.put('/api/app', { ...(await c.state()).app, reminders: { ...(await c.state()).app.reminders, style: 'discreet' } });
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    world.clock.now = at(11, 26, 14, 34);
+    await run();
+    expect(reminders(WIFE).at(-1)).toBe('H Thu Nov 26 before 4:33 PM.\nReply: DONE, STATUS');
+    await text(WIFE, 'done', 'ev-done');
+    expect((await c.state()).entries.map((e: any) => e.kind)).toEqual(['hefsek', 'flow']);
+  });
+
   it('to book the mikvah: the morning after the hefsek is recorded, once, and never a question about the immersion', async () => {
     await textsOn(c, WIFE);
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     // the hefsek of Thursday 26 November, recorded that evening by text
     world.clock.now = at(11, 26, 16);
-    await text(WIFE, '2', 'ev-h');
+    await text(WIFE, 'hefsek today', 'ev-h');
     world.clock.now = at(11, 27, 8, 59);
     await run();
     expect(reminders(WIFE).filter(t => t.startsWith('Book'))).toEqual([]);
     world.clock.now = at(11, 27, 9, 1);
     await run();
     await run();
-    expect(reminders(WIFE).filter(t => t.startsWith('Book'))).toEqual([expect.stringMatching(/^Book the mikvah: mikvah night is Thu Dec 3, after 5:1\d PM\.$/)]);
+    expect(reminders(WIFE).filter(t => t.startsWith('Book'))).toEqual([expect.stringMatching(/^Book the mikvah: mikvah night is Thu Dec 3, after 5:1\d PM\.\nReply: STATUS$/)]);
     // the mikvah night and the morning after: no question, no prompt
     world.clock.now = at(12, 3, 16);
     await run();
     world.clock.now = at(12, 4, 9, 30);
     await run();
     const all = reminders(WIFE);
-    expect(all.find(t => t.startsWith('Mikvah night'))).toMatch(/^Mikvah night: Thu Dec 3, after 5:1\d PM\.$/);
+    expect(all.find(t => t.startsWith('Mikvah night'))).toMatch(/^Mikvah night: Thu Dec 3, after 5:1\d PM\.\nReply: STATUS$/);
     for (const t of all) expect(t).not.toMatch(/Reply 4|immers|not recorded|no M recorded/i);
     expect((await c.state()).status).toMatchObject({ phase: 'tehorah' });
   });
@@ -1606,14 +1639,14 @@ describe('reminders', () => {
     expect(reminders(WIFE)).toHaveLength(1);
     // the hefsek is recorded: the hefsek reminders go, the reminders of the seven days come
     world.clock.now = at(11, 26, 16);
-    await text(WIFE, '2', 'ev-h');
+    await text(WIFE, 'hefsek today', 'ev-h');
     const keys = await queue();
     expect(keys.filter(k => k.status === 'sent').map(k => k.key)).toEqual([expect.stringMatching(/^hefsek:/)]);
     expect(keys.find(k => k.status === 'sent')!.text).toBe(''); // the words are not kept once sent
     expect(keys.filter(k => k.status === 'pending' && k.key.startsWith('hefsek:'))).toEqual([]);
     expect(keys.filter(k => k.status === 'pending' && k.key.startsWith('bedikah_am:')).length).toBe(7);
     // she removes it again: the same day's hefsek reminder is not sent a second time
-    await text(WIFE, '0', 'ev-undo');
+    await text(WIFE, 'undo', 'ev-undo');
     await run();
     expect(reminders(WIFE).filter(t => t.startsWith('Hefsek'))).toHaveLength(1);
   });
@@ -1941,7 +1974,7 @@ describe('your data', () => {
     expect(c.cookies.has('bt_session')).toBe(false);
     expect(world.google.revoked).toEqual(['refresh-1']);
     for (const table of ['households', 'phones', 'codes']) expect(await count(table, table === 'codes' ? 'household_id IS NOT NULL' : '1=1'), table).toBe(0);
-    await text(WIFE, '9', 'ev-after');
+    await text(WIFE, 'status', 'ev-after');
     expect(textsTo(WIFE).filter(t => t.startsWith('Tehorah') || t.startsWith('Niddah'))).toEqual([]);
 
     // the same number can start again from nothing
@@ -1961,7 +1994,7 @@ describe('what can be read in the database', () => {
     await textsOn(c, WIFE);
     await c.put('/api/phones', { number: HUSBAND, name: 'Private name', canUpdate: true, reminders: ['mikvah'], texts: true });
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day', note: 'a private note' });
-    await text(WIFE, '9', 'ev1');
+    await text(WIFE, 'status', 'ev1');
     const start = await c.get('/api/google/start');
     await c.get(`/api/google/callback?code=good-code&state=${encodeURIComponent(new URL(start.res.headers.get('location') as string).searchParams.get('state') as string)}`);
     await tick(env, world.deps);
@@ -1973,7 +2006,7 @@ describe('what can be read in the database', () => {
     await op.post('/api/admin/invites', { kind: 'setup', number: '+17324440177' });
     // the test account, with a simulated text, a simulated added phone and its simulated code
     expect((await op.post('/api/admin/demo')).status).toBe(200);
-    expect((await op.post('/api/demo/text', { text: '9' })).status).toBe(200);
+    expect((await op.post('/api/demo/text', { text: 'status' })).status).toBe(200);
     const demoCode = (await op.post('/api/phones/code', { number: '+17325550150' })).json.demoCode as string;
     expect(demoCode).toMatch(/^\d{6}$/);
 
@@ -2081,7 +2114,7 @@ describe('the operator\'s console', () => {
     await addPhone(member, WIFE);
     await member.put('/api/phones', { number: WIFE, name: 'Private name', canUpdate: true, reminders: [], texts: false });
     await member.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day', note: 'a private note' });
-    await text(HUSBAND, '9', 'ev1');
+    await text(HUSBAND, 'status', 'ev1');
     const r = await op.get('/api/admin/state');
     expect(r.status).toBe(200);
     expect(r.json.totals).toEqual({ households: 1, phones: 2, waiting: 0 });
@@ -2118,7 +2151,7 @@ describe('the operator\'s console', () => {
     await addPhone(member, WIFE);
     await member.put('/api/phones', { number: WIFE, name: 'Private name', canUpdate: true, reminders: [], texts: false });
     await member.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day', note: 'a private note' });
-    await text(HUSBAND, '9', 'ev1');
+    await text(HUSBAND, 'status', 'ev1');
     const id = (await op.get('/api/admin/state')).json.households[0].id;
     const r = await op.get(`/api/admin/accounts/${id}`);
     expect(r.status).toBe(200);
@@ -2127,7 +2160,7 @@ describe('the operator\'s console', () => {
       { number: HUSBAND, verified: true, texts: false, optedOut: false },
       { number: WIFE, verified: true, texts: false, optedOut: false },
     ]);
-    expect(r.json.account.messages.some((m: { body: string }) => m.body === '9')).toBe(true);
+    expect(r.json.account.messages.some((m: { body: string }) => m.body === 'status')).toBe(true);
     expect(r.json.account.messages.length).toBeLessThanOrEqual(15);
     for (const hidden of ['Private name', 'a private note', 'Lakewood', 'telnyx-key', 'client-secret', '2026-11-22']) expect(r.text.includes(hidden), hidden).toBe(false);
     // only for the operator, and only an account that exists
@@ -2288,14 +2321,15 @@ describe('the test account', () => {
 
   it('a simulated text is answered exactly as a real one would be, and nothing is sent', async () => {
     const c = await openDemo(await site({ sms: false }));
-    const status = await demoText(c, '9');
+    const status = await demoText(c, 'status');
     expect(status).toMatch(/^Clean day 5 of 7\. Mikvah /);
     let s = await c.state();
     expect(s.messages.slice(0, 2).map((m: any) => [m.direction, m.phone, m.body, m.status])).toEqual([
       ['out', '0100', status, 'simulated'],
-      ['in', '0100', '9', 'simulated'],
+      ['in', '0100', 'status', 'simulated'],
     ]);
-    expect(await demoText(c, '?')).toMatch(/^1 flow, 2 hefsek, 3 count broken, 4 mikvah \(optional\)/);
+    expect(await demoText(c, '?')).toBe('Betaharah.\nReply: PERIOD, HEFSEK, STATUS, MORE');
+    expect(await demoText(c, '9')).toBe('Not understood; nothing was changed.\nReply: PERIOD, HEFSEK, STATUS, MORE');
     expect(await demoText(c, 'HELP')).toBe(HELP_REPLY);
     expect(await demoText(c, 'what?')).toMatch(/^Not understood; nothing was changed\./);
 
@@ -2303,40 +2337,41 @@ describe('the test account', () => {
     const stopped = await c.post('/api/demo/text', { text: 'STOP' });
     expect(stopped.json.reply).toBeNull();
     expect(stopped.json.state.phones[0]).toMatchObject({ number: DEMO_NUMBER, optedOut: true });
-    expect(await demoText(c, '9')).toBeNull(); // not acted on while opted out
+    expect(await demoText(c, 'status')).toBeNull(); // not acted on while opted out
     expect(await demoText(c, 'START')).toBe(START_REPLY);
     expect((await c.state()).phones[0].optedOut).toBe(false);
 
     // commands change the account, and the reply comes with the new picture
-    expect(await demoText(c, '0')).toBe('Nothing recent to undo. Older entries can be erased by text: send HISTORY. Or remove them on the website.');
-    const flow = await c.post('/api/demo/text', { text: '1' });
-    expect(flow.json.reply).toBe('Recorded: flow Mon Nov 23 by day. The count is cancelled; a new hefsek is needed. 0 to undo.');
+    expect(await demoText(c, 'undo')).toBe('Nothing recent to undo.\nReply: HISTORY, MENU');
+    const flow = await c.post('/api/demo/text', { text: 'period now' });
+    expect(flow.json.reply).toBe('Recorded: flow Mon Nov 23 by day. The count is cancelled; a new hefsek is needed.\nReply: UNDO, STATUS');
+    expect(flow.json.replies[0].suggestions).toEqual([{ label: 'UNDO', send: 'UNDO' }, { label: 'STATUS', send: 'STATUS' }]);
     expect(flow.json.state.entryCount).toBe(15);
     expect(flow.json.state.entries[0]).toMatchObject({ kind: 'flow', source: 'sms' });
     expect(flow.json.state.status.headline).toBe('Niddah, before the hefsek taharah');
-    const undo = await c.post('/api/demo/text', { text: '0' });
+    const undo = await c.post('/api/demo/text', { text: 'undo' });
     expect(undo.json.reply).toMatch(/^Removed: flow Mon Nov 23 by day\. Clean day 5 of 7\./);
     expect(undo.json.state.entryCount).toBe(14);
 
     // a phone that may not record by text is told so
     await c.put('/api/phones', { number: DEMO_NUMBER, name: 'Test phone', canUpdate: false, reminders: [], texts: true });
-    expect(await demoText(c, '1')).toBe('This phone may not record entries (see Settings on the website).');
+    expect(await demoText(c, 'period now')).toBe('This phone may not record entries. That is set on the website.\nReply: STATUS, MENU');
     s = await c.state();
     expect(s.entryCount).toBe(14);
-    expect(s.messages[1]).toMatchObject({ direction: 'in', body: '1', status: 'simulated' });
+    expect(s.messages[1]).toMatchObject({ direction: 'in', body: 'period now', status: 'simulated' });
 
     for (const bad of [{ text: '' }, { text: '   ' }, { text: 'x'.repeat(321) }, { text: 9 }, {}]) expect((await c.post('/api/demo/text', bad)).status, JSON.stringify(bad)).toBe(400);
-    expect((await c.post('/api/demo/text', { text: '9' }, { header: false })).status).toBe(400);
+    expect((await c.post('/api/demo/text', { text: 'status' }, { header: false })).status).toBe(400);
     await nothingSent();
   });
 
   it('only the test account can send a simulated text', async () => {
     await site();
     const member = await account(HUSBAND);
-    const r = await member.post('/api/demo/text', { text: '1' });
+    const r = await member.post('/api/demo/text', { text: 'period now' });
     expect(r.status).toBe(403);
     expect((await member.state()).entries).toEqual([]);
-    expect((await new Client().post('/api/demo/text', { text: '1' })).status).toBe(401);
+    expect((await new Client().post('/api/demo/text', { text: 'period now' })).status).toBe(401);
     expect(textsTo(HUSBAND).filter(t => !t.startsWith('Betaharah code'))).toEqual([]);
   });
 
@@ -2345,7 +2380,7 @@ describe('the test account', () => {
     const next = (await c.state()).reminders[0];
     world.clock.now = next.at + MINUTE;
     await tick(env, world.deps);
-    const arrived = (await c.state()).messages.filter((m: any) => m.direction === 'out' && m.body === next.text);
+    const arrived = (await c.state()).messages.filter((m: any) => m.direction === 'out' && m.body.startsWith(`${next.text}\nReply: `));
     expect(arrived.map((m: any) => [m.phone, m.status]).sort()).toEqual([
       ['0100', 'simulated'],
       ['0199', 'simulated'],
@@ -2354,7 +2389,7 @@ describe('the test account', () => {
     // once only
     world.clock.now += MINUTE;
     await tick(env, world.deps);
-    expect((await c.state()).messages.filter((m: any) => m.body === next.text)).toHaveLength(2);
+    expect((await c.state()).messages.filter((m: any) => m.body.startsWith(`${next.text}\nReply: `))).toHaveLength(2);
     await nothingSent();
   });
 
@@ -2373,7 +2408,7 @@ describe('the test account', () => {
     world.clock.now = next.at + MINUTE;
     await tick(env, world.deps);
     expect(world.telnyx.sent.slice(before).map(t => t.to)).toEqual([HUSBAND]);
-    expect((await c.state()).messages.filter((m: any) => m.body === next.text && m.status === 'simulated')).toHaveLength(2);
+    expect((await c.state()).messages.filter((m: any) => m.body.startsWith(`${next.text}\nReply: `) && m.status === 'simulated')).toHaveLength(2);
   });
 
   it('adding a phone shows the code on the page instead of texting it', async () => {
@@ -2471,8 +2506,8 @@ describe('the test account', () => {
     const s = await member.state();
     expect(s.demo).toBe(false);
     expect(s.sms).toMatchObject({ ready: true, simulated: false, number: OUR_NUMBER });
-    await text(HUSBAND, '9', 'ev-real');
-    expect(textsTo(HUSBAND).at(-1)).toBe('Tehorah.');
+    await text(HUSBAND, 'status', 'ev-real');
+    expect(textsTo(HUSBAND).at(-1)).toBe('Tehorah.\nReply: PERIOD, HEFSEK, HISTORY, MORE');
     expect((await member.state()).messages.map((m: any) => m.status)).toEqual(['sent', 'received']);
   });
 });

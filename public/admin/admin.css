@@ -1851,3 +1851,141 @@ dl.texting-words dd {
   margin-top: calc(-1 * var(--space-1));
 }
 
+/* ===================== Texts: every text the service sends ===================== */
+.tx-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.tx-top .field {
+  flex: 1 1 18rem;
+  margin: 0;
+}
+.tx-top p {
+  margin: 0 0 var(--space-2);
+}
+ul.tx-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tx-row {
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--line);
+}
+.tx-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.tx-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.tx-when {
+  margin: 0;
+  font-weight: var(--weight-medium);
+}
+.tx-tags {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+.tx-filed {
+  margin: var(--space-1) 0 0;
+}
+.tx-phones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.tx-phone {
+  flex: 1 1 15rem;
+  max-width: 22rem;
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.tx-phone-label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-weight: var(--weight-medium);
+}
+.tx-bubble {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  border-bottom-left-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}
+.tx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.tx-chip {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+.tx-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.tx-count {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.tx-count.over {
+  color: var(--bad);
+  font-weight: var(--weight-medium);
+}
+.tx-edit {
+  margin-top: var(--space-3);
+}
+.tx-edit textarea {
+  width: 100%;
+}
+.tx-vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+}
+.tx-var.required {
+  font-weight: var(--weight-bold);
+}
+.tx-labels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0 var(--space-3);
+}
+#tx-preview {
+  margin: var(--space-2) 0 var(--space-3);
+}
+#tx-preview .tx-count {
+  margin-top: var(--space-2);
+}
+.tx-words {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0 var(--space-4);
+}
+

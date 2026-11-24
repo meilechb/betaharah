@@ -17,7 +17,7 @@ const sim = {
   fromError: '',
 };
 
-const EXAMPLES = ['JOIN', '08701', 'A', '1 11/22 day', 'SKIP', 'MENU', '9', 'REMINDERS ON', 'DELETE ACCOUNT'];
+const EXAMPLES = ['JOIN', '08701', 'KEEP FOR NOW', 'Nov 22 night', 'NOT YET', 'period last night', 'STATUS', 'REMINDERS ON', 'DELETE ACCOUNT'];
 
 const redrawMe = () => window.dispatchEvent(new CustomEvent('admin:section', { detail: 'simulator' }));
 
@@ -76,7 +76,8 @@ function nextNumber() {
 
 function bubble(entry, i) {
   if (entry.who === 'none') return h('li', { class: 'sim-note' }, entry.text);
-  const last = i === sim.log.length - 1 || sim.log[i + 1].who !== 'site';
+  // Only the options of the newest reply can be pressed, as on a phone.
+  const last = !sim.log.slice(i + 1).some(e => e.who !== 'site');
   return h(
     'li',
     { class: 'sim-msg ' + entry.who },
@@ -85,7 +86,7 @@ function bubble(entry, i) {
     entry.suggestions && entry.suggestions.length
       ? h(
           'div',
-          { class: 'sim-chips', role: 'group', 'aria-label': 'RCS buttons' },
+          { class: 'sim-chips', role: 'group', 'aria-label': 'The options of this text' },
           entry.suggestions.map((s, n) =>
             button({ label: s.label, size: 'sm', className: 'chip', disabled: !last, attrs: { id: 'sim-chip-' + i + '-' + n, title: 'Sends ' + s.send }, onclick: e => send(s.send, e.currentTarget) }),
           ),
@@ -134,7 +135,7 @@ export function simulator() {
     h(
       'p',
       {},
-      'Text the site as a new person would. The texts follow exactly the same rules as real ones, but nothing is sent. Buttons under a reply are the buttons a phone with RCS shows; pressing one sends its text.',
+      'Text the site as a new person would. Nothing is sent. The buttons under a reply are its options; pressing one sends it.',
     ),
     from,
     h(

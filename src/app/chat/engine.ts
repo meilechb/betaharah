@@ -3,98 +3,70 @@
  * SMS (and RCS) alone.
  *
  * Pure: no database, no network, no clock, no randomness of its own. The
- * server passes in the household, the pending question and what was typed,
- * and gets back the replies, the new pending question, and the things only
- * it can do (effects). docs/TEXTING.md is the reference for every text.
+ * server passes in the household, the options of the last message to the
+ * phone and what was typed, and gets back the replies, the options now
+ * offered, and the things only it can do (effects). docs/TEXTING.md is the
+ * reference.
  *
  *   greet(input)     a text from a number with no account: reply, ignore,
  *                    create an account, or add the phone to an account.
  *   begin(input, m)  right after greet's "create" ('setup') or "join"
- *                    ('joined'): the first texts to the new phone.
+ *                    ('joined'): the first text to the new phone.
  *   converse(input)  every text from a phone on an account.
  *   joinWord(text)   the invitation word in "JOIN <word>", for the server
  *                    to look up before calling greet.
  *
- * Rules the code keeps (and the tests check):
- *   1. Digits always mean the record commands (1 2 3 4 5 9 0 ? and their
- *      forms, with or without a date), at any moment, even with a question
- *      open. No question is ever answered by a digit: answers are letters,
- *      YES / NO, a ZIP code where one is asked for, or words.
- *   2. Nothing is guessed. A text not fully understood changes nothing, and
- *      the reply says so and what to send instead.
- *   3. Every change is confirmed by a reply that names it.
- *   4. GSM-7 only; at most 306 characters per text and 2 texts per message.
- *   5. A question closes 30 minutes after it was asked.
- *   6. STOP, START, HELP and the other carrier words never reach this code,
- *      and none is used as a command word.
- *   7. Erasing an entry, removing a phone, leaving, deleting the account,
- *      replacing or removing the calendar link and pausing vesatot each
- *      need YES.
- *   8. Nothing is ever sent to a number that has not texted in: ADD gives
- *      the person who asked a code, and the other phone texts JOIN and the
- *      code itself.
+ * Every text comes from the registry (messages.ts) in the operator's
+ * wording (site-texts.ts) and ends with its options. A reply is read, in
+ * this order:
+ *   1. (STOP, START, HELP and the other carrier words never reach this code.)
+ *   2. A digit alone, or a text over 400 characters: not understood.
+ *   3. The free text the last message asked for: a ZIP code, or a date
+ *      ("Nov 22 night", "yesterday").
+ *   4. The options of the last message, kept 24 hours.
+ *   5. The general words (PERIOD, HEFSEK, STATUS, UNDO, MENU and the words
+ *      for the settings), with a date or a time after them where they take one.
+ *   6. Otherwise: "Not understood", with the main options.
+ *
+ * Rules the code keeps (and the tests check): nothing is guessed (a text
+ * not understood changes nothing); every change is confirmed; GSM-7 only,
+ * at most two segments per text and two texts per message; erasing an
+ * entry, removing a phone, leaving, deleting the account, replacing or
+ * removing the calendar link and pausing vesatot each need YES; nothing is
+ * sent to a number that has not texted in.
  */
 import { localAbs, absToCivil } from '../../engine/civil';
-import { statusText } from '../../engine/present';
-import { HELP_TEXT, parseCommand } from '../commands';
-import { compute, entryEnglish, removeEntry, runCommand, whereOf, type Computed } from '../household';
+import { statusMessage, type TextMessage } from '../../engine/present';
+import { onahAt } from '../../engine/zmanim';
+import { parseDayWords, parseOnahWords, resolveHefsekDay, resolveMikvahNight, resolveWhen, whenTokens, type ResolveContext, type ResolvedOnah, type WhenSpec } from '../commands';
+import { compute, confirmationParts, entryEnglish, recordEntry, removeEntry, tooEarlyNight, UNDO_WINDOW_MS, whereOf, type Computed, type DraftEntry, type RejectReason } from '../household';
 import { canText, lastFour, type HouseholdData } from '../model';
 import { REMINDER_KINDS, type PhoneRecord } from '../settings';
-import { applyOption, currentOption, LETTERS, NIGHTFALL_INDEX, sameValue, SMS_CUSTOMS, tzeitWords, VESATOT_INDEX } from './customs';
-import { NO_PLACE_RECORD, parseDated, recordDated } from './dated';
-import { foldToGsm, guard, MAX_TEXT_CHARS } from './gsm';
-import * as T from './texts';
-import type {
-  BeginInput,
-  ChatState,
-  ConfirmAction,
-  ConverseInput,
-  ConverseOutput,
-  Effect,
-  GreetInput,
-  GreetOutput,
-  OutMessage,
-  Place,
-  Question,
-  Suggestion,
-} from './types';
+import { applyOption, currentOption, NIGHTFALL_INDEX, sameValue, SMS_CUSTOMS, tzeitWords, VESATOT_INDEX } from './customs';
+import { looksLikeDate, parseDated, recordDated, type DatedOutcome } from './dated';
+import { foldToGsm } from './gsm';
+import { MESSAGE_BY_KEY, shortWords } from './messages';
+import { compose, generalActionsIn, generalWords, matchGeneral, matchOption, NO_TEXTS, optionsOf, renderBody, wordsOf, type Piece, type SiteTexts, type Vars } from './site-texts';
+import type { BeginInput, ChatContext, ChatState, ConfirmAction, ConverseInput, ConverseOutput, Effect, GreetInput, GreetOutput, OutMessage, Place, RecordKind } from './types';
 
-/** A question closes this long after it was asked. */
-export const CHAT_TTL_MS = 30 * 60_000;
+/** The options of a message are kept this long. */
+export const CHAT_TTL_MS = 24 * 3_600_000;
 /** Days a code for adding another phone stays valid. */
 export const INVITE_DAYS = 7;
 /** Texts longer than this are not read at all. */
 const MAX_INPUT = 400;
 const DEFAULT_ORIGIN = 'https://betaharah.com';
+/** Stands for the sign-in link in the text of WEB LINK until the server has made it. GSM-7. */
+export const LINK_MARK = '@@LINK@@';
 
 // ---------- small helpers ----------
-
-/** Upper case, punctuation .,! removed, spaces collapsed: how command words and answers are read. */
-export function normalize(text: string): string {
-  return text.normalize('NFKC').replace(/[.,!]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
-}
-
-function lettersList(n: number): string {
-  const l = LETTERS.slice(0, n).split('');
-  return l.length <= 1 ? (l[0] ?? '') : `${l.slice(0, -1).join(', ')} or ${l[l.length - 1]}`;
-}
-
-function capitalFirst(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/** "flow Sun Nov 22 night", with ", 2025" when not this year. */
-function entryWithYear(e: Parameters<typeof entryEnglish>[0], thisYear: number): string {
-  const abs = 'onah' in e ? (e.onah.part === 'day' ? e.onah.abs : e.onah.abs - 1) : e.kind === 'mikvah' ? e.abs - 1 : e.abs;
-  const y = absToCivil(abs).y;
-  return y === thisYear ? entryEnglish(e) : `${entryEnglish(e)}, ${y}`;
-}
 
 const ZIP_US = /^(\d{5})(?:-\d{4})?$/;
 const ZIP_CA = /^([A-Z]\d[A-Z])(?: ?(\d[A-Z]\d))?$/;
 
 /** The code to look up, from a typed ZIP or postal code; null if it is not in either form. */
-export function postalOf(w: string): string | null {
+export function postalOf(text: string): string | null {
+  const w = text.normalize('NFKC').replace(/[.,!]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
   const us = ZIP_US.exec(w);
   if (us) return us[1] as string;
   const ca = ZIP_CA.exec(w);
@@ -115,514 +87,474 @@ export function inviteCode(random: () => string): string {
   return code.padEnd(8, 'A');
 }
 
-/** Checks a stored pending question; anything malformed counts as none. */
+/** "flow Sun Nov 22 night", with ", 2025" when not this year. */
+function entryWithYear(e: Parameters<typeof entryEnglish>[0], thisYear: number): string {
+  const abs = 'onah' in e ? (e.onah.part === 'day' ? e.onah.abs : e.onah.abs - 1) : e.kind === 'mikvah' ? e.abs - 1 : e.abs;
+  const y = absToCivil(abs).y;
+  return y === thisYear ? entryEnglish(e) : `${entryEnglish(e)}, ${y}`;
+}
+
+const ORDINAL_IDS = ['first', 'second', 'third', 'fourth', 'fifth'] as const;
+
+/** Checks stored options; anything malformed counts as none. */
 export function validChat(x: unknown): ChatState | null {
   if (typeof x !== 'object' || x === null) return null;
   const c = x as Partial<ChatState>;
-  if (c.v !== 1 || typeof c.at !== 'number' || !Number.isFinite(c.at) || typeof c.setup !== 'boolean') return null;
-  const q = c.q as Question | undefined;
-  if (typeof q !== 'object' || q === null) return null;
-  const strings = (a: unknown): boolean => Array.isArray(a) && a.length <= 12 && a.every(s => typeof s === 'string');
-  switch (q.kind) {
-    case 'zip':
-    case 'customs_intro':
-    case 'customs_list':
-    case 'kinds':
-      return c as ChatState;
-    case 'custom':
-      return Number.isInteger(q.index) && q.index >= 0 && q.index < SMS_CUSTOMS.length && typeof q.walk === 'boolean' ? (c as ChatState) : null;
-    case 'recent':
-      return typeof q.recorded === 'boolean' ? (c as ChatState) : null;
-    case 'history':
-      return strings(q.ids) ? (c as ChatState) : null;
-    case 'phones':
-      return strings(q.numbers) ? (c as ChatState) : null;
-    case 'confirm': {
-      const a = q.action as ConfirmAction | undefined;
-      if (typeof a !== 'object' || a === null) return null;
-      switch (a.type) {
-        case 'erase':
-          return typeof a.id === 'string' ? (c as ChatState) : null;
-        case 'remove_phone':
-          return typeof a.number === 'string' ? (c as ChatState) : null;
-        case 'place':
-          return typeof a.place === 'object' && a.place !== null && typeof a.place.name === 'string' ? (c as ChatState) : null;
-        case 'leave':
-        case 'delete_account':
-        case 'calendar_new':
-        case 'calendar_off':
-        case 'pause_vesatot':
-          return c as ChatState;
-        default:
-          return null;
-      }
-    }
+  if (c.v !== 2 || typeof c.at !== 'number' || !Number.isFinite(c.at) || typeof c.key !== 'string' || !MESSAGE_BY_KEY.has(c.key)) return null;
+  if (!Array.isArray(c.opts) || c.opts.length > 6 || !c.opts.every(o => Array.isArray(o) && o.length === 2 && typeof o[0] === 'string' && typeof o[1] === 'string' && o[1].length <= 20)) return null;
+  if (c.expect !== undefined && c.expect !== 'zip' && c.expect !== 'date') return null;
+  const k = c.ctx as ChatContext | undefined;
+  if (typeof k !== 'object' || k === null) return null;
+  const strings = (a: unknown, max: number): boolean => Array.isArray(a) && a.length <= max && a.every(s => typeof s === 'string');
+  if (k.setup !== undefined && typeof k.setup !== 'boolean') return null;
+  if (k.kind !== undefined && !['flow', 'stain', 'broken', 'hefsek', 'mikvah'].includes(k.kind)) return null;
+  if (k.day !== undefined && !Number.isInteger(k.day)) return null;
+  if (k.ids !== undefined && !strings(k.ids, 5)) return null;
+  if (k.numbers !== undefined && !strings(k.numbers, 4)) return null;
+  if (k.index !== undefined && !(Number.isInteger(k.index) && k.index >= 0 && k.index < SMS_CUSTOMS.length)) return null;
+  if (k.walk !== undefined && typeof k.walk !== 'boolean') return null;
+  if (k.action !== undefined && !validAction(k.action)) return null;
+  return c as ChatState;
+}
+
+function validAction(a: unknown): boolean {
+  if (typeof a !== 'object' || a === null) return false;
+  const x = a as ConfirmAction;
+  switch (x.type) {
+    case 'erase':
+      return typeof x.id === 'string';
+    case 'remove_phone':
+      return typeof x.number === 'string';
+    case 'place':
+      return typeof x.place === 'object' && x.place !== null && typeof x.place.name === 'string';
+    case 'leave':
+    case 'delete_account':
+    case 'calendar_new':
+    case 'calendar_off':
+    case 'pause_vesatot':
+      return true;
     default:
-      return null;
+      return false;
   }
+}
+
+/** The rendered texts as messages to send. */
+function toOut(texts: SiteTexts, pieces: Piece[]): OutMessage[] {
+  return compose(texts, pieces).map(t =>
+    t.options.length > 0 ? { text: t.text, body: t.body, suggestions: t.options.map(([, label]) => ({ label, send: label })) } : { text: t.text, body: t.body },
+  );
+}
+
+/** One message of the registry as a text to send, with the options it leaves for the reply. */
+export function messageOut(texts: SiteTexts, msg: TextMessage, now: number): { out: OutMessage; chat: ChatState | null } {
+  const out = toOut(texts, [{ key: msg.key, vars: msg.vars }])[0] ?? { text: '', body: '' };
+  const opts = optionsOf(texts, msg.key);
+  const chat: ChatState | null = opts.length > 0 && !MESSAGE_BY_KEY.get(msg.key)?.filed ? { v: 2, at: now, key: msg.key, opts, ctx: msg.day === undefined ? {} : { day: msg.day } } : null;
+  return { out, chat };
 }
 
 // ---------- the reply being built ----------
 
 class Reply {
-  pieces: OutMessage[] = [];
+  pieces: Piece[] = [];
   effects: Effect[] = [];
   changed = false;
   computed: Computed | undefined;
-  chat: ChatState | null = null;
+  ctx: ChatContext = {};
+  expect: 'zip' | 'date' | undefined;
+  readonly texts: SiteTexts;
 
-  constructor(readonly input: ConverseInput, readonly me: PhoneRecord) {}
+  constructor(
+    readonly input: ConverseInput,
+    readonly me: PhoneRecord,
+  ) {
+    this.texts = input.texts ?? NO_TEXTS;
+  }
 
-  say(text: string, suggestions?: Suggestion[]): this {
-    this.pieces.push(T.msg(text, suggestions));
+  /** Adds a message. Its options become the ones offered; what they need is set with ask() after it. */
+  say(key: string, vars: Vars = {}, offer?: readonly string[]): this {
+    this.pieces.push(offer ? { key, vars, offer } : { key, vars });
+    this.ctx = {};
+    this.expect = undefined;
     return this;
   }
 
-  ask(q: Question, setup: boolean): this {
-    this.chat = { v: 1, at: this.input.now, setup, q };
+  ask(ctx: ChatContext, expect?: 'zip' | 'date'): this {
+    this.ctx = ctx;
+    this.expect = expect;
     return this;
+  }
+
+  /** A text that would be one or more fails: "Could not". */
+  failed(key: string, vars: Vars = {}): OutMessage {
+    return toOut(this.texts, [{ key, vars }])[0] as OutMessage;
   }
 
   done(): ConverseOutput {
-    const out: ConverseOutput = { chat: this.chat, out: pack(this.pieces), effects: this.effects, changed: this.changed };
-    if (this.computed) out.computed = this.computed;
-    return out;
-  }
-}
-
-/** Joins texts into as few messages as fit (never more than two). Suggestions stay on the last. */
-export function pack(pieces: OutMessage[]): OutMessage[] {
-  const out: OutMessage[] = [];
-  for (const p of pieces) {
-    const last = out[out.length - 1];
-    if (last && last.text.length + 1 + p.text.length <= MAX_TEXT_CHARS) {
-      last.text = `${last.text} ${p.text}`;
-      if (p.suggestions) last.suggestions = p.suggestions;
-      else delete last.suggestions;
-    } else {
-      out.push({ ...p });
+    const now = this.input.now;
+    const last = this.pieces[this.pieces.length - 1];
+    let out = toOut(this.texts, this.pieces);
+    let chat: ChatState | null = null;
+    if (last) {
+      const opts = optionsOf(this.texts, last.key, last.offer);
+      if (opts.length > 0) chat = { v: 2, at: now, key: last.key, opts, ctx: this.ctx, ...(this.expect ? { expect: this.expect } : {}) };
     }
-  }
-  while (out.length > 2) {
-    const tail = out.pop() as OutMessage;
-    const prev = out[out.length - 1] as OutMessage;
-    prev.text = `${prev.text} ${tail.text}`;
-    if (tail.suggestions) prev.suggestions = tail.suggestions;
-  }
-  return out.map(m => {
-    const text = guard(m.text);
-    const suggestions = m.suggestions?.slice(0, 4);
-    return suggestions && suggestions.length > 0 ? { text, suggestions } : { text };
-  });
-}
-
-// ---------- the questions ----------
-
-function customText(index: number, data: HouseholdData): string {
-  const c = SMS_CUSTOMS[index]!;
-  const cur = currentOption(c, data.halachic);
-  const opts = c.options.map((o, j) => `${LETTERS[j]}: ${o.text}.`).join(' ');
-  const now = cur >= 0 ? `Now: ${LETTERS[cur]}.` : `Now: ${tzeitWords(data.halachic.tzeit)} (set on the website).`;
-  return `Custom ${index + 1} of 12: ${c.question} ${opts}${c.note ? ` ${c.note}` : ''} ${now} Reply ${lettersList(c.options.length)}, or KEEP.`;
-}
-
-function customSuggestions(index: number): Suggestion[] {
-  const c = SMS_CUSTOMS[index]!;
-  const s: Suggestion[] = c.options.map((o, j) => ({ label: `${LETTERS[j]}: ${o.short}`, send: LETTERS[j] as string }));
-  if (s.length < 4) s.push({ label: 'Keep', send: 'KEEP' });
-  return s;
-}
-
-function kindsText(me: PhoneRecord): string {
-  const list = REMINDER_KINDS.map((k, i) => `${LETTERS[i]} ${T.KIND_NAMES[i]} (${me.reminders.includes(k) ? 'on' : 'off'})`).join(', ');
-  return `Reminder kinds for this phone: ${list}. Reply the letters of the kinds you want, e.g. A D F, or ALL or NONE. The others turn off.`;
-}
-
-/** What to send to answer a question, in a few words. */
-function hint(q: Question): string {
-  switch (q.kind) {
-    case 'zip':
-      return 'reply with your ZIP code';
-    case 'customs_intro':
-      return 'reply A, B or C';
-    case 'custom':
-      return `reply ${lettersList(SMS_CUSTOMS[q.index]!.options.length)}, or KEEP`;
-    case 'customs_list':
-      return 'reply a letter from A to L';
-    case 'recent':
-      return q.recorded ? 'send 2 with a date, or DONE' : 'send 1 with a date, or SKIP';
-    case 'history':
-      return 'reply ERASE and a letter';
-    case 'phones':
-      return 'reply REMOVE and a letter';
-    case 'kinds':
-      return 'reply the letters you want, or ALL or NONE';
-    case 'confirm':
-      return 'reply YES or NO';
+    // WEB LINK: its one text goes with the effect, which adds the link.
+    const web = this.effects.find(e => e.type === 'web_link');
+    if (web && web.type === 'web_link') {
+      web.text = out.map(m => m.text).join(' ');
+      out = [];
+    }
+    const result: ConverseOutput = { chat, out, effects: this.effects, changed: this.changed };
+    if (this.computed) result.computed = this.computed;
+    return result;
   }
 }
 
-function suggestionsFor(q: Question): Suggestion[] | undefined {
-  switch (q.kind) {
-    case 'customs_intro':
-      return T.CUSTOMS_INTRO_SUGGEST;
-    case 'custom':
-      return customSuggestions(q.index);
-    case 'recent':
-      return q.recorded ? [{ label: 'Done', send: 'DONE' }] : [{ label: 'Skip', send: 'SKIP' }];
-    case 'kinds':
-      return [
-        { label: 'All', send: 'ALL' },
-        { label: 'None', send: 'NONE' },
-      ];
-    case 'confirm':
-      return T.YES_NO;
+// ---------- lists in the words of the options ----------
+
+/** The labels of a message's ordinal options, in small letters: "first", "second", ... */
+function ordinals(r: Reply, key: string): string[] {
+  const labels = new Map(optionsOf(r.texts, key));
+  return ORDINAL_IDS.map(id => (labels.get(id) ?? id).toLowerCase());
+}
+
+function kindLists(r: Reply): { on: string; off: string } {
+  const labels = new Map(optionsOf(r.texts, 'reminders.kinds'));
+  const name = (k: string): string => (labels.get(`kind_${k}`) ?? k).toLowerCase();
+  const on = REMINDER_KINDS.filter(k => r.me.reminders.includes(k)).map(name);
+  const off = REMINDER_KINDS.filter(k => !r.me.reminders.includes(k)).map(name);
+  return { on: on.length ? on.join(', ') : 'none', off: off.length ? off.join(', ') : 'none' };
+}
+
+// ---------- status ----------
+
+function statusOf(r: Reply, computed: Computed): { key: string; vars: Vars } {
+  return statusMessage(computed.timeline, computed.place.timeZone);
+}
+
+function statusBody(r: Reply, computed: Computed | null): string {
+  if (!computed) return '';
+  const m = statusOf(r, computed);
+  return renderBody(r.texts, m.key, m.vars);
+}
+
+function status(r: Reply): void {
+  const computed = compute(r.input.data, r.input.now);
+  if (!computed) {
+    r.say('status.no_place');
+    return;
+  }
+  r.computed = computed;
+  const m = statusOf(r, computed);
+  r.say(m.key, m.vars);
+}
+
+// ---------- recording ----------
+
+const RECORD_KEY: Record<RecordKind, string> = { flow: 'record.flow', stain: 'record.stain', broken: 'record.broken', hefsek: 'record.hefsek', mikvah: 'record.immersion' };
+const WHEN_KEY: Record<RecordKind, string> = {
+  flow: 'record.when_flow',
+  stain: 'record.when_stain',
+  broken: 'record.when_broken',
+  hefsek: 'record.when_hefsek',
+  mikvah: 'record.when_immersion',
+};
+/** The general action whose words name what is recorded. */
+const KIND_ACTION: Record<RecordKind, string | null> = { flow: 'period', stain: 'stain', broken: 'broken', hefsek: 'hefsek', mikvah: null };
+
+function isNight(r: Reply): boolean {
+  const where = whereOf(r.input.data);
+  return where ? onahAt(r.input.now, where.place, where.zopts).onah.part === 'night' : false;
+}
+
+function refusal(r: Reply, reason: RejectReason, computed: Computed | null): void {
+  switch (reason) {
+    case 'duplicate':
+      r.say('refuse.duplicate');
+      return;
+    case 'future':
+      r.say('refuse.future');
+      return;
+    case 'hefsek_without_niddah':
+    case 'mikvah_without_niddah':
+      r.say('refuse.no_period');
+      return;
+    case 'hefsek_before_start':
+      r.say('refuse.before_start');
+      return;
+    case 'broken_without_count':
+      r.say('refuse.no_count');
+      return;
+    case 'mikvah_without_hefsek':
+      r.say('refuse.no_hefsek');
+      return;
+    case 'mikvah_too_early': {
+      const night = tooEarlyNight(computed);
+      if (night) r.say('refuse.too_early', night);
+      else r.say('refuse.too_early_plain');
+      return;
+    }
+    case 'no_place':
+      r.say('refuse.no_place');
+      return;
     default:
-      return undefined;
+      r.say('refuse.other');
   }
 }
 
-/** The word that asks a closed question again. */
-function againFor(chat: ChatState): string {
-  if (chat.setup) return 'Send SETUP to start the setup again.';
-  switch (chat.q.kind) {
-    case 'zip':
-      return 'Send LOCATION and your ZIP code to set it.';
-    case 'custom':
-    case 'customs_list':
-      return chat.q.kind === 'custom' && chat.q.index === NIGHTFALL_INDEX && !chat.q.walk ? 'Send NIGHTFALL to see it again.' : 'Send CUSTOMS to start again.';
-    case 'history':
-      return 'Send HISTORY for the list again.';
-    case 'phones':
-      return 'Send PHONES for the list again.';
-    case 'kinds':
-      return 'Send KINDS to choose again.';
-    default:
-      return 'Send the word again if you still want it.';
+/** The question "when?" for what is being recorded, with the options that fit the hour. */
+function askWhen(r: Reply, kind: RecordKind, ctx: ChatContext): void {
+  const night = isNight(r);
+  const offer =
+    kind === 'hefsek'
+      ? undefined
+      : kind === 'mikvah'
+        ? night
+          ? ['tonight', 'last_night', 'another_day']
+          : ['last_night', 'another_day']
+        : ['now', night ? 'today_day' : 'last_night', 'another_day'];
+  r.say(WHEN_KEY[kind], {}, offer).ask({ ...(ctx.setup ? { setup: true } : {}), kind }, 'date');
+}
+
+/** What comes after a recording in setup, or a refusal in setup: the step again. */
+function setupNext(r: Reply, kind: RecordKind, recorded: boolean): void {
+  if (recorded && kind === 'hefsek') {
+    finishSetup(r);
+  } else if (recorded) {
+    r.say('setup.recent_hefsek').ask({ setup: true, kind: 'hefsek' }, 'date');
+  } else if (kind === 'hefsek') {
+    r.say('setup.recent_hefsek').ask({ setup: true, kind: 'hefsek' }, 'date');
+  } else {
+    r.say('setup.recent').ask({ setup: true, kind: 'flow' }, 'date');
   }
 }
 
-/** Whether a text would have answered this question (used only to explain that it closed). */
-function looksLikeAnswer(q: Question, w: string): boolean {
-  if (/^[A-L]$/.test(w) || ['YES', 'NO', 'KEEP', 'SKIP', 'DONE', 'ALL', 'NONE'].includes(w)) return true;
-  if (q.kind === 'zip' && postalOf(w) !== null) return true;
-  if (q.kind === 'history' && /^ERASE [A-Z]$/.test(w)) return true;
-  if (q.kind === 'phones' && /^REMOVE [A-Z]$/.test(w)) return true;
-  if (q.kind === 'kinds' && /^[A-F]( ?[A-F])*$/.test(w)) return true;
-  return false;
-}
-
-// ---------- the steps of setup ----------
-
-function askCustomsIntro(r: Reply): void {
-  r.say(T.CUSTOMS_INTRO, T.CUSTOMS_INTRO_SUGGEST).ask({ kind: 'customs_intro' }, true);
-}
-
-function askRecent(r: Reply): void {
-  r.say(T.RECENT_ASK, [{ label: 'Skip', send: 'SKIP' }]).ask({ kind: 'recent', recorded: false }, true);
-}
-
-function finishSetup(r: Reply): void {
-  r.say(T.SETUP_DONE, T.MENU_SUGGEST);
-  r.chat = null;
-}
-
-function askCustom(r: Reply, index: number, walk: boolean, setup: boolean): void {
-  r.say(customText(index, r.input.data), customSuggestions(index)).ask({ kind: 'custom', index, walk }, setup);
-}
-
-function setPlace(r: Reply, place: Place, setup: boolean): void {
-  r.input.data.app.place = { name: place.name, latitude: place.latitude, longitude: place.longitude, timeZone: place.timeZone, elevation: place.elevation };
-  r.input.data.sync.dirty = true;
+function saveDraft(r: Reply, kind: RecordKind, draft: DraftEntry, resolved: ResolvedOnah | null, ctx: ChatContext): void {
+  const result = recordEntry(r.input.data, draft, 'sms', null, r.input.now);
+  if (!result.ok) {
+    refusal(r, result.reason, result.computed);
+    if (ctx.setup) setupNext(r, kind, false);
+    return;
+  }
   r.changed = true;
-  r.say(T.placeSet(foldToGsm(place.name)));
-  if (setup) askCustomsIntro(r);
-  else r.chat = null;
+  r.computed = result.computed;
+  r.say(RECORD_KEY[kind], confirmationParts(result, resolved));
+  if (ctx.setup) setupNext(r, kind, true);
 }
 
-function startSetup(r: Reply): void {
-  const place = r.input.data.app.place;
-  r.say(place ? T.setupStartWithPlace(foldToGsm(place.name)) : T.SETUP_START, place ? [{ label: 'Keep', send: 'KEEP' }] : undefined).ask({ kind: 'zip' }, true);
+function saveDated(r: Reply, kind: RecordKind, o: DatedOutcome, ctx: ChatContext): void {
+  if (o.ok) {
+    // recordDated changed the data only for a phone that may record (readWhen checks before it is called).
+    r.changed = true;
+    r.computed = o.result.computed;
+    const parts = confirmationParts(o.result, o.resolved);
+    r.say(RECORD_KEY[kind], { entry: `${parts.entry}, ${o.year}`, details: parts.details });
+    if (ctx.setup) setupNext(r, kind, true);
+    return;
+  }
+  if (o.reason === 'none_recent') {
+    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(o.month) + 1;
+    const today = absToCivil(localAbs(r.input.now, whereOf(r.input.data)?.place.timeZone ?? 'UTC')).y;
+    let example = today - 4;
+    for (let y = today; y > today - 8; y--) {
+      if (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) {
+        example = y;
+        break;
+      }
+    }
+    r.say('date.not_recent', { date: `${o.month} ${o.day}`, example: `${m}/${o.day}/${example}` }).ask({ ...ctx, kind }, 'date');
+    return;
+  }
+  if (o.reason === 'no_such_date') {
+    r.say('date.no_such', { date: o.date }).ask({ ...ctx, kind }, 'date');
+    return;
+  }
+  refusal(r, o.reason, o.computed);
+  if (o.readAs) r.say('date.read_as', { date: o.readAs });
+  if (ctx.setup) setupNext(r, kind, false);
 }
 
-// ---------- answers to the pending question ----------
+/**
+ * Records what `kind` names, from the words after it: a date ("Nov 22
+ * night"), when-words ("yesterday night", "9pm"), or nothing (then the
+ * question "when?" with its options).
+ */
+function record(r: Reply, kind: RecordKind, tokens: readonly string[], ctx: ChatContext = {}): void {
+  if (!r.me.canUpdate) {
+    r.say('refuse.read_only');
+    return;
+  }
+  if (!whereOf(r.input.data)) {
+    r.say('refuse.no_place');
+    return;
+  }
+  const outcome = readWhen(r, kind, tokens, ctx);
+  if (outcome === 'unread') askWhen(r, kind, ctx);
+}
 
-/** Handles `w` as the answer to the pending question. Returns false if it is not an answer to it. */
-function answer(r: Reply, chat: ChatState, w: string): boolean {
+/** Records from words, if they say when. 'unread' when they do not (nothing is changed). */
+function readWhen(r: Reply, kind: RecordKind, tokens: readonly string[], ctx: ChatContext): 'done' | 'unread' {
+  const t = whenTokens(tokens);
+  if (looksLikeDate(t[0])) {
+    const p = parseDated(kind, t);
+    if (p.kind === 'error') {
+      r.say(p.problem.key, 'vars' in p.problem ? p.problem.vars : {}).ask({ ...ctx, kind }, 'date');
+      return 'done';
+    }
+    if (p.kind === 'ok') {
+      if (!r.me.canUpdate) r.say('refuse.read_only');
+      else saveDated(r, kind, recordDated(r.input.data, p, r.input.now), ctx);
+      return 'done';
+    }
+  }
+  if (kind === 'hefsek') {
+    const d = parseDayWords(tokens);
+    if (!d) return 'unread';
+    recordNow(r, kind, { yesterday: d.yesterday }, ctx);
+    return 'done';
+  }
+  if (kind === 'mikvah') {
+    const words = t.join(' ');
+    if (words === 'tonight') recordNow(r, kind, { tonight: true }, ctx);
+    else if (words === 'last night' || words === 'yesterday' || words === 'night') recordNow(r, kind, { tonight: false }, ctx);
+    else return 'unread';
+    return 'done';
+  }
+  const when = parseOnahWords(t);
+  if (!when) return 'unread';
+  recordNow(r, kind, { when, last: t.includes('last') }, ctx);
+  return 'done';
+}
+
+type How = { when: WhenSpec; last?: boolean } | { yesterday: boolean } | { tonight: boolean };
+
+/** Records something that happened now or lately (no date given). */
+function recordNow(r: Reply, kind: RecordKind, how: How, ctx: ChatContext): void {
   const { data, now } = r.input;
-  const q = chat.q;
-  switch (q.kind) {
-    case 'zip': {
-      if (w === 'KEEP' && chat.setup && data.app.place) {
-        askCustomsIntro(r);
-        return true;
-      }
-      const postal = postalOf(w);
-      if (postal === null) return false;
-      const place = r.input.lookupPostal(postal);
-      if (!place) {
-        r.say(T.unknownZip(postal)).ask(q, chat.setup);
-        return true;
-      }
-      setPlace(r, place, chat.setup);
-      return true;
-    }
-    case 'customs_intro': {
-      if (w === 'A') {
-        r.say(T.CUSTOMS_KEPT);
-        if (chat.setup) askRecent(r);
-        return true;
-      }
-      if (w === 'B') {
-        askCustom(r, 0, true, chat.setup);
-        return true;
-      }
-      if (w === 'C') {
-        r.say(T.CUSTOMS_LATER);
-        if (chat.setup) askRecent(r);
-        return true;
-      }
-      return false;
-    }
-    case 'custom': {
-      const c = SMS_CUSTOMS[q.index]!;
-      const cur = currentOption(c, data.halachic);
-      let chosen: number;
-      if (w === 'KEEP') chosen = -1;
-      else if (/^[A-L]$/.test(w) && LETTERS.indexOf(w) < c.options.length) chosen = LETTERS.indexOf(w);
-      else return false;
-      const option = chosen >= 0 ? c.options[chosen]! : null;
-      const same = option === null || (cur >= 0 && sameValue(c.options[cur]!.value, option.value));
-      if (option && !same) {
-        applyOption(data.halachic, c, option);
-        data.sync.dirty = true;
-        r.changed = true;
-      }
-      if (!q.walk) {
-        if (option === null) r.say(T.KEPT_ONE);
-        else if (same) r.say(`That is already the setting for ${c.name}; nothing was changed.`);
-        else r.say(`Changed: ${c.name}: ${option.text}. The calendar follows what you selected.`);
-        r.chat = null;
-        return true;
-      }
-      const keptWords = cur >= 0 ? c.options[cur]!.short : 'as set on the website';
-      r.say(option && !same ? `Saved: ${c.name}: ${option.short}.` : `Kept: ${c.name}: ${option ? option.short : keptWords}.`);
-      if (q.index + 1 < SMS_CUSTOMS.length) {
-        askCustom(r, q.index + 1, true, chat.setup);
-      } else {
-        data.halachicConfirmedAt = now;
-        r.changed = true;
-        r.say(T.CUSTOMS_ALL_DONE);
-        if (chat.setup) askRecent(r);
-        else r.chat = null;
-      }
-      return true;
-    }
-    case 'customs_list': {
-      if (!/^[A-L]$/.test(w)) return false;
-      askCustom(r, LETTERS.indexOf(w), false, false);
-      return true;
-    }
-    case 'recent': {
-      if (w === 'SKIP' || w === 'DONE') {
-        finishSetup(r);
-        return true;
-      }
-      return false;
-    }
-    case 'kinds': {
-      let chosen: Set<number>;
-      if (w === 'ALL') chosen = new Set(REMINDER_KINDS.map((_, i) => i));
-      else if (w === 'NONE') chosen = new Set();
-      else if (/^[A-F]( ?[A-F])*$/.test(w)) chosen = new Set(w.replace(/ /g, '').split('').map(l => LETTERS.indexOf(l)));
-      else return false;
-      const kinds = REMINDER_KINDS.filter((_, i) => chosen.has(i));
-      const before = REMINDER_KINDS.filter(k => r.me.reminders.includes(k));
-      if (kinds.join() === before.join()) {
-        r.say('That is already the choice for this phone; nothing was changed.');
-      } else {
-        r.me.reminders = kinds;
-        r.changed = true;
-        const names = REMINDER_KINDS.map((k, i) => (chosen.has(i) ? T.KIND_NAMES[i] : null)).filter(Boolean);
-        const tail = canText(r.me) ? '' : ' They are sent once you text REMINDERS ON.';
-        r.say(kinds.length === 0 ? 'Changed: this phone gets no reminders of any kind. KINDS chooses again.' : `Changed: this phone gets reminders for: ${names.join(', ')}.${tail}`);
-      }
-      r.chat = null;
-      return true;
-    }
-    case 'confirm': {
-      if (w === 'NO') {
-        r.say(T.NO_CHANGE);
-        r.chat = null;
-        return true;
-      }
-      if (w !== 'YES') return false;
-      r.chat = null;
-      confirm(r, q.action);
-      return true;
-    }
-    case 'history':
-    case 'phones':
-      return false; // ERASE and REMOVE are read as command words, which look at the list
-  }
-}
-
-function confirm(r: Reply, action: ConfirmAction): void {
-  const { data, now, from } = r.input;
-  switch (action.type) {
-    case 'erase': {
-      if (!r.me.canUpdate) {
-        r.say(T.READ_ONLY);
-        return;
-      }
-      const stored = data.entries.find(e => e.entry.id === action.id);
-      if (!stored) {
-        r.say(T.ENTRY_GONE);
-        return;
-      }
-      const where = whereOf(data);
-      const thisYear = where ? absToCivil(localAbs(now, where.place.timeZone)).y : absToCivil(localAbs(now, 'UTC')).y;
-      removeEntry(data, action.id, now);
-      r.changed = true;
-      const after = compute(data, now);
-      if (after) r.computed = after;
-      r.say(`Erased: ${entryWithYear(stored.entry, thisYear)}.${after ? ` ${statusText(after.timeline, after.place.timeZone)}` : ''}`);
-      return;
-    }
-    case 'remove_phone': {
-      if (!data.phones.some(p => p.number === action.number)) {
-        r.say(`The phone ending ${lastFour(action.number)} is no longer on the account. Nothing was changed.`);
-        return;
-      }
-      r.effects.push({ type: 'remove_phone', number: action.number, ifFailed: T.removeFailed(lastFour(action.number)) });
-      r.say(T.removed(lastFour(action.number)));
-      return;
-    }
-    case 'leave': {
-      if (data.phones.length <= 1) {
-        r.say(T.LAST_PHONE);
-        return;
-      }
-      r.effects.push({ type: 'leave', number: from, ifFailed: T.LEAVE_FAILED });
-      r.say(T.LEFT);
-      return;
-    }
-    case 'delete_account': {
-      r.effects.push({ type: 'delete_account', ifFailed: T.DELETE_FAILED });
-      r.say(T.DELETED);
-      return;
-    }
-    case 'calendar_new': {
-      if (!data.calendarLinkToken) {
-        r.say(T.CALENDAR_NO_LINK);
-        return;
-      }
-      data.calendarLinkToken = r.input.random();
-      r.changed = true;
-      r.say(T.calendarReplaced(calendarUrl(r)));
-      return;
-    }
-    case 'calendar_off': {
-      if (!data.calendarLinkToken) {
-        r.say(T.CALENDAR_NO_LINK);
-        return;
-      }
-      data.calendarLinkToken = null;
-      r.changed = true;
-      r.say(T.CALENDAR_OFF);
-      return;
-    }
-    case 'pause_vesatot': {
-      if (data.halachic.vesatot === 'paused') {
-        r.say(T.VESATOT_ALREADY_PAUSED);
-        return;
-      }
-      data.halachic.vesatot = 'paused';
-      data.sync.dirty = true;
-      r.changed = true;
-      r.say(T.PAUSED);
-      return;
-    }
-    case 'place': {
-      setPlace(r, action.place, false);
-      return;
-    }
-  }
-}
-
-function calendarUrl(r: Reply): string {
-  return `${(r.input.origin ?? DEFAULT_ORIGIN).replace(/\/+$/, '')}/cal/${r.input.data.calendarLinkToken}.ics`;
-}
-
-// ---------- the record commands (digits) ----------
-
-const RECORD_KINDS = new Set(['flow', 'stain', 'broken', 'hefsek', 'mikvah', 'undo']);
-
-/** The digit commands, with or without a date. Always handled; never an answer to a question. */
-function digits(r: Reply, raw: string): { recorded: boolean } {
-  const { data, now } = r.input;
-  const command = parseCommand(raw);
-  if (command.kind === 'help') {
-    r.say(`${HELP_TEXT} A date also works: 1 11/22 night, 2 11/26, 4 12/3. MENU lists the words.`);
-    return { recorded: false };
-  }
-  if (command.kind !== 'unknown') {
-    if (RECORD_KINDS.has(command.kind) && !r.me.canUpdate) {
-      r.say(T.READ_ONLY);
-      return { recorded: false };
-    }
-    if (!whereOf(data)) {
-      r.say(command.kind === 'status' ? T.NO_PLACE_STATUS : NO_PLACE_RECORD);
-      return { recorded: false };
-    }
-    const result = runCommand(data, raw, now);
-    r.say(result.text);
-    if (result.computed) r.computed = result.computed;
-    if (result.changed) r.changed = true;
-    return { recorded: result.changed && command.kind !== 'undo' };
-  }
-  const dated = parseDated(raw);
-  if (dated.kind === 'error') {
-    r.say(dated.text);
-    return { recorded: false };
-  }
-  if (dated.kind === 'ok') {
-    if (!r.me.canUpdate) {
-      r.say(T.READ_ONLY);
-      return { recorded: false };
-    }
-    const result = recordDated(data, dated, now);
-    r.say(result.text);
-    if (result.computed) r.computed = result.computed;
-    if (result.changed) r.changed = true;
-    return { recorded: result.changed };
-  }
-  if (ZIP_US.test(normalize(raw))) {
-    r.say(T.ZIP_HINT);
-    return { recorded: false };
-  }
-  r.say(`Not understood; nothing was changed. ${HELP_TEXT}`);
-  return { recorded: false };
-}
-
-// ---------- command words ----------
-
-function usage(r: Reply, text: string): void {
-  r.say(`Not understood; nothing was changed. ${text}`);
-}
-
-function menu(r: Reply): void {
-  r.say(T.MENU, T.MENU_SUGGEST);
-}
-
-function history(r: Reply): void {
-  const { data, now } = r.input;
-  if (data.entries.length === 0) {
-    r.say(T.HISTORY_EMPTY);
+  if (!r.me.canUpdate) {
+    r.say('refuse.read_only');
     return;
   }
   const where = whereOf(data);
-  const thisYear = absToCivil(localAbs(now, where ? where.place.timeZone : 'UTC')).y;
+  if (!where) {
+    r.say('refuse.no_place');
+    return;
+  }
+  const rc: ResolveContext = { now, place: where.place, zopts: where.zopts, boundaryMarginMs: data.app.boundaryMarginMinutes * 60_000 };
+  const night = isNight(r);
+  if (kind === 'hefsek' && 'yesterday' in how) {
+    saveDraft(r, kind, { kind: 'hefsek', abs: resolveHefsekDay(how.yesterday, rc) }, null, ctx);
+    return;
+  }
+  if (kind === 'mikvah' && 'tonight' in how) {
+    if (how.tonight && !night) {
+      r.say('refuse.future');
+      return;
+    }
+    // At night, "last night" is the night before this one; by day, the night that ended this morning.
+    saveDraft(r, kind, { kind: 'mikvah', abs: resolveMikvahNight(!how.tonight && night, rc) }, null, ctx);
+    return;
+  }
+  if (!('when' in how) || kind === 'hefsek' || kind === 'mikvah') return;
+  let when = how.when;
+  // "last night" at night: the night before this one.
+  if (how.last && night && when.type === 'onah' && when.part === 'night' && !when.yesterday) when = { ...when, yesterday: true };
+  const resolved = resolveWhen(when, rc);
+  if (!resolved.ok) {
+    r.say('refuse.future');
+    return;
+  }
+  const draft: DraftEntry = kind === 'flow' ? { kind: 'flow', onah: resolved.onah, veset: true } : { kind, onah: resolved.onah };
+  saveDraft(r, kind, draft, resolved, ctx);
+}
+
+/** The answer to "when?" by an option. */
+function whenChoice(r: Reply, id: string, ctx: ChatContext): void {
+  const kind = ctx.kind;
+  if (!kind) {
+    notUnderstood(r);
+    return;
+  }
+  const keep: ChatContext = ctx.setup ? { setup: true } : {};
+  switch (id) {
+    case 'another_day':
+      r.say(kind === 'hefsek' || kind === 'mikvah' ? 'record.date_day' : 'record.date_onah').ask({ ...keep, kind }, 'date');
+      return;
+    case 'now':
+      recordNow(r, kind, { when: { type: 'now' } }, keep);
+      return;
+    case 'last_night':
+      if (kind === 'mikvah') recordNow(r, kind, { tonight: false }, keep);
+      else recordNow(r, kind, { when: { type: 'onah', part: 'night', yesterday: false }, last: true }, keep);
+      return;
+    case 'today_day':
+      recordNow(r, kind, { when: { type: 'onah', part: 'day', yesterday: false } }, keep);
+      return;
+    case 'today':
+    case 'yesterday':
+      if (kind === 'hefsek') recordNow(r, kind, { yesterday: id === 'yesterday' }, keep);
+      else notUnderstood(r);
+      return;
+    case 'tonight':
+      recordNow(r, 'mikvah', { tonight: true }, keep);
+      return;
+  }
+}
+
+/** DONE on the hefsek reminder: the hefsek on the day the reminder was about. */
+function hefsekDone(r: Reply, ctx: ChatContext): void {
+  if (ctx.day === undefined) {
+    notUnderstood(r);
+    return;
+  }
+  if (!r.me.canUpdate) {
+    r.say('refuse.read_only');
+    return;
+  }
+  if (!whereOf(r.input.data)) {
+    r.say('refuse.no_place');
+    return;
+  }
+  saveDraft(r, 'hefsek', { kind: 'hefsek', abs: ctx.day }, null, {});
+}
+
+function undo(r: Reply): void {
+  const { data, now } = r.input;
+  if (!r.me.canUpdate) {
+    r.say('refuse.read_only');
+    return;
+  }
+  if (!whereOf(data)) {
+    r.say('refuse.no_place');
+    return;
+  }
+  const last = [...data.entries].sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (!last || now - last.createdAt > UNDO_WINDOW_MS) {
+    r.say('undo.nothing');
+    return;
+  }
+  removeEntry(data, last.entry.id, now);
+  r.changed = true;
+  const after = compute(data, now);
+  if (after) r.computed = after;
+  r.say('undo.done', { entry: entryEnglish(last.entry), status: statusBody(r, after) });
+}
+
+// ---------- history ----------
+
+function thisYear(r: Reply): number {
+  const where = whereOf(r.input.data);
+  return absToCivil(localAbs(r.input.now, where ? where.place.timeZone : 'UTC')).y;
+}
+
+function history(r: Reply): void {
+  const { data } = r.input;
+  if (data.entries.length === 0) {
+    r.say('history.empty');
+    return;
+  }
+  const year = thisYear(r);
   const sorted = [...data.entries]
     .sort((a, b) => {
       const pa = 'onah' in a.entry ? a.entry.onah.abs : a.entry.abs;
@@ -630,400 +562,641 @@ function history(r: Reply): void {
       return pb - pa || b.createdAt - a.createdAt;
     })
     .slice(0, 5);
-  const list = sorted.map((e, i) => `${LETTERS[i]} ${entryWithYear(e.entry, thisYear)}`).join('. ');
-  r.say(`Latest entries: ${list}. To erase one, reply ERASE and its letter, e.g. ERASE A.`).ask({ kind: 'history', ids: sorted.map(e => e.entry.id) }, false);
+  const names = ordinals(r, 'history.list');
+  const list = sorted.map((e, i) => `${names[i]}: ${entryWithYear(e.entry, year)}`).join('; ');
+  r.say('history.list', { list }, [...ORDINAL_IDS.slice(0, sorted.length), 'menu']).ask({ ids: sorted.map(e => e.entry.id) });
 }
 
-function erase(r: Reply, chat: ChatState | null, letter: string): void {
-  if (!chat || chat.q.kind !== 'history') {
-    r.say(T.ERASE_NEEDS_LIST);
-    return;
-  }
-  const id = chat.q.ids[LETTERS.indexOf(letter)];
-  if (LETTERS.indexOf(letter) < 0 || id === undefined) {
-    r.say(`There is no entry ${letter} in the list. Nothing was changed. ${capitalFirst(hint(chat.q))}.`).ask(chat.q, false);
-    return;
-  }
+function eraseAsk(r: Reply, id: string): void {
   const stored = r.input.data.entries.find(e => e.entry.id === id);
   if (!stored) {
-    r.say(T.ENTRY_GONE);
+    r.say('history.gone');
     return;
   }
   if (!r.me.canUpdate) {
-    r.say(T.READ_ONLY);
+    r.say('refuse.read_only');
     return;
   }
-  const where = whereOf(r.input.data);
-  const thisYear = absToCivil(localAbs(r.input.now, where ? where.place.timeZone : 'UTC')).y;
-  r.say(`Erase ${entryWithYear(stored.entry, thisYear)}? Reply YES to erase it, NO to keep it.`, T.YES_NO).ask({ kind: 'confirm', action: { type: 'erase', id } }, false);
+  r.say('history.erase_ask', { entry: entryWithYear(stored.entry, thisYear(r)) }).ask({ action: { type: 'erase', id } });
 }
 
-function location(r: Reply, arg: string): void {
-  if (arg === '') {
-    const place = r.input.data.app.place;
-    r.say(place ? `Your location is ${foldToGsm(place.name)}. To change it, reply with the new ZIP code.` : T.ASK_ZIP).ask({ kind: 'zip' }, false);
-    return;
-  }
-  const postal = postalOf(arg);
-  if (postal === null) {
-    usage(r, 'Write LOCATION and the ZIP code, e.g. LOCATION 08701, or a Canadian postal code.');
-    return;
-  }
+// ---------- setup ----------
+
+function startSetup(r: Reply, first: boolean): void {
+  const place = r.input.data.app.place;
+  if (place) r.say('setup.start_place', { place: foldToGsm(place.name) });
+  else r.say(first ? 'setup.start' : 'setup.again');
+  r.ask({ setup: true }, 'zip');
+}
+
+function setupCustoms(r: Reply): void {
+  r.say('setup.customs').ask({ setup: true });
+}
+
+function setupRecent(r: Reply): void {
+  r.say('setup.recent').ask({ setup: true, kind: 'flow' }, 'date');
+}
+
+function finishSetup(r: Reply): void {
+  r.say('setup.done');
+}
+
+// ---------- location ----------
+
+function setPlace(r: Reply, place: Place, setup: boolean): void {
+  r.input.data.app.place = { name: place.name, latitude: place.latitude, longitude: place.longitude, timeZone: place.timeZone, elevation: place.elevation };
+  r.input.data.sync.dirty = true;
+  r.changed = true;
+  r.say('location.set', { place: foldToGsm(place.name) });
+  if (setup) setupCustoms(r);
+}
+
+function zipAnswer(r: Reply, setup: boolean, postal: string): void {
   const place = r.input.lookupPostal(postal);
   if (!place) {
-    r.say(T.unknownZip(postal)).ask({ kind: 'zip' }, false);
+    r.say('location.unknown', { code: postal }, setup ? ['skip_place', 'web', 'menu'] : ['web', 'menu']).ask(setup ? { setup: true } : {}, 'zip');
     return;
   }
-  setPlace(r, place, false);
+  setPlace(r, place, setup);
 }
 
-function customs(r: Reply, arg: string): void {
-  if (arg === '') {
-    r.say(T.CUSTOMS_LIST).ask({ kind: 'customs_list' }, false);
-  } else if (arg === 'ALL') {
-    askCustom(r, 0, true, false);
+function location(r: Reply, rest: readonly string[]): void {
+  if (rest.length === 0) {
+    const place = r.input.data.app.place;
+    if (place) r.say('location.show', { place: foldToGsm(place.name) });
+    else r.say('location.ask');
+    r.ask({}, 'zip');
+    return;
+  }
+  const postal = postalOf(rest.join(' '));
+  if (postal === null) {
+    r.say('location.not_postal').ask({}, 'zip');
+    return;
+  }
+  zipAnswer(r, false, postal);
+}
+
+// ---------- customs ----------
+
+function askCustom(r: Reply, index: number, walk: boolean, setup: boolean): void {
+  const c = SMS_CUSTOMS[index]!;
+  const cur = currentOption(c, r.input.data.halachic);
+  const now = cur >= 0 ? shortWords(c.options[cur]!.short) : `${tzeitWords(r.input.data.halachic.tzeit)} (set on the website)`;
+  const step = walk ? `Custom ${index + 1} of 12: ` : '';
+  r.say(`custom.${c.key}`, { step, now }).ask({ index, walk, ...(setup ? { setup: true } : {}) });
+}
+
+function customAnswer(r: Reply, ctx: ChatContext, id: string): void {
+  const index = ctx.index;
+  if (index === undefined) {
+    notUnderstood(r);
+    return;
+  }
+  const { data, now } = r.input;
+  const c = SMS_CUSTOMS[index]!;
+  const cur = currentOption(c, data.halachic);
+  const chosen = id === 'keep' ? -1 : Number(id.slice(1));
+  const option = chosen >= 0 ? c.options[chosen] : null;
+  if (chosen >= 0 && !option) {
+    notUnderstood(r);
+    return;
+  }
+  const same = !option || (cur >= 0 && sameValue(c.options[cur]!.value, option.value));
+  if (!ctx.walk) {
+    if (!option) r.say('confirm.no');
+    else if (same) r.say('custom.same');
+    else if (index === VESATOT_INDEX && option.value === 'paused') r.say('vesatot.pause_ask').ask({ action: { type: 'pause_vesatot' } });
+    else {
+      applyOption(data.halachic, c, option);
+      data.sync.dirty = true;
+      r.changed = true;
+      r.say('custom.changed', { name: c.name, choice: shortWords(option.short) });
+    }
+    return;
+  }
+  if (option && !same) {
+    applyOption(data.halachic, c, option);
+    data.sync.dirty = true;
+    r.changed = true;
+    r.say('custom.saved', { name: c.name, choice: shortWords(option.short) });
   } else {
-    usage(r, 'Send CUSTOMS for the list, or CUSTOMS ALL to go through all 12.');
+    r.say('custom.kept', { name: c.name, choice: cur >= 0 ? shortWords(c.options[cur]!.short) : 'as set on the website' });
   }
-}
-
-function vesatot(r: Reply, verb: 'PAUSE' | 'RESUME'): void {
-  const data = r.input.data;
-  if (verb === 'PAUSE') {
-    if (data.halachic.vesatot === 'paused') r.say(T.VESATOT_ALREADY_PAUSED);
-    else r.say(T.PAUSE_ASK, T.YES_NO).ask({ kind: 'confirm', action: { type: 'pause_vesatot' } }, false);
+  if (index + 1 < SMS_CUSTOMS.length) {
+    askCustom(r, index + 1, true, ctx.setup === true);
     return;
   }
-  if (data.halachic.vesatot === 'active') {
-    r.say(T.VESATOT_ALREADY_ON);
-    return;
-  }
-  const c = SMS_CUSTOMS[VESATOT_INDEX]!;
-  applyOption(data.halachic, c, c.options[0]!);
-  data.sync.dirty = true;
+  data.halachicConfirmedAt = now;
   r.changed = true;
-  r.say(T.RESUMED);
+  r.say('customs.done');
+  if (ctx.setup) setupRecent(r);
 }
 
-function reminders(r: Reply, arg: string): void {
+function customsList(r: Reply, rest: readonly string[]): void {
+  if (rest.some(w => w.toLowerCase() === 'all')) askCustom(r, 0, true, false);
+  else r.say('customs.page1');
+}
+
+function vesatot(r: Reply, rest: readonly string[]): void {
+  const data = r.input.data;
+  const words = new Set(rest.map(w => w.toLowerCase()));
+  if (words.has('pause')) {
+    if (data.halachic.vesatot === 'paused') r.say('vesatot.already_paused');
+    else r.say('vesatot.pause_ask').ask({ action: { type: 'pause_vesatot' } });
+    return;
+  }
+  if (words.has('resume')) {
+    if (data.halachic.vesatot === 'active') {
+      r.say('vesatot.already_on');
+      return;
+    }
+    const c = SMS_CUSTOMS[VESATOT_INDEX]!;
+    applyOption(data.halachic, c, c.options[0]!);
+    data.sync.dirty = true;
+    r.changed = true;
+    r.say('vesatot.resumed');
+    return;
+  }
+  askCustom(r, VESATOT_INDEX, false, false);
+}
+
+// ---------- reminders ----------
+
+function reminders(r: Reply, rest: readonly string[]): void {
+  const words = new Set(rest.map(w => w.toLowerCase()));
+  if (words.has('on')) return remindersOn(r);
+  if (words.has('off')) return remindersOff(r);
+  if (words.has('kinds')) return kinds(r);
+  if (words.has('times') || words.has('time')) {
+    r.say('website.only');
+    return;
+  }
+  if (words.has('wording')) return wording(r, []);
+  const on = canText(r.me);
+  r.say('reminders.show', { state: on ? 'on' : 'off', kinds: String(r.me.reminders.length), style: r.input.data.app.reminders.style }, [on ? 'off' : 'on', 'kinds', 'wording']);
+}
+
+function remindersOn(r: Reply): void {
   const me = r.me;
-  const on = canText(me);
-  if (arg === '') {
-    const style = r.input.data.app.reminders.style;
-    r.say(
-      `Reminders for this phone are ${on ? 'on' : 'off'}. ${on ? 'REMINDERS OFF turns them off' : 'REMINDERS ON turns them on'}. KINDS chooses which kinds (now ${me.reminders.length} of 6). WORDING PLAIN or WORDING DISCREET (now ${style}). Times are set on the website.`,
-      [on ? { label: 'Reminders off', send: 'REMINDERS OFF' } : { label: 'Reminders on', send: 'REMINDERS ON' }, { label: 'Kinds', send: 'KINDS' }, { label: style === 'plain' ? 'Wording discreet' : 'Wording plain', send: style === 'plain' ? 'WORDING DISCREET' : 'WORDING PLAIN' }],
-    );
+  if (me.optedOut) {
+    r.say('reminders.opted_out');
     return;
   }
-  if (arg === 'ON') {
-    if (me.optedOut) {
-      r.say(T.OPTED_OUT);
-      return;
-    }
-    if (me.consentAt !== null && me.verifiedAt !== null) {
-      r.say(T.REMINDERS_ALREADY_ON);
-      return;
-    }
-    // Texting from the phone proves the number; turning reminders on by text is the consent.
-    if (me.verifiedAt === null) me.verifiedAt = r.input.now;
-    me.consentAt = r.input.now;
-    r.changed = true;
-    r.say(T.remindersOn(lastFour(me.number)));
+  if (me.consentAt !== null && me.verifiedAt !== null) {
+    r.say('reminders.already_on');
     return;
   }
-  if (arg === 'OFF') {
-    if (me.consentAt === null) {
-      r.say(T.REMINDERS_ALREADY_OFF);
-      return;
-    }
-    me.consentAt = null;
-    r.changed = true;
-    r.say(T.REMINDERS_OFF);
+  // Texting from the phone proves the number; turning reminders on by text is the consent.
+  if (me.verifiedAt === null) me.verifiedAt = r.input.now;
+  me.consentAt = r.input.now;
+  r.changed = true;
+  r.say('reminders.on', { last4: lastFour(me.number) });
+}
+
+function remindersOff(r: Reply): void {
+  if (r.me.consentAt === null) {
+    r.say('reminders.already_off');
     return;
   }
-  if (arg === 'TIMES' || arg === 'TIME') {
-    r.say(T.WEBSITE_TIMES);
-    return;
-  }
-  if (arg === 'KINDS') {
-    kinds(r);
-    return;
-  }
-  usage(r, 'Send REMINDERS ON, REMINDERS OFF, KINDS, or WORDING.');
+  r.me.consentAt = null;
+  r.changed = true;
+  r.say('reminders.off');
 }
 
 function kinds(r: Reply): void {
-  r.say(kindsText(r.me), [
-    { label: 'All', send: 'ALL' },
-    { label: 'None', send: 'NONE' },
-  ]).ask({ kind: 'kinds' }, false);
+  r.say('reminders.kinds', kindLists(r));
 }
 
-function wording(r: Reply, arg: string): void {
+function kindToggle(r: Reply, id: string): void {
+  const kind = id.slice('kind_'.length);
+  if (!(REMINDER_KINDS as string[]).includes(kind)) {
+    notUnderstood(r);
+    return;
+  }
+  const has = (r.me.reminders as string[]).includes(kind);
+  r.me.reminders = REMINDER_KINDS.filter(k => (k === kind ? !has : r.me.reminders.includes(k)));
+  r.changed = true;
+  r.say('reminders.kinds_changed', kindLists(r));
+}
+
+function wording(r: Reply, rest: readonly string[]): void {
+  const words = new Set(rest.map(w => w.toLowerCase()));
+  if (words.has('plain')) return setWording(r, 'plain');
+  if (words.has('discreet')) return setWording(r, 'discreet');
+  r.say('reminders.wording', { style: r.input.data.app.reminders.style });
+}
+
+function setWording(r: Reply, style: 'plain' | 'discreet'): void {
   const rem = r.input.data.app.reminders;
-  if (arg === '') {
-    r.say(`Reminder wording is ${rem.style}, for every phone on the account. WORDING PLAIN uses the full words; WORDING DISCREET uses short letters, such as H for hefsek.`, [
-      { label: 'Wording plain', send: 'WORDING PLAIN' },
-      { label: 'Wording discreet', send: 'WORDING DISCREET' },
-    ]);
-    return;
-  }
-  if (arg !== 'PLAIN' && arg !== 'DISCREET') {
-    usage(r, 'Send WORDING PLAIN or WORDING DISCREET.');
-    return;
-  }
-  const style = arg === 'PLAIN' ? 'plain' : 'discreet';
   if (rem.style === style) {
-    r.say(T.wordingSame(style));
+    r.say('reminders.wording_same', { style });
     return;
   }
   // A copy, so that a shared default object is never changed.
   r.input.data.app.reminders = { ...rem, style };
   r.changed = true;
-  r.say(T.wordingChanged(style));
+  r.say('reminders.wording_changed', { style });
+}
+
+// ---------- phones ----------
+
+function phoneList(r: Reply, numbers: readonly string[], only?: (n: string) => boolean): string {
+  const names = ordinals(r, 'phones.list');
+  return numbers
+    .map((n, i) => ({ n, i }))
+    .filter(({ n }) => !only || only(n))
+    .map(({ n, i }) => {
+      const p = r.input.data.phones.find(x => x.number === n);
+      const mine = n === r.input.from ? 'this phone, ' : '';
+      return `${names[i]} ending ${lastFour(n)} (${mine}reminders ${p && canText(p) ? 'on' : 'off'})`;
+    })
+    .join('; ');
 }
 
 function phones(r: Reply): void {
-  const { data, from } = r.input;
-  const list = data.phones
-    .map((p, i) => `${LETTERS[i]} ending ${lastFour(p.number)} (${p.number === from ? 'this phone, ' : ''}reminders ${canText(p) ? 'on' : 'off'})`)
-    .join(', ');
-  r.say(`Phones: ${list}. ADD gives a code to add a phone. REMOVE and a letter removes one. LEAVE takes this phone off.`).ask(
-    { kind: 'phones', numbers: data.phones.map(p => p.number) },
-    false,
-  );
+  const numbers = r.input.data.phones.map(p => p.number);
+  const offer = ['menu'];
+  if (numbers.length < r.input.limits.maxPhones) offer.unshift('add');
+  if (numbers.length > 1) offer.splice(offer.length - 1, 0, 'remove', 'leave');
+  r.say('phones.list', { list: phoneList(r, numbers) }, offer).ask({ numbers });
+}
+
+function removeWhich(r: Reply, ctx: ChatContext): void {
+  const numbers = ctx.numbers ?? r.input.data.phones.map(p => p.number);
+  const others = numbers.map((n, i) => ({ n, i })).filter(({ n }) => n !== r.input.from && r.input.data.phones.some(p => p.number === n));
+  if (others.length === 0) {
+    phones(r);
+    return;
+  }
+  const names = ordinals(r, 'phones.remove_which');
+  const list = others.map(({ n, i }) => `${names[i]} ending ${lastFour(n)}`).join('; ');
+  r.say('phones.remove_which', { list }, [...others.map(({ i }) => ORDINAL_IDS[i] as string), 'menu']).ask({ numbers: [...numbers] });
+}
+
+function ordinal(r: Reply, ctx: ChatContext, id: string): void {
+  const i = (ORDINAL_IDS as readonly string[]).indexOf(id);
+  if (ctx.ids) {
+    const entry = ctx.ids[i];
+    if (entry === undefined) notUnderstood(r);
+    else eraseAsk(r, entry);
+    return;
+  }
+  if (ctx.numbers) {
+    const number = ctx.numbers[i];
+    if (number === undefined) notUnderstood(r);
+    else if (number === r.input.from) leave(r);
+    else if (!r.input.data.phones.some(p => p.number === number)) r.say('phones.gone', { last4: lastFour(number) });
+    else r.say('phones.remove_ask', { last4: lastFour(number) }).ask({ action: { type: 'remove_phone', number } });
+    return;
+  }
+  notUnderstood(r);
 }
 
 /**
  * ADD, or ADD and the other phone's number: a code for the other phone to
  * text back as "JOIN <code>". Nothing is sent to that phone (it has not
- * texted in), so nothing needs YES. The number, when given, is only checked
- * against the phones already on the account.
+ * texted in). The number, when given, is only checked against the phones
+ * already on the account.
  */
-function addPhone(r: Reply, arg: string): void {
+function addPhone(r: Reply, rest: readonly string[]): void {
   const { data } = r.input;
-  if (arg !== '') {
-    let n = arg.replace(/[\s().-]/g, '');
+  if (rest.length > 0) {
+    let n = rest.join('').replace(/[\s().-]/g, '');
     if (/^\d{10}$/.test(n)) n = `+1${n}`;
     else if (/^1\d{10}$/.test(n)) n = `+${n}`;
     if (!/^\+[1-9]\d{7,14}$/.test(n)) {
-      r.say(T.ADD_FORMAT);
+      r.say('phones.add_format');
       return;
     }
     if (data.phones.some(p => p.number === n)) {
-      r.say(`The number ending ${lastFour(n)} is already on this account. Nothing was changed.`);
+      r.say('phones.add_already', { last4: lastFour(n) });
       return;
     }
   }
   if (data.phones.length >= r.input.limits.maxPhones) {
-    r.say(`This account already has ${data.phones.length} phones, the most allowed. Send PHONES to remove one first. Nothing was changed.`);
+    r.say('phones.add_full', { count: String(data.phones.length) });
     return;
   }
   const code = inviteCode(r.input.random);
-  r.effects.push({ type: 'join_code', code, days: INVITE_DAYS, ifFailed: T.ADD_FAILED });
-  r.say(T.addCode(code, INVITE_DAYS));
-}
-
-function removePhone(r: Reply, chat: ChatState | null, letter: string): void {
-  if (!chat || chat.q.kind !== 'phones') {
-    r.say(T.REMOVE_NEEDS_LIST);
-    return;
-  }
-  const number = chat.q.numbers[LETTERS.indexOf(letter)];
-  if (LETTERS.indexOf(letter) < 0 || number === undefined) {
-    r.say(`There is no phone ${letter} in the list. Nothing was changed. ${capitalFirst(hint(chat.q))}.`).ask(chat.q, false);
-    return;
-  }
-  if (number === r.input.from) {
-    r.say(T.REMOVE_SELF);
-    return;
-  }
-  if (!r.input.data.phones.some(p => p.number === number)) {
-    r.say(`The phone ending ${lastFour(number)} is no longer on the account. Nothing was changed.`);
-    return;
-  }
-  r.say(T.removeAsk(lastFour(number)), T.YES_NO).ask({ kind: 'confirm', action: { type: 'remove_phone', number } }, false);
+  r.effects.push({ type: 'join_code', code, days: INVITE_DAYS, ifFailed: r.failed('phones.add_failed') });
+  r.say('phones.add_code', { code, days: String(INVITE_DAYS) });
 }
 
 function leave(r: Reply): void {
   if (r.input.data.phones.length <= 1) {
-    r.say(T.LAST_PHONE);
+    r.say('phones.last');
     return;
   }
-  r.say(T.LEAVE_ASK, T.YES_NO).ask({ kind: 'confirm', action: { type: 'leave' } }, false);
+  r.say('phones.leave_ask').ask({ action: { type: 'leave' } });
 }
 
-function calendar(r: Reply, arg: string): void {
-  const data = r.input.data;
-  if (arg === '') {
-    r.say(data.calendarLinkToken ? T.CALENDAR_HAS : T.CALENDAR_NONE, data.calendarLinkToken ? undefined : [{ label: 'Calendar link', send: 'CALENDAR LINK' }]);
+// ---------- calendar, terms ----------
+
+function calendarUrl(r: Reply): string {
+  return `${(r.input.origin ?? DEFAULT_ORIGIN).replace(/\/+$/, '')}/cal/${r.input.data.calendarLinkToken}.ics`;
+}
+
+function calendar(r: Reply, rest: readonly string[]): void {
+  const words = new Set(rest.map(w => w.toLowerCase()));
+  if (words.has('link') || words.has('show') || words.has('create')) return calendarLink(r);
+  if (words.has('new')) return calendarAsk(r, 'new');
+  if (words.has('off') || words.has('remove')) return calendarAsk(r, 'off');
+  if (words.has('google')) {
+    r.say('website.only');
     return;
   }
-  if (arg === 'LINK') {
-    if (data.calendarLinkToken) {
-      r.say(T.calendarShow(calendarUrl(r)));
-      return;
-    }
+  r.say(r.input.data.calendarLinkToken ? 'calendar.has' : 'calendar.none');
+}
+
+function calendarLink(r: Reply): void {
+  const data = r.input.data;
+  if (!data.calendarLinkToken) {
     data.calendarLinkToken = r.input.random();
     r.changed = true;
-    r.say(T.calendarCreated(calendarUrl(r)));
-    return;
   }
-  if (arg === 'NEW' || arg === 'OFF') {
-    if (!data.calendarLinkToken) {
-      r.say(T.CALENDAR_NO_LINK);
-      return;
-    }
-    r.say(arg === 'NEW' ? T.CALENDAR_NEW_ASK : T.CALENDAR_OFF_ASK, T.YES_NO).ask({ kind: 'confirm', action: { type: arg === 'NEW' ? 'calendar_new' : 'calendar_off' } }, false);
-    return;
-  }
-  if (arg === 'GOOGLE') {
-    r.say(T.WEBSITE_GOOGLE);
-    return;
-  }
-  usage(r, 'Send CALENDAR LINK, CALENDAR NEW or CALENDAR OFF.');
+  r.say('calendar.link', { url: calendarUrl(r) });
 }
 
-function terms(r: Reply, arg: string): void {
+function calendarAsk(r: Reply, which: 'new' | 'off'): void {
+  if (!r.input.data.calendarLinkToken) {
+    r.say('calendar.no_link');
+    return;
+  }
+  r.say(which === 'new' ? 'calendar.new_ask' : 'calendar.off_ask').ask({ action: { type: which === 'new' ? 'calendar_new' : 'calendar_off' } });
+}
+
+function terms(r: Reply, rest: readonly string[]): void {
+  const words = new Set(rest.map(w => w.toLowerCase()));
+  if (words.has('hebrew')) return setTerms(r, 'he');
+  if (words.has('english')) return setTerms(r, 'en');
+  r.say('terms.show', { lang: r.input.data.app.terms === 'he' ? 'Hebrew' : 'English letters' });
+}
+
+function setTerms(r: Reply, lang: 'en' | 'he'): void {
   const app = r.input.data.app;
-  if (arg === '') {
-    r.say(T.termsNow(app.terms), [
-      { label: 'Terms Hebrew', send: 'TERMS HEBREW' },
-      { label: 'Terms English', send: 'TERMS ENGLISH' },
-    ]);
-    return;
-  }
-  const lang = arg === 'HEBREW' ? 'he' : arg === 'ENGLISH' ? 'en' : null;
-  if (!lang) {
-    usage(r, 'Send TERMS HEBREW or TERMS ENGLISH.');
-    return;
-  }
+  const name = lang === 'he' ? 'Hebrew' : 'English letters';
   if (app.terms === lang) {
-    r.say(`The terms are already in ${lang === 'he' ? 'Hebrew' : 'English letters'}. Nothing was changed.`);
+    r.say('terms.same', { lang: name });
     return;
   }
   app.terms = lang;
   r.input.data.sync.dirty = true;
   r.changed = true;
-  r.say(lang === 'he' ? T.TERMS_HE : T.TERMS_EN);
+  r.say('terms.changed', { lang: name });
 }
 
-/**
- * The command words. Returns false if `w` is not one. A command word
- * closes any open question (and setup), except where it reads the list
- * the question showed (ERASE, REMOVE).
- */
-function word(r: Reply, chat: ChatState | null, w: string): boolean {
-  const [head = '', ...tail] = w.split(' ');
-  const arg = tail.join(' ');
-  const none = (fn: () => void): true => {
-    if (arg !== '') usage(r, `${head} is sent on its own.`);
-    else fn();
-    return true;
-  };
-  switch (head) {
-    case 'MENU':
-      return none(() => menu(r));
-    case 'HISTORY':
-      return none(() => history(r));
-    case 'ERASE':
-      if (!/^[A-Z]$/.test(arg)) {
-        usage(r, 'Write ERASE and the letter of the entry from HISTORY, e.g. ERASE A.');
-        return true;
+// ---------- YES and NO ----------
+
+function confirmAnswer(r: Reply, ctx: ChatContext, id: 'yes' | 'no'): void {
+  const action = ctx.action;
+  if (!action) {
+    notUnderstood(r);
+    return;
+  }
+  if (id === 'no') {
+    r.say('confirm.no');
+    return;
+  }
+  const { data, from } = r.input;
+  switch (action.type) {
+    case 'erase': {
+      if (!r.me.canUpdate) {
+        r.say('refuse.read_only');
+        return;
       }
-      erase(r, chat, arg);
-      return true;
-    case 'LOCATION':
-    case 'ZIP':
-      location(r, arg);
-      return true;
-    case 'CUSTOMS':
-    case 'CUSTOM':
-      customs(r, arg);
-      return true;
-    case 'NIGHTFALL':
-      return none(() => askCustom(r, NIGHTFALL_INDEX, false, false));
-    case 'PAUSE':
-    case 'RESUME':
-      if (arg !== 'VESATOT') {
-        usage(r, `Write ${head} VESATOT.`);
-        return true;
+      const stored = data.entries.find(e => e.entry.id === action.id);
+      if (!stored) {
+        r.say('history.gone');
+        return;
       }
-      vesatot(r, head);
-      return true;
-    case 'REMINDERS':
-    case 'REMINDER':
-      reminders(r, arg);
-      return true;
-    case 'KINDS':
-      return none(() => kinds(r));
-    case 'WORDING':
-      wording(r, arg);
-      return true;
-    case 'TIMES':
-      return none(() => r.say(T.WEBSITE_TIMES));
-    case 'PHONES':
-    case 'PHONE':
-      return none(() => phones(r));
-    case 'ADD':
-      addPhone(r, arg);
-      return true;
-    case 'REMOVE':
-      if (!/^[A-Z]$/.test(arg)) {
-        usage(r, 'Write REMOVE and the letter of the phone from PHONES, e.g. REMOVE B.');
-        return true;
+      const year = thisYear(r);
+      removeEntry(data, action.id, r.input.now);
+      r.changed = true;
+      const after = compute(data, r.input.now);
+      if (after) r.computed = after;
+      r.say('history.erased', { entry: entryWithYear(stored.entry, year), status: statusBody(r, after) });
+      return;
+    }
+    case 'remove_phone': {
+      if (!data.phones.some(p => p.number === action.number)) {
+        r.say('phones.gone', { last4: lastFour(action.number) });
+        return;
       }
-      removePhone(r, chat, arg);
-      return true;
-    case 'LEAVE':
-      return none(() => leave(r));
-    case 'CALENDAR':
-      calendar(r, arg);
-      return true;
-    case 'TERMS':
-      terms(r, arg);
-      return true;
-    case 'WEB':
-      return none(() => {
-        r.effects.push({ type: 'web_link', number: r.input.from, text: T.WEB_LINK_TEXT, ifFailed: T.WEB_FAILED });
-      });
-    case 'SETUP':
-      return none(() => startSetup(r));
-    case 'DELETE':
-      if (arg !== 'ACCOUNT') {
-        usage(r, 'To delete the account, write DELETE ACCOUNT. To erase one entry, send HISTORY.');
-        return true;
+      r.effects.push({ type: 'remove_phone', number: action.number, ifFailed: r.failed('phones.remove_failed', { last4: lastFour(action.number) }) });
+      r.say('phones.removed', { last4: lastFour(action.number) });
+      return;
+    }
+    case 'leave': {
+      if (data.phones.length <= 1) {
+        r.say('phones.last');
+        return;
       }
-      r.say(T.DELETE_ASK, T.YES_NO).ask({ kind: 'confirm', action: { type: 'delete_account' } }, false);
-      return true;
-    case 'PASSWORD':
-      return none(() => r.say(T.WEBSITE_PASSWORD));
-    case 'DOWNLOAD':
-    case 'EXPORT':
-      return none(() => r.say(T.WEBSITE_DATA));
-    case 'GOOGLE':
-      return none(() => r.say(T.WEBSITE_GOOGLE));
-    case 'JOIN':
-      r.say(arg === '' ? T.ALREADY_JOINED : T.ALREADY_ON_ACCOUNT);
-      return true;
-    case 'YES':
-    case 'NO':
-    case 'KEEP':
-    case 'SKIP':
-    case 'DONE':
-    case 'ALL':
-    case 'NONE':
-      // With a question open these are answers it did not accept; that is reported below.
-      if (arg !== '' || chat) return false;
-      r.say(T.NOTHING_PENDING);
-      return true;
-    default:
-      return false;
+      r.effects.push({ type: 'leave', number: from, ifFailed: r.failed('phones.leave_failed') });
+      r.say('phones.left');
+      return;
+    }
+    case 'delete_account':
+      r.effects.push({ type: 'delete_account', ifFailed: r.failed('delete.failed') });
+      r.say('delete.done');
+      return;
+    case 'calendar_new':
+      if (!data.calendarLinkToken) {
+        r.say('calendar.no_link');
+        return;
+      }
+      data.calendarLinkToken = r.input.random();
+      r.changed = true;
+      r.say('calendar.replaced', { url: calendarUrl(r) });
+      return;
+    case 'calendar_off':
+      if (!data.calendarLinkToken) {
+        r.say('calendar.no_link');
+        return;
+      }
+      data.calendarLinkToken = null;
+      r.changed = true;
+      r.say('calendar.removed');
+      return;
+    case 'pause_vesatot':
+      if (data.halachic.vesatot === 'paused') {
+        r.say('vesatot.already_paused');
+        return;
+      }
+      data.halachic.vesatot = 'paused';
+      data.sync.dirty = true;
+      r.changed = true;
+      r.say('vesatot.paused');
+      return;
+    case 'place':
+      setPlace(r, action.place, false);
+      return;
   }
 }
 
-// ---------- the entry points ----------
+// ---------- dispatch ----------
+
+function notUnderstood(r: Reply): void {
+  r.say('not_understood');
+}
+
+/** A general action (also the main options and the menus), with the words written after it. */
+function act(r: Reply, action: string, rest: readonly string[]): void {
+  switch (action) {
+    case 'period':
+      return record(r, 'flow', rest);
+    case 'stain':
+      return record(r, 'stain', rest);
+    case 'broken':
+      return record(r, 'broken', rest);
+    case 'hefsek':
+      return record(r, 'hefsek', rest);
+    case 'immersion':
+      return record(r, 'mikvah', rest);
+    case 'status':
+      return status(r);
+    case 'undo':
+      return undo(r);
+    case 'menu':
+      r.say('menu.main');
+      return;
+    case 'more':
+      r.say('menu.more');
+      return;
+    case 'entries':
+      r.say('menu.entries');
+      return;
+    case 'settings':
+      r.say('menu.settings');
+      return;
+    case 'account':
+      r.say('menu.account');
+      return;
+    case 'history':
+      return history(r);
+    case 'location':
+      return location(r, rest);
+    case 'customs':
+      return customsList(r, rest);
+    case 'nightfall':
+      return askCustom(r, NIGHTFALL_INDEX, false, false);
+    case 'vesatot':
+      return vesatot(r, rest);
+    case 'reminders':
+      return reminders(r, rest);
+    case 'kinds':
+      return kinds(r);
+    case 'wording':
+      return wording(r, rest);
+    case 'phones':
+      return phones(r);
+    case 'add':
+      return addPhone(r, rest);
+    case 'leave':
+      return leave(r);
+    case 'calendar':
+      return calendar(r, rest);
+    case 'terms':
+      return terms(r, rest);
+    case 'web':
+      r.effects.push({ type: 'web_link', number: r.input.from, text: '', ifFailed: r.failed('web.failed') });
+      r.say('web.link', { link: LINK_MARK });
+      return;
+    case 'setup':
+      return startSetup(r, false);
+    case 'delete':
+      r.say('delete.ask').ask({ action: { type: 'delete_account' } });
+      return;
+    case 'join':
+      r.say(rest.length === 0 ? 'join.already' : 'join.other_account');
+      return;
+    case 'website':
+      r.say('website.only');
+      return;
+    default:
+      notUnderstood(r);
+  }
+}
+
+const CUSTOM_KEYS = new Set<string>(SMS_CUSTOMS.map(c => c.key));
+const WHEN_IDS = new Set(['now', 'last_night', 'today_day', 'another_day', 'today', 'yesterday', 'tonight']);
+
+/** An option of the last message was chosen. */
+function choose(r: Reply, chat: ChatState, id: string, rest: readonly string[]): void {
+  const ctx = chat.ctx;
+  if (id === 'yes' || id === 'no') return confirmAnswer(r, ctx, id);
+  if (id === 'keep' || /^v\d$/.test(id)) return customAnswer(r, ctx, id);
+  if ((ORDINAL_IDS as readonly string[]).includes(id)) return ordinal(r, ctx, id);
+  if (WHEN_IDS.has(id)) return whenChoice(r, id, ctx);
+  if (id.startsWith('kind_')) return kindToggle(r, id);
+  if (CUSTOM_KEYS.has(id) && chat.key.startsWith('customs.page')) return askCustom(r, SMS_CUSTOMS.findIndex(c => c.key === id), false, false);
+  switch (id) {
+    case 'next':
+      r.say(chat.key === 'customs.page1' ? 'customs.page2' : 'customs.page3');
+      return;
+    case 'all':
+      return askCustom(r, 0, true, false);
+    case 'remove':
+      return removeWhich(r, ctx);
+    case 'done':
+      return hefsekDone(r, ctx);
+    case 'skip_place':
+    case 'keep_place':
+      return setupCustoms(r);
+    case 'keep_customs':
+    case 'customs_later':
+      return setupRecent(r);
+    case 'answer_customs':
+      return askCustom(r, 0, true, true);
+    case 'skip_recent':
+    case 'not_yet':
+      return finishSetup(r);
+    case 'on':
+      return remindersOn(r);
+    case 'off':
+      return remindersOff(r);
+    case 'plain':
+    case 'discreet':
+      return setWording(r, id);
+    case 'hebrew':
+      return setTerms(r, 'he');
+    case 'english':
+      return setTerms(r, 'en');
+    case 'create_link':
+    case 'show_link':
+      return calendarLink(r);
+    case 'new_link':
+      return calendarAsk(r, 'new');
+    case 'remove_link':
+      return calendarAsk(r, 'off');
+  }
+  act(r, id, rest);
+}
+
+/** General actions that belong with the options of a message: a reply naming one of them is still about the options. */
+const KEY_FAMILY: Record<string, string[]> = {
+  custom: ['customs', 'nightfall', 'vesatot'],
+  customs: ['customs', 'nightfall', 'vesatot'],
+  vesatot: ['vesatot'],
+  reminders: ['reminders', 'kinds', 'wording'],
+  reminder: ['hefsek', 'status'],
+  calendar: ['calendar'],
+  phones: ['phones', 'add', 'leave'],
+  history: ['history'],
+  terms: ['terms'],
+  delete: ['delete'],
+  location: ['location'],
+  setup: ['location', 'customs'],
+};
+
+function belongs(chat: ChatState, id: string): Set<string> {
+  const own = new Set<string>([id]);
+  const family: Record<string, string[]> = { more: ['menu'], entries: ['menu'], settings: ['menu'], account: ['menu'], remove: ['phones'] };
+  for (const a of family[id] ?? []) own.add(a);
+  for (const a of KEY_FAMILY[chat.key.split('.')[0] as string] ?? []) own.add(a);
+  const kindAction = chat.ctx.kind ? KIND_ACTION[chat.ctx.kind] : null;
+  if (kindAction) own.add(kindAction);
+  return own;
+}
 
 /** Handles one text from a phone on an account. Never throws for any text or state. */
 export function converse(input: ConverseInput): ConverseOutput {
@@ -1031,93 +1204,86 @@ export function converse(input: ConverseInput): ConverseOutput {
   if (!me) return { chat: validChat(input.chat), out: [], effects: [], changed: false };
   const r = new Reply(input, me);
   let chat = validChat(input.chat);
-  let closed: ChatState | null = null;
-  if (chat && (input.now - chat.at > CHAT_TTL_MS || chat.at - input.now > CHAT_TTL_MS)) {
-    closed = chat;
-    chat = null;
-  }
-  // By default the question stays open; handlers that answer or replace it set r.chat.
-  r.chat = chat;
+  if (chat && (input.now - chat.at > CHAT_TTL_MS || chat.at - input.now > CHAT_TTL_MS)) chat = null;
 
   // RCS: a shared location.
   if (input.location) {
     const { latitude, longitude } = input.location;
     const place =
       Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? input.nearestPostal(latitude, longitude) : null;
-    if (!place) r.say(T.NO_PLACE_NEAR);
-    else if (chat && chat.q.kind === 'zip') setPlace(r, place, chat.setup);
+    if (!place) r.say('location.none_near');
+    else if (chat?.expect === 'zip') setPlace(r, place, chat.ctx.setup === true);
     else {
       const current = input.data.app.place;
-      r.say(`Set your location to ${foldToGsm(place.name)}? Reply YES to set it, NO to keep ${current ? foldToGsm(current.name) : 'it unset'}.`, T.YES_NO).ask(
-        { kind: 'confirm', action: { type: 'place', place } },
-        false,
-      );
+      r.say('location.confirm', { place: foldToGsm(place.name), current: current ? foldToGsm(current.name) : 'none' }).ask({ action: { type: 'place', place } });
     }
     return r.done();
   }
 
   const raw = typeof input.text === 'string' ? input.text : '';
   if (raw.length > MAX_INPUT) {
-    r.say(chat ? `Not understood; nothing was changed. ${capitalFirst(hint(chat.q))}.` : T.UNKNOWN, chat ? suggestionsFor(chat.q) : undefined);
+    notUnderstood(r);
     return r.done();
   }
-  const w = normalize(raw);
-
-  // A ZIP code answers a question that asks for one (it is never a record command).
-  if (chat && chat.q.kind === 'zip' && postalOf(w) !== null) {
-    answer(r, chat, w);
+  if (raw.trim() === '?') {
+    r.say('menu.main');
     return r.done();
   }
-
-  // A ZIP code for a ZIP question that has closed.
-  if (closed && closed.q.kind === 'zip' && postalOf(w) !== null) {
-    r.say(T.expired(againFor(closed)));
+  const words = wordsOf(raw);
+  // A digit alone is never a command.
+  if (words.length === 0 || (words.length === 1 && /^\d$/.test(words[0] as string))) {
+    notUnderstood(r);
     return r.done();
   }
+  const lists = generalWords(r.texts);
 
-  // Digits, and the two words that mean 9 and 0: record commands, at any moment.
-  if (/^[0-9?]/.test(w) || w === 'STATUS' || w === 'UNDO') {
-    const { recorded } = digits(r, w === 'STATUS' ? '9' : w === 'UNDO' ? '0' : raw);
-    if (chat && chat.q.kind === 'confirm') {
-      r.chat = null; // a yes-or-no question is closed by anything else
-    } else if (chat && chat.q.kind === 'recent' && recorded && !chat.q.recorded) {
-      r.say(T.RECENT_NEXT, [{ label: 'Done', send: 'DONE' }]).ask({ kind: 'recent', recorded: true }, chat.setup);
-    } else if (chat) {
-      r.say(`The question before is still open: ${hint(chat.q)}.`, suggestionsFor(chat.q)).ask(chat.q, chat.setup);
+  // The free text the last message asked for.
+  if (chat?.expect === 'zip') {
+    const postal = postalOf(raw);
+    if (postal !== null) {
+      zipAnswer(r, chat.ctx.setup === true, postal);
+      return r.done();
     }
+  }
+  if (chat?.expect === 'date' && chat.ctx.kind) {
+    const kind = chat.ctx.kind;
+    const own = KIND_ACTION[kind];
+    const ownWords = new Set((own ? (lists[own] ?? []) : []).map(w => w.toLowerCase()));
+    const tokens = raw.split(/\s+/).filter(t => !ownWords.has(t.toLowerCase().replace(/[^a-z]/g, '')));
+    const others = generalActionsIn(raw, lists).filter(a => a !== own);
+    if (others.length === 0 && tokens.length > 0 && readWhen(r, kind, tokens, chat.ctx) === 'done') return r.done();
+  }
+
+  // The options of the last message.
+  if (chat) {
+    const m = matchOption(raw, chat.opts, id => lists[id] ?? []);
+    if (m === 'ambiguous') {
+      notUnderstood(r);
+      return r.done();
+    }
+    if (m) {
+      const own = belongs(chat, m.id);
+      const elsewhere = generalActionsIn(raw, lists).filter(a => !own.has(a));
+      if (elsewhere.length === 0) {
+        choose(r, chat, m.id, m.rest);
+        return r.done();
+      }
+    }
+  }
+
+  // The general words.
+  const g = matchGeneral(raw, lists);
+  if (g && g !== 'ambiguous') {
+    // "more" (one of the words for the main options) goes straight to the page MORE shows.
+    act(r, g.id === 'menu' && words.includes('MORE') ? 'more' : g.id, g.rest);
     return r.done();
   }
-
-  if (chat) {
-    // An answer closes the question unless the handler asks again.
-    r.chat = null;
-    if (answer(r, chat, w)) return r.done();
-    r.chat = chat;
-  }
-
-  if (closed && looksLikeAnswer(closed.q, w)) {
-    r.say(T.expired(againFor(closed)));
-    return r.done();
-  }
-
-  // A command word replaces any open question.
-  const before = r.chat;
-  r.chat = null;
-  if (word(r, chat, w)) return r.done();
-  r.chat = before;
-
-  if (chat) {
-    if (chat.q.kind === 'zip') r.say(T.NOT_A_ZIP);
-    else r.say(`Not understood; nothing was changed. ${capitalFirst(hint(chat.q))}.`, suggestionsFor(chat.q));
-    r.chat = { ...chat, at: input.now };
-  } else {
-    r.say(T.UNKNOWN);
-  }
+  notUnderstood(r);
   return r.done();
 }
 
 /**
- * The first texts to a phone that was just added: 'setup' after greet()
+ * The first text to a phone that was just added: 'setup' after greet()
  * said "create" (the setup conversation starts with the location), or
  * 'joined' after it said "join".
  */
@@ -1125,15 +1291,15 @@ export function begin(input: BeginInput, mode: 'setup' | 'joined'): ConverseOutp
   const me = input.data.phones.find(p => p.number === input.from);
   if (!me) return { chat: null, out: [], effects: [], changed: false };
   const r = new Reply(
-    { data: input.data, chat: null, from: input.from, text: '', now: input.now, limits: { maxPhones: 0 }, lookupPostal: () => null, nearestPostal: () => null, random: () => '' },
+    { data: input.data, chat: null, from: input.from, text: '', now: input.now, limits: { maxPhones: 0 }, lookupPostal: () => null, nearestPostal: () => null, random: () => '', texts: input.texts },
     me,
   );
   if (mode === 'setup') {
-    startSetup(r);
+    startSetup(r, true);
   } else {
     const others = input.data.phones.filter(p => p.number !== input.from).map(p => lastFour(p.number));
     const with_ = others.length === 0 ? '' : ` with the phone${others.length > 1 ? 's' : ''} ending ${others.length > 1 ? `${others.slice(0, -1).join(', ')} and ${others[others.length - 1]}` : others[0]}`;
-    r.say(T.joinedText(with_), T.MENU_SUGGEST);
+    r.say('setup.joined', { others: with_ });
   }
   return r.done();
 }
@@ -1149,7 +1315,7 @@ export function joinWord(text: string): string | null {
  * A text from a number with no account.
  *
  * Sign-up open: JOIN creates the account; anything else gets one welcome
- * text naming the service, JOIN, and the compliance wording.
+ * text naming the service and the compliance wording, with the option JOIN.
  * By invitation: JOIN <word> with a valid sign-up invitation creates it;
  * anything else gets one text saying so; a bad word gets one text.
  * Closed: nothing is sent (see docs/TEXTING.md for why).
@@ -1157,21 +1323,27 @@ export function joinWord(text: string): string | null {
  * ('phone') adds this phone to that account.
  */
 export function greet(input: GreetInput): GreetOutput {
+  const texts = input.texts ?? NO_TEXTS;
+  const reply = (key: string): GreetOutput => ({ action: 'reply', out: toOut(texts, [{ key }]) });
   const text = typeof input.text === 'string' && input.text.length <= 100 ? input.text : '';
-  const w = normalize(text);
   const word_ = joinWord(text);
   if (word_ !== null) {
     if (input.inviteValid === true && input.inviteKind === 'phone') return { action: 'join', out: [], invite: word_ };
     if (input.signup === 'closed') return { action: 'ignore', out: [], invite: word_ };
     if (input.inviteValid === true) return { action: 'create', out: [], invite: word_ };
-    return { action: 'reply', out: pack([T.msg(T.BAD_INVITATION)]), invite: word_ };
+    return { ...reply('signup.bad_word'), invite: word_ };
   }
-  if (w === 'JOIN') {
+  if (wordsOf(text).join(' ') === 'JOIN') {
     if (input.signup === 'open') return { action: 'create', out: [] };
-    if (input.signup === 'invite') return { action: 'reply', out: pack([T.msg(T.WELCOME_INVITE)]) };
+    if (input.signup === 'invite') return reply('signup.invite');
     return { action: 'ignore', out: [] };
   }
-  if (input.signup === 'open') return { action: 'reply', out: pack([T.msg(T.WELCOME_OPEN, [{ label: 'Join', send: 'JOIN' }])]) };
-  if (input.signup === 'invite') return { action: 'reply', out: pack([T.msg(T.WELCOME_INVITE)]) };
+  if (input.signup === 'open') return reply('signup.welcome');
+  if (input.signup === 'invite') return reply('signup.invite');
   return { action: 'ignore', out: [] };
+}
+
+/** A text of the registry that the server sends on its own (a refusal, a test text), with its options. */
+export function serverText(texts: SiteTexts | undefined, key: string, vars: Vars = {}): OutMessage {
+  return toOut(texts ?? NO_TEXTS, [{ key, vars }])[0] as OutMessage;
 }

@@ -17,7 +17,7 @@ function household(): HouseholdData {
   return data;
 }
 
-const reminder = (key: string, kind: Reminder['kind'], at: number, until = at + 3 * HOUR): Reminder => ({ key, kind, at, until, text: `text of ${key}` });
+const reminder = (key: string, kind: Reminder['kind'], at: number, until = at + 3 * HOUR): Reminder => ({ key, kind, at, until, text: `text of ${key}`, msg: { key: 'reminder.onah', vars: {} } });
 const LIST = [reminder('hefsek:1', 'hefsek', NOW + HOUR), reminder('mikvah:1', 'mikvah', NOW + 2 * DAY)];
 const pending = (data: HouseholdData): string[] => data.queue.filter(q => q.status === 'pending').map(q => `${q.key}>${q.to.slice(-1)}`);
 
@@ -26,7 +26,7 @@ describe('building the list of waiting reminders', () => {
     const data = household();
     rebuildQueue(data, LIST, NOW);
     expect(pending(data)).toEqual(['hefsek:1>1', 'mikvah:1>1', 'mikvah:1>2']);
-    expect(data.queue[0]).toEqual({ key: 'hefsek:1', to: A, at: NOW + HOUR, until: NOW + 4 * HOUR, text: 'text of hefsek:1', status: 'pending', notBefore: 0, doneAt: null });
+    expect(data.queue[0]).toEqual({ key: 'hefsek:1', to: A, at: NOW + HOUR, until: NOW + 4 * HOUR, text: 'text of hefsek:1', msg: { key: 'reminder.onah', vars: {} }, status: 'pending', notBefore: 0, doneAt: null });
   });
 
   it('nothing for a phone that has not agreed, has not proved its number, or replied STOP', () => {

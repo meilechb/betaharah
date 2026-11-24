@@ -20,9 +20,11 @@ import type { Deps, Env } from './env';
 import { compute } from './household';
 import { SITE_SECRET_KEYS } from './model';
 import { ALL_KINDS, runSandbox, sandboxChoices, type SandboxLimits } from './sandbox';
-import { refreshHousehold, sendSms, TEST_TEXT } from './service';
+import { refreshHousehold, sendSms, testText, toSend } from './service';
 import { ValidationError } from './settings';
-import { createHousehold, createInvitationWord, createInvite, deleteHousehold, deleteInvite, getPhone, insertPhone, inviteHash, loadHousehold, loadSite, phoneHash, saveSiteConfig, saveSiteSecrets } from './store';
+import { DEFAULT_WORDS, GENERAL_ACTIONS, MESSAGE_BY_KEY } from './chat/messages';
+import { checkMessage, checkWords, NO_TEXTS, TextsError, textsForConsole } from './chat/site-texts';
+import { createHousehold, createInvitationWord, createInvite, deleteHousehold, deleteInvite, getPhone, insertPhone, inviteHash, loadHousehold, loadSite, phoneHash, saveSiteConfig, saveSiteSecrets, saveSiteTexts } from './store';
 
 type AdminApp = Hono<{ Bindings: Env; Variables: { session: Session } }>;
 type C = Context<{ Bindings: Env; Variables: { session: Session } }>;
@@ -271,6 +273,90 @@ export function registerAdminRoutes(app: AdminApp, deps: Deps): void {
     }),
   );
 
+  // ----- the Texts page: every text the service sends, in the operator's wording -----
+
+  /** Every message with its current wording and defaults, the general words and the options prefix. */
+  app.get('/api/admin/texts', async c => c.json(textsForConsole((await loadSite(c.env)).texts ?? NO_TEXTS)));
+
+  /** Saves one message: { body, labels: { <option id>: label } }. Errors name the field ("body", "label.<id>"). */
+  app.put(
+    '/api/admin/texts/:key',
+    handle(async c => {
+      const site = await loadSite(c.env);
+      const texts = site.texts ?? NO_TEXTS;
+      const key = c.req.param('key') ?? '';
+      const def = MESSAGE_BY_KEY.get(key);
+      if (!def) throw new AdminError(404, 'There is no such text.');
+      const body = await readBody(c);
+      if (typeof body.body !== 'string' || body.body.length > 1000) throw new AdminError(400, 'The text is missing or too long.', 'body');
+      const labels: Record<string, string> = {};
+      if (body.labels !== undefined) {
+        if (typeof body.labels !== 'object' || body.labels === null || Array.isArray(body.labels)) throw new AdminError(400, 'The labels could not be read.', 'body');
+        for (const [id, v] of Object.entries(body.labels as Record<string, unknown>)) {
+          if (typeof v !== 'string') throw new AdminError(400, 'A label is text.', `label.${id}`);
+          labels[id] = v.trim().replace(/ +/g, ' ');
+        }
+      }
+      try {
+        checkMessage(texts, key, body.body, labels);
+      } catch (e) {
+        if (e instanceof TextsError) throw new AdminError(400, e.message, e.field);
+        throw e;
+      }
+      // Only what differs from the default is stored.
+      const change: { body?: string; labels?: Record<string, string> } = {};
+      if (body.body !== def.body) change.body = body.body;
+      const changedLabels = Object.fromEntries(Object.entries(labels).filter(([id, l]) => def.options.find(o => o.id === id)?.label !== l));
+      if (Object.keys(changedLabels).length > 0) change.labels = changedLabels;
+      const messages = { ...texts.messages };
+      if (change.body === undefined && !change.labels) delete messages[key];
+      else messages[key] = change;
+      await saveSiteTexts(c.env, { ...texts, messages }, deps.now());
+      return c.json(textsForConsole({ ...texts, messages }));
+    }),
+  );
+
+  /** Puts one message back to its original wording and labels. */
+  app.delete('/api/admin/texts/:key', async c => {
+    const texts = (await loadSite(c.env)).texts ?? NO_TEXTS;
+    const messages = { ...texts.messages };
+    delete messages[c.req.param('key') ?? ''];
+    await saveSiteTexts(c.env, { ...texts, messages }, deps.now());
+    return c.json(textsForConsole({ ...texts, messages }));
+  });
+
+  /** Saves the general words ({ words: { <action>: "word, word" | [words] } }) and the options prefix. */
+  app.put(
+    '/api/admin/texts-words',
+    handle(async c => {
+      const texts = (await loadSite(c.env)).texts ?? NO_TEXTS;
+      const body = await readBody(c);
+      const prefix = typeof body.prefix === 'string' ? body.prefix.trim() : texts.prefix;
+      const given = (typeof body.words === 'object' && body.words !== null && !Array.isArray(body.words) ? body.words : {}) as Record<string, unknown>;
+      const words: Record<string, string[]> = {};
+      for (const a of GENERAL_ACTIONS) {
+        const raw = given[a.action];
+        if (raw === undefined) {
+          words[a.action] = texts.words[a.action] ?? a.words;
+          continue;
+        }
+        const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : null;
+        if (!list || !list.every(w => typeof w === 'string')) throw new AdminError(400, 'Write the words separated by commas.', `words.${a.action}`);
+        words[a.action] = [...new Set((list as string[]).map(w => w.trim().toLowerCase()).filter(w => w !== ''))];
+      }
+      try {
+        checkWords(texts, words, prefix);
+      } catch (e) {
+        if (e instanceof TextsError) throw new AdminError(400, e.message, e.field);
+        throw e;
+      }
+      const stored = Object.fromEntries(Object.entries(words).filter(([action, list]) => (DEFAULT_WORDS[action] ?? []).join(',') !== list.join(',')));
+      const next = { ...texts, words: stored, prefix };
+      await saveSiteTexts(c.env, next, deps.now());
+      return c.json(textsForConsole(next));
+    }),
+  );
+
   app.delete('/api/admin/households/:id', async c => {
     const household = await loadHousehold(c.env, c.req.param('id')).catch(() => null);
     await deleteAccount(c.env, deps, { id: c.req.param('id'), google: household?.data.google ?? null });
@@ -328,7 +414,7 @@ export function registerAdminRoutes(app: AdminApp, deps: Deps): void {
         throw e;
       }
       if (isFictionalNumber(to)) throw new AdminError(400, FICTIONAL_MESSAGE, 'to');
-      const outcome = await sendSms(c.env, deps, site, { to, text: TEST_TEXT, now });
+      const outcome = await sendSms(c.env, deps, site, { to, ...toSend(testText(site.texts)), now });
       await noteSmsOutcome(c.env.DB, outcome, now);
       if (!outcome.ok) {
         const { kind, code } = failureOf(outcome);

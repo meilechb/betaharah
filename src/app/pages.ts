@@ -4,7 +4,7 @@
  * as set in the operator's console. Every value the operator sets goes
  * through escapeHtml.
  */
-import { HELP_TEXT } from './commands';
+import { NO_TEXTS, optionsLine, optionsOf } from './chat/site-texts';
 import { ADMIN_EMAIL, donateReady, googleReady, MAX_MESSAGES_KEPT, MAX_PHONES, MAX_REMOVED_KEPT, PRIVACY_EMAIL, smsReady, type Site } from './model';
 
 export const LAST_UPDATED = 'November 24, 2026';
@@ -124,23 +124,21 @@ function numberLink(number: string, body?: string): string {
   return `<a class="nowrap" href="${escapeHtml(href)}">${escapeHtml(shown)}</a>`;
 }
 
-const COMMANDS: Array<[string, string]> = [
-  ['1', 'A flow began now'],
-  ['2', 'Hefsek taharah done today'],
-  ['3', 'The count of clean days was broken now'],
-  ['4', 'Immersed tonight (optional)'],
-  ['5', 'A stain that makes her niddah was found now'],
-  ['9', 'Where things stand'],
-  ['0', 'Undo the last entry (within 48 hours)'],
-  ['?', 'The list of commands'],
-  ['MENU', 'Every other word: location, customs, reminders, phones, calendar link, sign-in link, deleting the account'],
-];
-
+/** What each main option does, by its id (the labels are the operator's: src/app/chat/messages.ts). */
+const MAIN_MEANINGS: Record<string, string> = {
+  period: 'A period began. The reply asks when: now, last night, or another day.',
+  hefsek: 'Hefsek taharah done: today, yesterday, or another day.',
+  status: 'Where things stand.',
+  more: 'History, undo, a stain, the settings and the account.',
+};
 export function helpPage(site: Site): string {
   const c = contact(site);
   const number = textingNumber(site);
   const join = joinNumber(site);
-  const rows = COMMANDS.map(([code, meaning]) => `  <tr><td><code>${escapeHtml(code)}</code></td><td>${meaning}</td></tr>`).join('\n');
+  const rows = optionsOf(site.texts ?? NO_TEXTS, 'menu.main')
+    .map(([id, label]) => `  <tr><td><code>${escapeHtml(label)}</code></td><td>${MAIN_MEANINGS[id] ?? ''}</td></tr>`)
+    .join('\n');
+  const line = optionsLine(site.texts ?? NO_TEXTS, optionsOf(site.texts ?? NO_TEXTS, 'menu.main').map(([, l]) => l));
   return layout({
     title: 'Help',
     path: '/help',
@@ -162,44 +160,35 @@ export function helpPage(site: Site): string {
         id: 'by-text',
         title: 'Recording by text message',
         body: `${number ? `<p class="number-line">Text <strong>${numberLink(number)}</strong> from a phone that is on your account.</p>` : '<p class="number-line">Text messaging is not available on this site yet. Everything can be recorded on the website.</p>'}
+<p>Every text ends with its options, for example <code>${escapeHtml(line)}</code>. Reply with one of them, or in words. On a phone with RCS they are buttons.</p>
 <table class="commands">
-  <caption>Send one of these as a text message</caption>
-  <thead><tr><th scope="col">Text</th><th scope="col">Meaning</th></tr></thead>
+  <caption>The main options</caption>
+  <thead><tr><th scope="col">Option</th><th scope="col">Meaning</th></tr></thead>
   <tbody>
 ${rows}
   </tbody>
 </table>
-<h3>Saying when it happened</h3>
-<ul>
-  <li>For <code>1</code>, <code>3</code> and <code>5</code>: <code>1 day</code>, <code>1 night</code>, <code>1 yesterday night</code>, or a clock time such as <code>1 6:40am</code>.</li>
-  <li>For <code>2</code> and <code>4</code>: <code>2 yesterday</code>.</li>
-  <li>For an earlier date, add it as month/day: <code>1 11/22 night</code>, <code>2 11/26</code>, <code>4 12/3</code>.</li>
-</ul>
-<p>The short reminder the service sends is: <em>${escapeHtml(HELP_TEXT)}</em></p>
-<p>Every text gets a reply saying what was recorded. If a text arrives shortly after sunrise or sunset, the reply says which side it was counted on and how to correct it.</p>`,
+<p>A time or a date can go with the word: <code>period last night</code>, <code>period Nov 22 night</code>, <code>hefsek yesterday</code>. Every reply says what was recorded, and offers UNDO.</p>`,
       },
       {
         id: 'text-only',
         title: 'Using it by text only',
-        body: `<p>An account can be created and used entirely by text message, without the website.</p>
+        body: `<p>An account can be created and used entirely by text message.</p>
 ${
   join
-    ? `<p class="number-line">To start, text <strong>JOIN</strong> to <strong>${numberLink(join, 'JOIN')}</strong>.</p>`
+    ? `<p class="number-line">To start, text <strong>JOIN</strong> to <strong>${numberLink(join, 'JOIN')}</strong>. The replies ask for the ZIP code, the customs and the most recent dates, each with its options.</p>`
     : '<p class="number-line">Signing up by text message is not open on this site at the moment. You can sign up on the website.</p>'
 }
 <ul>
-  <li>Texting JOIN counts as your request to create an account and to receive the replies. The replies then ask for your ZIP code and your customs, one question at a time, and for the most recent dates.</li>
-  <li>Text <code>MENU</code> at any time for the list of every word you can send. Each word sent alone shows its own options. For example: <code>LOCATION 08701</code> sets the location by ZIP code, <code>CUSTOMS</code> shows and changes the customs, <code>REMINDERS ON</code> turns on reminders for that phone, <code>CALENDAR LINK</code> makes a link for a calendar app, <code>WEB</code> texts a link that signs that phone in on the website once, within 10 minutes, and <code>DELETE ACCOUNT</code> deletes the account after you confirm with YES.</li>
-  <li>The digits in the table above work the same way.</li>
-  <li><strong>A second phone</strong>: a phone on the account texts <code>ADD</code> and gets a code of eight letters. The other phone then texts <code>JOIN</code> and that code (for example <code>JOIN NRMAAABZ</code>) to the same number, within 7 days.</li>
-  <li>Reply <strong>STOP</strong> to stop all texts to your phone, <strong>START</strong> to turn them back on, and <strong>HELP</strong> for a short description.</li>
-  <li>The site does not text a number that has not texted it, with two exceptions that a person asks for on the website by entering the number: a sign-in code, and a code to add that phone to an account. Reminders go only to a phone for which they were turned on.</li>
+  <li><strong>A second phone</strong>: MORE, then ACCOUNT, PHONES and ADD give a code. The other phone texts <code>JOIN</code> and the code to the same number.</li>
+  <li><strong>STOP</strong> stops all texts to the phone, <strong>START</strong> turns them back on, <strong>HELP</strong> sends a short description.</li>
+  <li>The site texts only numbers that texted it, and a number asking on the website for a sign-in code or a code to add it to an account.</li>
 </ul>`,
       },
       {
         id: 'reminders',
         title: 'Reminders',
-        body: `<p>Reminders are off until you turn them on for a phone, under Settings or by texting <code>REMINDERS ON</code> from it. You choose which ones each phone receives and when. Nothing is sent on Shabbat or Yom Tov: what falls on those days is sent beforehand, or held until afterwards, or dropped, depending on what it is.</p>
+        body: `<p>Reminders are off until you turn them on for a phone, under Settings or by text (REMINDERS, then TURN ON). You choose which ones each phone receives and when. Nothing is sent on Shabbat or Yom Tov: what falls on those days is sent beforehand, or held until afterwards, or dropped, depending on what it is.</p>
 <p>To stop all texts to a phone, reply <strong>STOP</strong>. To turn them back on, reply <strong>START</strong>. Reply <strong>HELP</strong> for a short description. Message frequency varies with your settings. Message and data rates may apply.</p>`,
       },
       {

@@ -70,6 +70,42 @@ export function reasonsEnglish(reasons: readonly VesetReason[], maxItems = 4): s
 
 export type ReminderKind = 'hefsek' | 'bedikah_morning' | 'bedikah_afternoon' | 'mikvah' | 'mikvah_book' | 'onah';
 
+/**
+ * A text by its message key (src/app/chat/messages.ts) and the values of
+ * its placeholders. `day` is the day a reminder is about (the hefsek
+ * reminder's DONE records the hefsek on it).
+ */
+export interface TextMessage {
+  key: string;
+  vars: Record<string, string>;
+  day?: number;
+}
+
+/** Fills {placeholders} with values; an unknown or missing one becomes empty. */
+export function fillText(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => vars[name] ?? '');
+}
+
+/**
+ * The default wording of the reminders, by message key. The operator can
+ * change each one (the registry in src/app/chat/messages.ts takes these as
+ * its defaults); `text` below is always this default.
+ */
+export const REMINDER_TEXTS: Record<string, string> = {
+  'reminder.hefsek': 'Hefsek tahara: {day}, before sunset at {sunset}.{eve}',
+  'reminder.hefsek.discreet': 'H {day} before {sunset}.',
+  'reminder.bedikah_morning': 'Clean day {n} of 7 is {day}: bedikah in the morning and again before sunset at {sunset}.{required}',
+  'reminder.bedikah_morning.discreet': 'Day {n}/7 {day}: AM, and before {sunset}.',
+  'reminder.bedikah_afternoon': 'Clean day {n} of 7, {day}: afternoon bedikah before sunset at {sunset}.{required}',
+  'reminder.bedikah_afternoon.discreet': 'Day {n}/7 {day}: before {sunset}.',
+  'reminder.mikvah_book': 'Book the mikvah: mikvah night is {day}, after {time}.',
+  'reminder.mikvah_book.discreet': 'Book M: {day} after {time}.',
+  'reminder.mikvah': 'Mikvah night: {day}, after {time}{notes}.',
+  'reminder.mikvah.discreet': 'M night: {day} after {time}{notes}.',
+  'reminder.onah': 'Onah: {from} until {to}. {why}.{bedikah}{clash}',
+  'reminder.onah.discreet': '{mark} {from} - {to}.',
+};
+
 export interface Reminder {
   /** Stable identity: a reminder is sent once per key. */
   key: string;
@@ -81,7 +117,10 @@ export interface Reminder {
    * start of the next Shabbat or Yom Tov if that comes first.
    */
   until: number;
+  /** The text in its default wording. */
   text: string;
+  /** The same text by its message key, so that the operator's wording is used when it is sent. */
+  msg: TextMessage;
 }
 
 /** A reminder not sent within this long of its time is dropped. */
@@ -229,7 +268,7 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
    * or Yom Tov: send it beforehand, hold it until afterwards, or leave it out.
    * The texts name their day, so they read correctly whenever they are sent.
    */
-  const push = (key: string, kind: ReminderKind, at: number, text: string, onRestDay: 'before' | 'after' | 'drop'): void => {
+  const push = (key: string, kind: ReminderKind, at: number, base: string, vars: Record<string, string>, onRestDay: 'before' | 'after' | 'drop', day?: number): void => {
     let when = at;
     if (opts.beforeRestDays && restDayAt(at, ctx) !== null) {
       if (onRestDay === 'drop') return;
@@ -237,7 +276,9 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
     }
     let until = when + REMINDER_WINDOW_MS;
     if (opts.beforeRestDays) until = Math.min(until, nextRestStart(when, ctx));
-    out.push({ key, kind, at: when, until, text });
+    const msgKey = discreet ? `${base}.discreet` : base;
+    const msg: TextMessage = day === undefined ? { key: msgKey, vars } : { key: msgKey, vars, day };
+    out.push({ key, kind, at: when, until, text: fillText(REMINDER_TEXTS[msgKey] as string, vars), msg });
   };
   const localTime = (abs: number, hh: number, mi: number): number => {
     const c = absToCivil(abs);
@@ -249,38 +290,37 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
     if (open.hefsekAbs === null) {
       if (opts.hefsek.on && open.planHefsekAbs - open.earliestHefsekAbs < opts.hefsekMaxDays) {
         const deadline = clock12(open.hefsekSunset, tz, 'floor');
-        const eve = isRestDay(open.planHefsekAbs + 1, ctx.yomTov) ? ' Before candle lighting if possible.' : '';
+        const eve = isRestDay(open.planHefsekAbs + 1, ctx.yomTov) ? ' Candle lighting is that evening.' : '';
         push(
           `hefsek:${open.startId}:${open.planHefsekAbs}`,
           'hefsek',
           open.hefsekSunset - opts.hefsek.minutesBeforeSunset * MINUTE,
-          discreet
-            ? `H ${englishDate(open.planHefsekAbs)} before ${deadline}. Reply 2 when done.`
-            : `Hefsek tahara: ${englishDate(open.planHefsekAbs)}, before sunset at ${deadline}.${eve} Reply 2 when done.`,
+          'reminder.hefsek',
+          { day: englishDate(open.planHefsekAbs), sunset: deadline, eve },
           'before',
+          open.planHefsekAbs,
         );
       }
     } else {
       for (const day of open.planCleanDays) {
         const sunset = clock12(day.sunset, tz, 'floor');
-        const must = day.n === 1 || day.n === 7 ? ' Required on this day.' : '';
+        const required = day.n === 1 || day.n === 7 ? ' Required on this day.' : '';
+        const vars = { n: String(day.n), day: englishDate(day.abs), sunset, required };
         if (opts.bedikot.on) {
           push(
             `bedikah_am:${open.startId}:${open.hefsekAbs}:${day.n}`,
             'bedikah_morning',
             localTime(day.abs, opts.bedikot.morningHour, opts.bedikot.morningMinute),
-            discreet
-              ? `Day ${day.n}/7 ${englishDate(day.abs)}: AM, and before ${sunset}.`
-              : `Clean day ${day.n} of 7 is ${englishDate(day.abs)}: bedikah in the morning and again before sunset at ${sunset}.${must}`,
+            'reminder.bedikah_morning',
+            vars,
             'before',
           );
           push(
             `bedikah_pm:${open.startId}:${open.hefsekAbs}:${day.n}`,
             'bedikah_afternoon',
             day.sunset - opts.bedikot.minutesBeforeSunset * MINUTE,
-            discreet
-              ? `Day ${day.n}/7 ${englishDate(day.abs)}: before ${sunset}.`
-              : `Clean day ${day.n} of 7, ${englishDate(day.abs)}: afternoon bedikah before sunset at ${sunset}.${must}`,
+            'reminder.bedikah_afternoon',
+            vars,
             'drop', // the morning reminder, sent beforehand, already names the afternoon bedikah
           );
         }
@@ -297,7 +337,8 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
             `mikvah_book:${open.startId}:${open.hefsekAbs}`,
             'mikvah_book',
             localTime(day, opts.mikvahBook.hour, opts.mikvahBook.minute),
-            discreet ? `Book M: ${englishDate(m.eveningAbs)} after ${after}.` : `Book the mikvah: mikvah night is ${englishDate(m.eveningAbs)}, after ${after}.`,
+            'reminder.mikvah_book',
+            { day: englishDate(m.eveningAbs), time: after },
             'after',
           );
         }
@@ -305,7 +346,7 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
       if (opts.mikvah.on) {
         const notes: string[] = [];
         if (m.postponedOver.length > 0) notes.push('moved past the fast');
-        if (m.restNight) notes.push('Shabbat or Yom Tov night, prepare before');
+        if (m.restNight) notes.push('Shabbat or Yom Tov night');
         else if (m.afterRestDay) notes.push('after Shabbat or Yom Tov');
         const clash = t.onot.some(o => o.onMikvahNight && o.onah.abs === m.nightAbs);
         if (clash) notes.push('also an onah');
@@ -314,9 +355,8 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
           `mikvah:${open.startId}:${open.hefsekAbs}:${m.nightAbs}`,
           'mikvah',
           m.sunset - opts.mikvah.minutesBeforeSunset * MINUTE,
-          discreet
-            ? `M night: ${englishDate(m.eveningAbs)} after ${after}${tail}.`
-            : `Mikvah night: ${englishDate(m.eveningAbs)}, after ${after}${tail}.`,
+          'reminder.mikvah',
+          { day: englishDate(m.eveningAbs), time: after, notes: tail },
           'before',
         );
       }
@@ -336,9 +376,8 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
         `onah:${b.firstIndex}:${Math.round((b.end - b.start) / MINUTE)}`,
         'onah',
         b.start - opts.onah.minutesBefore * MINUTE,
-        discreet
-          ? `${b.veset ? 'O' : 'OZ'} ${from} - ${to}.`
-          : `Onah: ${from} until ${to}. ${orZaruaOnly}${why}.${b.veset ? ' Bedikah.' : ''}${clash}`,
+        'reminder.onah',
+        { from, to, why: `${orZaruaOnly}${why}`, bedikah: b.veset ? ' Bedikah.' : '', clash, mark: b.veset ? 'O' : 'OZ' },
         'before',
       );
     }
@@ -349,29 +388,47 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
 
 // ---------- status line ----------
 
-/** One or two sentences on where things stand, for a text-message reply. */
-export function statusText(t: Timeline, timeZone: string): string {
-  const next = t.onot.find(o => o.end > t.now);
-  const nextOnah = next
-    ? ` Next onah: ${clock12(next.start, timeZone, 'floor')} ${englishDate(localAbs(next.start, timeZone))}.`
-    : '';
-  if (t.status.state === 'tehorah') return `Tehorah.${nextOnah}`;
+/** The default wording of the status, by phase (message keys of src/app/chat/messages.ts). */
+export const STATUS_TEXTS: Record<string, string> = {
+  'status.tehorah': 'Tehorah.',
+  'status.tehorah_onah': 'Tehorah. Next onah: {next_time} {next_day}.',
+  'status.before_hefsek': 'Niddah since {start}. Hefsek from {hefsek_day} before {sunset}.',
+  'status.before_hefsek_later': 'Niddah since {start}. Hefsek from {earliest}; next possible {hefsek_day} before {sunset}.',
+  'status.before_first_day': 'Hefsek done {hefsek_day}. Clean day 1 is {first_day}. Mikvah {mikvah_day} after {mikvah_time}.',
+  'status.counting': 'Clean day {day} of 7. Mikvah {mikvah_day} after {mikvah_time}.',
+  'status.postponed': 'Count complete; no immersion tonight. Mikvah {mikvah_day} after {mikvah_time}.',
+  'status.mikvah_tonight': 'Mikvah tonight after {mikvah_time}.',
+};
+
+/** Where things stand, as a message key and its values. */
+export function statusMessage(t: Timeline, timeZone: string): TextMessage {
+  if (t.status.state === 'tehorah') {
+    const next = t.onot.find(o => o.end > t.now);
+    return next
+      ? { key: 'status.tehorah_onah', vars: { next_time: clock12(next.start, timeZone, 'floor'), next_day: englishDate(localAbs(next.start, timeZone)) } }
+      : { key: 'status.tehorah', vars: {} };
+  }
   const p = t.status.period;
   const phase = t.status.phase;
+  const mikvah = { mikvah_day: englishDate(p.planMikvah.eveningAbs), mikvah_time: clock12(p.planMikvah.tzeit, timeZone, 'ceil') };
   switch (phase.kind) {
     case 'before_hefsek': {
-      const day = `${englishDate(p.planHefsekAbs)} before ${clock12(p.hefsekSunset, timeZone, 'floor')}`;
-      return p.planHefsekAbs === p.earliestHefsekAbs
-        ? `Niddah since ${englishDate(p.start.abs)}. Hefsek from ${day}.`
-        : `Niddah since ${englishDate(p.start.abs)}. Hefsek from ${englishDate(p.earliestHefsekAbs)}; next possible ${day}.`;
+      const vars = { start: englishDate(p.start.abs), hefsek_day: englishDate(p.planHefsekAbs), sunset: clock12(p.hefsekSunset, timeZone, 'floor'), earliest: englishDate(p.earliestHefsekAbs) };
+      return { key: p.planHefsekAbs === p.earliestHefsekAbs ? 'status.before_hefsek' : 'status.before_hefsek_later', vars };
     }
     case 'before_first_day':
-      return `Hefsek done ${englishDate(p.planHefsekAbs)}. Clean day 1 is ${englishDate(p.planCleanDays[0]!.abs)}. Mikvah ${englishDate(p.planMikvah.eveningAbs)} after ${clock12(p.planMikvah.tzeit, timeZone, 'ceil')}.`;
+      return { key: 'status.before_first_day', vars: { hefsek_day: englishDate(p.planHefsekAbs), first_day: englishDate(p.planCleanDays[0]!.abs), ...mikvah } };
     case 'counting':
-      return `Clean day ${phase.day} of 7. Mikvah ${englishDate(p.planMikvah.eveningAbs)} after ${clock12(p.planMikvah.tzeit, timeZone, 'ceil')}.`;
+      return { key: 'status.counting', vars: { day: String(phase.day), ...mikvah } };
     case 'postponed':
-      return `Count complete; no immersion tonight. Mikvah ${englishDate(p.planMikvah.eveningAbs)} after ${clock12(p.planMikvah.tzeit, timeZone, 'ceil')}.`;
+      return { key: 'status.postponed', vars: mikvah };
     case 'mikvah_tonight':
-      return `Mikvah tonight after ${clock12(p.planMikvah.tzeit, timeZone, 'ceil')}.`;
+      return { key: 'status.mikvah_tonight', vars: mikvah };
   }
+}
+
+/** One or two sentences on where things stand, in the default wording. */
+export function statusText(t: Timeline, timeZone: string): string {
+  const m = statusMessage(t, timeZone);
+  return fillText(STATUS_TEXTS[m.key] as string, m.vars);
 }

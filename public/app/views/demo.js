@@ -21,16 +21,10 @@ export function demoBanner() {
   return h('div', { class: 'demo-banner', role: 'note' }, icon('info', { size: 'sm' }), h('span', {}, 'This is the test account. Nothing here is sent to a real phone.'));
 }
 
+/** Texts that work at any time (the options of each reply are buttons under it). */
 const QUICK = [
-  ['1', '{flow} began'],
-  ['2', '{hefsek} done'],
-  ['3', 'count broken'],
-  ['4', '{immersion}'],
-  ['5', '{stain}'],
-  ['9', 'status'],
-  ['0', 'undo'],
-  ['?', 'commands'],
-  ['MENU', 'every word'],
+  ['MENU', 'main options'],
+  ['STATUS', 'where things stand'],
   ['STOP', 'stop texts'],
   ['START', 'texts again'],
 ];
@@ -79,9 +73,9 @@ function linksIn(text) {
   return (text.match(/https?:\/\/\S+/g) || []).map(u => u.replace(/[.,]$/, ''));
 }
 
-/** What the last reply offers: its tap-to-reply buttons (as an RCS phone shows them) and any link in it. */
+/** What the last reply offers: its options as buttons (as an RCS phone shows them; tapping sends the option) and any link in it. */
 function lastReplyExtras() {
-  const chips = lastReplies.flatMap(r => r.suggestions || []);
+  const chips = (lastReplies.length ? lastReplies[lastReplies.length - 1].suggestions : null) || [];
   const links = lastReplies.flatMap(r => linksIn(r.text));
   if (chips.length === 0 && links.length === 0) return null;
   return h(
@@ -90,8 +84,8 @@ function lastReplyExtras() {
     chips.length
       ? h(
           'div',
-          { class: 'quick chips', role: 'group', 'aria-label': 'Buttons under the last reply' },
-          h('p', { class: 'small muted chips-title' }, 'Buttons under the last reply, as a phone with RCS shows them:'),
+          { class: 'quick chips', role: 'group', 'aria-label': 'The options of the last reply' },
+          h('p', { class: 'small muted chips-title' }, 'Options:'),
           chips.map((c, k) =>
             h(
               'button',
@@ -159,7 +153,7 @@ export function tryTextCard() {
   if (!S.demo) return null;
   return card(
     { title: 'Try a text', icon: 'message', className: 'demo-card' },
-    h('p', { class: 'help' }, 'Type what you would text to ' + pretty(S.sms.number) + (S.account.number ? ' from ' + pretty(S.account.number) : '') + '. It is handled exactly as a real text, and the reply is shown here instead of being sent.'),
+    h('p', { class: 'help' }, 'A text to ' + pretty(S.sms.number) + (S.account.number ? ' from ' + pretty(S.account.number) : '') + ', handled as a real one. Nothing is sent.'),
     region('demo-chat', () => {
       const recent = (S.messages || []).slice(0, 8);
       // The newest text is at the bottom: show it.
@@ -170,7 +164,7 @@ export function tryTextCard() {
       return h(
         'div',
         { class: 'chat' },
-        recent.length ? thread(recent, { id: 'demo-thread', label: 'The latest texts' }) : h('p', { class: 'muted chat-empty' }, 'No texts yet. Try 9 for the status, or MENU.'),
+        recent.length ? thread(recent, { id: 'demo-thread', label: 'The latest texts' }) : h('p', { class: 'muted chat-empty' }, 'No texts yet. Try MENU.'),
         lastReplyExtras(),
         h(
           'form',
@@ -188,7 +182,7 @@ export function tryTextCard() {
             type: 'text',
             autocomplete: 'off',
             maxlength: 320,
-            placeholder: 'For example: 2 yesterday',
+            placeholder: 'For example: hefsek yesterday',
             value: draftText,
             'aria-invalid': error ? 'true' : null,
             'aria-describedby': error ? 'demo-error' : null,

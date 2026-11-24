@@ -113,13 +113,13 @@ describe('reminders', () => {
     expect(r).toHaveLength(1);
     expect(r[0]!.key).toBe(`hefsek:f:${SUN + 4}`);
     expect(r[0]!.at).toBe(dayTimes(SUN + 4, LAKEWOOD, ZOPTS).sunset - 120 * 60_000);
-    expect(r[0]!.text).toMatch(/^Hefsek tahara: Thu Nov 26, before sunset at 4:3\d PM\. Reply 2 when done\.$/);
+    expect(r[0]!.text).toMatch(/^Hefsek tahara: Thu Nov 26, before sunset at 4:3\d PM\.$/);
   });
 
   it('each later day gets its own hefsek reminder, up to the limit', () => {
     const fri = reminders([flow], at(2026, 11, 27, 9)).filter(x => x.kind === 'hefsek');
     expect(fri[0]!.key).toBe(`hefsek:f:${SUN + 5}`);
-    expect(fri[0]!.text).toContain('Before candle lighting if possible.');
+    expect(fri[0]!.text).toContain('Candle lighting is that evening.');
     const late = reminders([flow], at(2026, 12, 10, 9)).filter(x => x.kind === 'hefsek');
     expect(late).toEqual([]);
   });
@@ -215,10 +215,10 @@ describe('reminders', () => {
     expect(localDateTime(m.at, TZ)).toMatchObject({ m: 12, d: 4 });
   });
 
-  it('a Friday-night immersion is announced before Shabbat, with a note to prepare', () => {
+  it('a Friday-night immersion is announced before Shabbat, with a note that it is Shabbat or Yom Tov night', () => {
     const r = reminders([flow, { id: 'h', kind: 'hefsek', abs: SUN + 5 }], at(2026, 11, 30, 10));
     const m = r.find(x => x.kind === 'mikvah')!;
-    expect(m.text).toContain('Shabbat or Yom Tov night, prepare before');
+    expect(m.text).toContain('(Shabbat or Yom Tov night)');
     expect(localDateTime(m.at, TZ)).toMatchObject({ m: 12, d: 4 });
   });
 

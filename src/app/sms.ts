@@ -194,9 +194,10 @@ export interface RcsSuggestion {
  */
 export async function sendTelnyxRcs(
   deps: Deps,
-  args: { apiKey: string; agentId: string; messagingProfileId: string; from: string; to: string; text: string; suggestions?: RcsSuggestion[] },
+  args: { apiKey: string; agentId: string; messagingProfileId: string; from: string; to: string; text: string; rcsText?: string; suggestions?: RcsSuggestion[] },
 ): Promise<SendResult> {
-  const content: { text: string; suggestions?: Array<{ reply: { text: string; postback_data: string } }> } = { text: args.text };
+  // By RCS the options are the buttons, so the text above them is the body alone; the SMS fallback keeps the options line.
+  const content: { text: string; suggestions?: Array<{ reply: { text: string; postback_data: string } }> } = { text: args.suggestions && args.suggestions.length > 0 && args.rcsText ? args.rcsText : args.text };
   if (args.suggestions && args.suggestions.length > 0) content.suggestions = args.suggestions.map(s => ({ reply: { text: s.label, postback_data: s.send } }));
   return postTelnyx(deps, TELNYX_RCS, args.apiKey, {
     agent_id: args.agentId,

@@ -1,5 +1,5 @@
 /** Shared setup for the chat tests (not itself a test file). */
-import { converse, type ChatState, type ConverseOutput, type Place } from '../src/app/chat';
+import { converse, type ChatState, type ConverseOutput, type Place, type SiteTexts } from '../src/app/chat';
 import { localToInstant } from '../src/engine/civil';
 import { newHousehold, type HouseholdData } from '../src/app/model';
 import { REMINDER_KINDS, type PhoneRecord } from '../src/app/settings';
@@ -68,6 +68,7 @@ export class Phone {
   chat: ChatState | null = null;
   random = makeRandom();
   last: ConverseOutput | null = null;
+  texts: SiteTexts | undefined = undefined;
   constructor(
     public data: HouseholdData,
     public now = NOW,
@@ -76,6 +77,7 @@ export class Phone {
 
   send(text: string, extra: { location?: { latitude: number; longitude: number } } = {}): ConverseOutput {
     const out = converse({
+      texts: this.texts,
       data: this.data,
       chat: this.chat,
       from: this.from,
@@ -92,9 +94,14 @@ export class Phone {
     return out;
   }
 
-  /** The reply as one string (the texts joined by " | "). */
+  /** The reply's words without the options line (the texts joined by " | "). */
   say(text: string): string {
-    return this.send(text).out.map(m => m.text).join(' | ');
+    return bodies(this.send(text));
+  }
+
+  /** The labels of the options of the last reply. */
+  options(): string[] {
+    return labels(this.last as ConverseOutput);
   }
 
   wait(minutes: number): this {
@@ -103,6 +110,17 @@ export class Phone {
   }
 }
 
+/** The whole texts as sent by SMS (with the options line), joined by " | ". */
 export function texts(out: ConverseOutput): string {
   return out.out.map(m => m.text).join(' | ');
+}
+
+/** The texts without their options line. */
+export function bodies(out: ConverseOutput): string {
+  return out.out.map(m => m.body).join(' | ');
+}
+
+/** The labels of the options offered with the last text. */
+export function labels(out: ConverseOutput): string[] {
+  return (out.out[out.out.length - 1]?.suggestions ?? []).map(s => s.label);
 }
