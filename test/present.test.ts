@@ -4,14 +4,12 @@ import type { LogEntry } from '../src/engine/cycle';
 import { isRestDay } from '../src/engine/holidays';
 import {
   DEFAULT_REMINDER_OPTIONS,
-  buildCalendar,
   buildReminders,
   clock12,
   clock24,
   englishDate,
   moveAfterRestDay,
   moveBeforeRestDay,
-  reasonHebrew,
   reasonsEnglish,
   restDayAt,
   statusText,
@@ -65,108 +63,6 @@ describe('formatting', () => {
     ).toBe('day 30, chodesh, haflagah 28d');
     const many = [27, 28, 29, 31, 33, 35].map(length => ({ kind: 'haflagah' as const, unit: 'onot' as const, length, latest: false }));
     expect(reasonsEnglish(many)).toBe('haflagah 27 onot, haflagah 28 onot, haflagah 29 onot, haflagah 31 onot +2 more');
-  });
-
-  it('names each reason in Hebrew', () => {
-    expect(reasonHebrew({ kind: 'beinonit', day: 30 })).toBe('עונה בינונית (יום ל׳)');
-    expect(reasonHebrew({ kind: 'beinonit', day: 31 })).toBe('עונה בינונית (יום ל״א)');
-    expect(reasonHebrew({ kind: 'chodesh', rule: 'same_date', dayOfMonth: 13 })).toBe('וסת החודש (י״ג בחודש)');
-    expect(reasonHebrew({ kind: 'haflagah', unit: 'days', length: 28, latest: true })).toBe('וסת ההפלגה (28 ימים)');
-    expect(reasonHebrew({ kind: 'haflagah', unit: 'onot', length: 48, latest: false })).toBe('הפלגה קודמת שלא נעקרה (48 עונות)');
-    expect(reasonHebrew({ kind: 'or_zarua', of: { kind: 'beinonit', day: 30 } })).toBe('אור זרוע של עונה בינונית (יום ל׳)');
-    expect(reasonHebrew({ kind: 'full_day', of: { kind: 'chodesh', rule: 'first_of_following', dayOfMonth: 30 } })).toContain('מעת לעת של וסת החודש');
-  });
-});
-
-describe('calendar events', () => {
-  it('before the hefsek: the flow, the hefsek deadline, seven projected days, a projected immersion, and the onot', () => {
-    const events = buildCalendar(timeline([flow], at(2026, 11, 23, 10)), { style: 'hebrew', timeZone: TZ });
-    const byKind = (k: string) => events.filter(e => e.kind === k);
-    expect(byKind('flow').map(e => e.title)).toEqual(['ראייה (יום)']);
-    const h = byKind('hefsek')[0]!;
-    expect(h.title).toMatch(/^הפסק טהרה \(עד 16:3\d\)$/);
-    expect(h.projected).toBe(true);
-    expect(h.timed!.end).toBeLessThanOrEqual(dayTimes(SUN + 4, LAKEWOOD, ZOPTS).sunset);
-    expect(byKind('clean_day').map(e => e.title)).toEqual(
-      ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ז׳'].map(n => `שבעה נקיים: יום ${n} (משוער)`),
-    );
-    expect(byKind('clean_day').map(e => e.allDay!.startAbs)).toEqual([5, 6, 7, 8, 9, 10, 11].map(n => SUN + n));
-    const m = byKind('mikvah')[0]!;
-    expect(m.title).toMatch(/^ליל טבילה \(אחר 17:\d\d\) \(משוער\)$/);
-    expect(localDateTime(m.timed!.start, TZ)).toMatchObject({ y: 2026, m: 12, d: 3 });
-    expect(m.timed!.start).toBeGreaterThanOrEqual(dayTimes(SUN + 11, LAKEWOOD, ZOPTS).tzeit);
-    // 22 November 2026 is 12 Kislev, and Kislev has 30 days this year:
-    // day 30 is 21 December (11 Tevet) and veset hachodesh is 22 December (12 Tevet).
-    expect(byKind('onah')).toHaveLength(2);
-    expect(byKind('onah').map(e => e.title)).toEqual(['עונת הוסת (יום)', 'עונת הוסת (יום)']);
-    expect(byKind('onah')[0]!.description).toContain('עונה בינונית (יום ל׳)');
-    expect(byKind('onah')[0]!.description).toContain('י״א טבת');
-    expect(byKind('onah')[1]!.description).toContain('וסת החודש (י״ב בחודש)');
-    expect(byKind('onah')[1]!.description).toContain('י״ב טבת');
-    expect(byKind('onah')[0]!.description).toContain('פרישה ובדיקה.');
-  });
-
-  it('after the hefsek nothing is projected', () => {
-    const events = buildCalendar(timeline([flow, hefsek], at(2026, 11, 27, 10)), { style: 'hebrew', timeZone: TZ });
-    expect(events.filter(e => e.projected)).toEqual([]);
-    expect(events.find(e => e.kind === 'hefsek')!.title).toBe('הפסק טהרה ✓');
-    expect(events.find(e => e.key === 'clean:f:1')!.title).toBe('שבעה נקיים: יום א׳');
-    expect(events.find(e => e.key === 'clean:f:1')!.description).toContain('בדיקה ביום זה מעכבת.');
-    expect(events.find(e => e.key === 'clean:f:3')!.description).not.toContain('מעכבת');
-  });
-
-  it('after immersion the event is the night she went', () => {
-    const entries: LogEntry[] = [flow, hefsek, { id: 'm', kind: 'mikvah', abs: SUN + 13 }]; // a night late
-    const events = buildCalendar(timeline(entries, at(2026, 12, 6, 10)), { style: 'hebrew', timeZone: TZ });
-    const m = events.find(e => e.kind === 'mikvah')!;
-    expect(m.title).toBe('טבילה ✓');
-    expect(localDateTime(m.timed!.start, TZ)).toMatchObject({ m: 12, d: 4 });
-  });
-
-  it('separate Or Zarua onot are titled as such', () => {
-    const events = buildCalendar(timeline([flow], at(2026, 11, 23, 10), { orZarua: 'yes' }), { style: 'hebrew', timeZone: TZ });
-    const titles = events.filter(e => e.kind === 'onah').map(e => e.title);
-    expect(titles).toEqual(['אור זרוע (לילה)', 'עונת הוסת (יום)', 'אור זרוע (לילה)', 'עונת הוסת (יום)']);
-  });
-
-  it('discreet style has no words and no descriptions', () => {
-    const events = buildCalendar(timeline([flow], at(2026, 11, 23, 10), { orZarua: 'yes' }), { style: 'discreet', timeZone: TZ });
-    for (const e of events) {
-      expect(e.description).toBe('');
-      expect(e.title).not.toMatch(/[֐-׿]/);
-      expect(e.title).not.toMatch(/[A-Za-z]{2,}/);
-    }
-    expect(events.map(e => e.title)).toContain('1/7 ?');
-    expect(events.map(e => e.title)).toContain('◇');
-    expect(events.map(e => e.title)).toContain('◆');
-  });
-
-  it('gives every event a distinct key and exactly one kind of timing, over a long history', () => {
-    const entries: LogEntry[] = [];
-    let abs = SUN - 300;
-    for (let k = 0; k < 10; k++) {
-      entries.push({ id: `f${k}`, kind: 'flow', onah: { abs, part: k % 2 ? 'night' : 'day' }, veset: true });
-      entries.push({ id: `h${k}`, kind: 'hefsek', abs: abs + 5 });
-      entries.push({ id: `m${k}`, kind: 'mikvah', abs: abs + 13 });
-      abs += 27 + (k % 4);
-    }
-    const t = buildTimeline({ entries, settings: DEFAULT_HALACHIC_SETTINGS, place: LAKEWOOD, useElevation: false, now: at(2026, 11, 23, 10) });
-    const events = buildCalendar(t, { style: 'hebrew', timeZone: TZ });
-    expect(new Set(events.map(e => e.key)).size).toBe(events.length);
-    for (const e of events) {
-      expect(Boolean(e.timed) !== Boolean(e.allDay)).toBe(true);
-      if (e.timed) expect(e.timed.end).toBeGreaterThan(e.timed.start);
-      expect(e.title.length).toBeGreaterThan(0);
-    }
-    expect(events.filter(e => e.kind === 'mikvah')).toHaveLength(10);
-  });
-
-  it('notes an immersion night that is also an onah', () => {
-    const a: LogEntry = { id: 'a', kind: 'flow', onah: { abs: SUN - 12, part: 'night' }, veset: true };
-    const b: LogEntry = { id: 'b', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: true };
-    const events = buildCalendar(timeline([a, b, hefsek], at(2026, 11, 30, 10)), { style: 'hebrew', timeZone: TZ });
-    expect(events.find(e => e.key === 'mikvah:a')!.description).toContain('ליל הטבילה חל בעונת פרישה. יש לשאול רב.');
-    expect(events.find(e => e.kind === 'onah' && e.description.includes('בליל הטבילה'))).toBeDefined();
   });
 });
 
@@ -337,6 +233,23 @@ describe('reminders', () => {
       }
     }
     expect(checked).toBeGreaterThan(2000);
+  });
+
+  it('each reminder stops being worth sending three hours after its time, or at the next candle lighting if that is sooner', () => {
+    const r = reminders([flow, hefsek], at(2026, 11, 26, 18));
+    const monday = r.find(x => x.key === `bedikah_am:f:${SUN + 4}:4`)!; // Monday 30 November, 8:00
+    expect(localDateTime(monday.at, TZ)).toMatchObject({ m: 11, d: 30, hh: 8 });
+    expect(monday.until).toBe(monday.at + 3 * 3_600_000);
+    // Friday's afternoon reminder is 90 minutes before sunset; candle lighting, 18 minutes before sunset, ends it.
+    const friday = r.find(x => x.key === `bedikah_pm:f:${SUN + 4}:1`)!;
+    expect(friday.until).toBe(dayTimes(SAT - 1, LAKEWOOD, ZOPTS).sunset - 18 * 60_000);
+    expect(friday.until - friday.at).toBe(72 * 60_000);
+    for (const x of r) {
+      expect(x.until).toBeGreaterThan(x.at);
+      // nothing can be sent during Shabbat or Yom Tov
+      expect(restDayAt(x.at, CTX)).toBeNull();
+      expect(restDayAt(x.until - 1, CTX)).toBeNull();
+    }
   });
 
   it('keys are unique and stable for the same state', () => {

@@ -1,22 +1,23 @@
 /** The data the dashboard page shows, prepared on the server. */
+import { civilDate, weekday } from '../engine/calendar';
 import { absToCivil, civilToAbs, localAbs, localDateTime, localToInstant } from '../engine/civil';
-import { hebrewWeekday, formatHebrewDate } from '../engine/hebrew';
-import { clock24 } from '../engine/present';
-import { HALACHIC_CHOICES, TZEIT_PRESETS } from '../engine/settings';
+import { clock12, englishDate } from '../engine/present';
+import { choicesFor, TZEIT_TITLE, tzeitPresetsFor } from '../engine/settings';
+import { allTerms, capital, fill, hebrewDate } from '../engine/terms';
 import { onahAt } from '../engine/zmanim';
-import { resolveHefsekDay } from './commands';
-import { entryHebrew, noteHebrew, patternHebrew, statusHebrew, warningHebrew } from './hebrew';
-import type { Computed, DraftEntry, Where } from './service';
+import type { Session } from './auth';
+import { HELP_TEXT, resolveHefsekDay } from './commands';
+import type { Computed, DraftEntry, Where } from './household';
+import { canText, googleReady, MAX_PHONES, smsReady, type HouseholdData, type Site } from './model';
+import { textsThisMonth } from './queue';
 import { PLACES, REMINDER_KINDS, ValidationError } from './settings';
-import { SECRET_KEYS, type SmsRow, type Stored, type StoredEntry } from './store';
-
-function civilLabel(abs: number): string {
-  const c = absToCivil(abs);
-  return `${hebrewWeekday(abs)} ${c.d}.${c.m}.${c.y}`;
-}
+import { entryText, noteText, patternText, statusLines, warningText } from './wording';
 
 /** The dashboard lists this many of the most recent entries. */
 const MAX_LISTED_ENTRIES = 150;
+
+/** For this long after signing in, a session may change how the account is signed in to (its password). */
+export const FRESH_MS = 15 * 60_000;
 
 export interface UpcomingItem {
   key: string;
@@ -28,30 +29,44 @@ export interface UpcomingItem {
   light: boolean;
 }
 
-export function dashboardState(stored: Stored, entries: readonly StoredEntry[], computed: Computed | null, sms: readonly SmsRow[], now: number, origin: string) {
+export interface StateArgs {
+  data: HouseholdData;
+  computed: Computed | null;
+  site: Site;
+  session: Session;
+  /** The number of the phone this session signed in with. */
+  myNumber: string | null;
+  now: number;
+  origin: string;
+}
+
+export function dashboardState(args: StateArgs) {
+  const { data, computed, site, session, now, origin } = args;
+  const lang = data.app.terms;
   const tz = computed?.place.timeZone ?? 'UTC';
-  const alerts: Array<{ level: 'warn' | 'info'; text: string; dir: 'rtl' | 'ltr' }> = [];
-  if (!stored.app.place) alerts.push({ level: 'warn', text: 'No location is set yet. Nothing can be calculated until one is chosen under Settings.', dir: 'ltr' });
-  if (stored.halachic.confirmedAt === null) {
-    alerts.push({ level: 'warn', text: 'ההגדרות ההלכתיות טרם אושרו. החישוב נעשה כעת לפי ברירת המחדל (לחומרא). יש לעבור עליהן, רצוי עם רב, ולשמור.', dir: 'rtl' });
-  }
-  if (stored.sync.lastError) alerts.push({ level: 'warn', text: `Google Calendar: ${stored.sync.lastError}`, dir: 'ltr' });
+  const f = (template: string): string => fill(template, lang);
+
+  const alerts: Array<{ level: 'warn' | 'info'; text: string }> = [];
+  if (data.sync.lastError) alerts.push({ level: 'warn', text: `Google Calendar: ${data.sync.lastError}` });
 
   let status: { headline: string; detail: string } | null = null;
   let upcoming: UpcomingItem[] = [];
   let reminders: Array<{ at: number; when: string; kind: string; text: string }> = [];
-  let today: { hebrew: string; civil: string; onah: string } | null = null;
+  let today: { hebrew: string; civil: string; part: 'night' | 'day' } | null = null;
   if (computed) {
     const t = computed.timeline;
-    status = statusHebrew(t, tz);
-    for (const w of t.warnings) alerts.push({ level: 'warn', text: warningHebrew(w.code), dir: 'rtl' });
-    for (const p of t.patterns) alerts.push({ level: 'warn', text: patternHebrew(p), dir: 'rtl' });
-    for (const n of t.vesatotNotes) alerts.push({ level: 'info', text: noteHebrew(n), dir: 'rtl' });
-    if (t.onot.some(o => o.onMikvahNight && o.end > now)) alerts.push({ level: 'warn', text: 'ליל הטבילה חל בעונת פרישה. יש לשאול רב.', dir: 'rtl' });
+    status = statusLines(t, tz, lang);
+    for (const w of t.warnings) alerts.push({ level: 'warn', text: warningText(w.code, lang) });
+    for (const p of t.patterns) alerts.push({ level: 'warn', text: patternText(p, lang) });
+    for (const n of t.vesatotNotes) alerts.push({ level: 'info', text: noteText(n, lang) });
+    if (t.onot.some(o => o.onMikvahNight && o.end > now)) {
+      alerts.push({ level: 'warn', text: f('The {mikvah_night} falls on an {onat_perishah}. Ask a {rav}.') });
+    }
+    const civilToday = localAbs(now, tz);
     today = {
-      hebrew: `${hebrewWeekday(t.nowOnah.abs)}, ${formatHebrewDate(t.nowOnah.abs)}`,
-      civil: civilLabel(localAbs(now, tz)),
-      onah: t.nowOnah.part === 'night' ? 'לילה' : 'יום',
+      hebrew: `${weekday(t.nowOnah.abs)}, ${hebrewDate(t.nowOnah.abs, lang)}`,
+      civil: civilDate(civilToday),
+      part: t.nowOnah.part,
     };
     const endOf = (e: Computed['events'][number]): number =>
       e.timed ? e.timed.end : localToInstant({ ...absToCivil(e.allDay!.endAbsExclusive), hh: 0, mi: 0, ss: 0 }, tz);
@@ -66,11 +81,11 @@ export function dashboardState(stored: Stored, entries: readonly StoredEntry[], 
         if (e.timed) {
           const a = localAbs(e.timed.start, tz);
           const b = localAbs(e.timed.end, tz);
-          const from = clock24(e.timed.start, tz, 'floor');
-          const to = clock24(e.timed.end, tz, 'ceil');
-          when = a === b ? `${civilLabel(a)}, מ־${from} עד ${to}` : `מ${civilLabel(a)} ${from} עד ${civilLabel(b)} ${to}`;
+          const from = clock12(e.timed.start, tz, 'floor');
+          const to = clock12(e.timed.end, tz, 'ceil');
+          when = a === b ? `${englishDate(a)}, ${from} to ${to}` : `${englishDate(a)} ${from} to ${englishDate(b)} ${to}`;
         } else {
-          when = civilLabel(e.allDay!.startAbs);
+          when = englishDate(e.allDay!.startAbs);
         }
         return { key: e.key, kind: e.kind, title: e.title, description: e.description, when, projected: e.projected, light: e.light === true };
       });
@@ -79,44 +94,101 @@ export function dashboardState(stored: Stored, entries: readonly StoredEntry[], 
       .slice(0, 30)
       .map(r => {
         const l = localDateTime(r.at, tz);
-        return { at: r.at, when: `${l.m}/${l.d} ${l.hh}:${String(l.mi).padStart(2, '0')}`, kind: r.kind, text: r.text };
+        return { at: r.at, when: `${englishDate(civilToAbs(l))} ${clock12(r.at, tz, 'floor')}`, kind: r.kind, text: r.text };
       });
   }
 
-  const secretsSet = Object.fromEntries(SECRET_KEYS.map(k => [k, Boolean(stored.secrets[k])]));
+  const texting = data.phones.some(canText);
+  const setup = [
+    { key: 'place', done: data.app.place !== null, text: 'Choose your location', tab: 'settings' },
+    { key: 'customs', done: data.halachicConfirmedAt !== null, text: f('Review your customs, ideally with your {rav}, and save them'), tab: 'customs' },
+    { key: 'entry', done: data.entries.length > 0, text: f('Record the start of the most recent {flow}, and the {hefsek} and {immersion} that followed'), tab: 'today' },
+    { key: 'calendar', done: data.google !== null || data.calendarLinkToken !== null, text: 'Optional: show it in your calendar app', tab: 'settings' },
+    { key: 'texts', done: texting, text: 'Optional: turn on text reminders', tab: 'settings' },
+  ];
+
   return {
     now,
     timeZone: tz,
+    terms: lang,
+    words: allTerms(lang),
     today,
     status,
     alerts,
+    setup,
     upcoming,
     reminders,
-    entryCount: entries.length,
+    entryCount: data.entries.length,
     // newest first; the page lists the most recent ones
-    entries: [...entries]
+    entries: [...data.entries]
       .sort((a, b) => {
         const pa = 'onah' in a.entry ? a.entry.onah.abs : a.entry.abs;
         const pb = 'onah' in b.entry ? b.entry.onah.abs : b.entry.abs;
         return pb - pa || b.createdAt - a.createdAt;
       })
       .slice(0, MAX_LISTED_ENTRIES)
-      .map(e => ({ id: e.entry.id, kind: e.entry.kind, text: entryHebrew(e.entry), source: e.source, note: e.note, createdAt: e.createdAt })),
-    halachic: { settings: stored.halachic.settings, confirmedAt: stored.halachic.confirmedAt, choices: HALACHIC_CHOICES, tzeitPresets: TZEIT_PRESETS },
-    app: stored.app,
+      .map(e => ({ id: e.entry.id, kind: e.entry.kind, text: entryText(e.entry, lang), source: e.source, note: e.note, createdAt: e.createdAt })),
+    halachic: {
+      settings: data.halachic,
+      confirmedAt: data.halachicConfirmedAt,
+      choices: choicesFor(lang),
+      tzeitPresets: tzeitPresetsFor(lang),
+      tzeitTitle: capital(f(TZEIT_TITLE)),
+    },
+    app: data.app,
     places: PLACES,
     reminderKinds: REMINDER_KINDS,
-    connections: {
-      google: { connected: Boolean(stored.google && stored.secrets.googleRefreshToken), calendarId: stored.google?.calendarId ?? null },
-      sms: { configured: Boolean(stored.secrets.telnyxApiKey && stored.secrets.telnyxPublicKey && stored.secrets.telnyxNumber), number: stored.secrets.telnyxNumber ?? null },
-      secretsSet,
-      redirectUri: `${origin}/api/google/callback`,
-      webhookUrl: `${origin}/webhooks/telnyx`,
+    labels: {
+      kinds: {
+        flow: capital(f('{flow}')),
+        stain: capital(f('{stain}')),
+        hefsek: capital(f('{hefsek}')),
+        broken: 'Count broken',
+        mikvah: capital(f('{immersion}')),
+      },
+      reminders: {
+        hefsek: capital(f('{hefsek}')),
+        bedikah_morning: capital(f('{bedikah}, morning')),
+        bedikah_afternoon: capital(f('{bedikah}, afternoon')),
+        mikvah: capital(f('{mikvah_night}')),
+        mikvah_confirm: capital(f('{immersion} not recorded')),
+        onah: capital(f('{onat_perishah}')),
+      },
     },
-    sync: stored.sync,
-    sms: sms.map(m => ({ ...m })),
+    phones: data.phones.map(p => ({
+      number: p.number,
+      name: p.name,
+      canUpdate: p.canUpdate,
+      reminders: p.reminders,
+      verified: p.verifiedAt !== null,
+      texts: p.consentAt !== null,
+      optedOut: p.optedOut,
+      me: p.number === args.myNumber,
+    })),
+    maxPhones: MAX_PHONES,
+    account: {
+      number: args.myNumber,
+      hasPassword: session.phone.password !== null,
+      // Whether this session began recently enough to set, change or remove the password.
+      fresh: now - session.startedAt < FRESH_MS,
+    },
+    calendar: {
+      google: { available: googleReady(site), connected: data.google !== null },
+      link: data.calendarLinkToken ? `${origin}/cal/${data.calendarLinkToken}.ics` : null,
+      sync: data.sync,
+    },
+    sms: {
+      ready: smsReady(site),
+      number: smsReady(site) ? (site.secrets.telnyxNumber ?? null) : null,
+      usedThisMonth: textsThisMonth(data, now),
+      monthlyLimit: site.config.householdMonthlyLimit,
+      commands: HELP_TEXT,
+    },
+    messages: data.messages,
   };
 }
+
+export type DashboardState = ReturnType<typeof dashboardState>;
 
 /**
  * Turns what the dashboard's "record" form sends into an entry.
@@ -126,15 +198,15 @@ export function dashboardState(stored: Stored, entries: readonly StoredEntry[], 
  *   { kind, date: 'YYYY-MM-DD', time: 'HH:MM' }
  *   hefsek: { kind: 'hefsek', date }            mikvah: { kind: 'mikvah', date }  (the evening she immersed)
  */
-export function draftFromForm(input: unknown, computed: Where, now: number): DraftEntry {
+export function draftFromForm(input: unknown, where: Where, now: number): DraftEntry {
   if (typeof input !== 'object' || input === null) throw new ValidationError('expected an object');
   const o = input as Record<string, unknown>;
   const kind = o.kind;
   if (kind !== 'flow' && kind !== 'stain' && kind !== 'broken' && kind !== 'hefsek' && kind !== 'mikvah') throw new ValidationError('kind: unknown');
-  const tz = computed.place.timeZone;
+  const tz = where.place.timeZone;
 
   const parseDate = (): number => {
-    if (typeof o.date !== 'string') throw new ValidationError('date: required');
+    if (typeof o.date !== 'string') throw new ValidationError('Choose a date.');
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(o.date);
     if (!m) throw new ValidationError('date: use YYYY-MM-DD');
     try {
@@ -146,27 +218,27 @@ export function draftFromForm(input: unknown, computed: Where, now: number): Dra
 
   if (kind === 'hefsek') {
     // "now": today, or yesterday when it is after midnight and before sunrise (as for a text message)
-    if (o.when === 'now') return { kind, abs: resolveHefsekDay(false, { now, place: computed.place, zopts: computed.zopts, boundaryMarginMs: 0 }) };
+    if (o.when === 'now') return { kind, abs: resolveHefsekDay(false, { now, place: where.place, zopts: where.zopts, boundaryMarginMs: 0 }) };
     return { kind, abs: parseDate() };
   }
   if (kind === 'mikvah') {
-    if (o.when === 'now') return { kind, abs: onahAt(now, computed.place, computed.zopts).onah.abs };
+    if (o.when === 'now') return { kind, abs: onahAt(now, where.place, where.zopts).onah.abs };
     return { kind, abs: parseDate() + 1 }; // the night that begins on that evening belongs to the next Hebrew date
   }
 
   let onah: { abs: number; part: 'night' | 'day' };
   if (o.when === 'now') {
-    onah = onahAt(now, computed.place, computed.zopts).onah;
+    onah = onahAt(now, where.place, where.zopts).onah;
   } else if (typeof o.time === 'string' && o.time !== '') {
     const t = /^(\d{1,2}):(\d{2})$/.exec(o.time);
     if (!t || Number(t[1]) > 23 || Number(t[2]) > 59) throw new ValidationError('time: use HH:MM');
     const c = absToCivil(parseDate());
-    onah = onahAt(localToInstant({ ...c, hh: Number(t[1]), mi: Number(t[2]), ss: 0 }, tz), computed.place, computed.zopts).onah;
+    onah = onahAt(localToInstant({ ...c, hh: Number(t[1]), mi: Number(t[2]), ss: 0 }, tz), where.place, where.zopts).onah;
   } else {
     const abs = parseDate();
     if (o.part === 'day') onah = { abs, part: 'day' };
     else if (o.part === 'night') onah = { abs: abs + 1, part: 'night' };
-    else throw new ValidationError('choose day, night, or a time');
+    else throw new ValidationError('Choose day, night, or a time.');
   }
   if (kind === 'flow') return { kind, onah, veset: o.veset !== false };
   return { kind, onah };

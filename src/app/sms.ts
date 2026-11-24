@@ -20,6 +20,11 @@ export interface InboundMessage {
   from: string;
   to: string;
   text: string;
+  /**
+   * Set by Telnyx when the text was one of its opt-out, opt-in or help
+   * keywords and it acted on it: 'STOP', 'START' or 'HELP'.
+   */
+  autoresponseType: string | null;
 }
 
 export type WebhookResult =
@@ -50,14 +55,26 @@ export async function readTelnyxWebhook(
   if (!data || typeof data.id !== 'string') return { ok: false, status: 400, reason: 'no event' };
   // Delivery reports and other events are acknowledged and ignored.
   if (data.event_type !== 'message.received') return { ok: true, message: null };
-  const payload = data.payload as { from?: { phone_number?: unknown }; to?: Array<{ phone_number?: unknown }>; text?: unknown } | undefined;
+  const payload = data.payload as
+    | { from?: { phone_number?: unknown }; to?: Array<{ phone_number?: unknown }>; text?: unknown; autoresponse_type?: unknown }
+    | undefined;
   const from = payload?.from?.phone_number;
   const to = payload?.to?.[0]?.phone_number;
   if (typeof from !== 'string' || typeof to !== 'string') return { ok: false, status: 400, reason: 'no sender' };
-  return { ok: true, message: { eventId: data.id, from, to, text: typeof payload?.text === 'string' ? payload.text : '' } };
+  return {
+    ok: true,
+    message: {
+      eventId: data.id,
+      from,
+      to,
+      text: typeof payload?.text === 'string' ? payload.text : '',
+      autoresponseType: typeof payload?.autoresponse_type === 'string' && payload.autoresponse_type !== '' ? payload.autoresponse_type.toUpperCase() : null,
+    },
+  };
 }
 
-export type SendResult = { ok: true; id: string | null } | { ok: false; error: string };
+/** `blocked` is true when Telnyx refused because the recipient opted out (its error 40300). */
+export type SendResult = { ok: true; id: string | null } | { ok: false; error: string; blocked: boolean };
 
 export async function sendTelnyx(deps: Deps, args: { apiKey: string; from: string; to: string; text: string }): Promise<SendResult> {
   try {
@@ -69,14 +86,16 @@ export async function sendTelnyx(deps: Deps, args: { apiKey: string; from: strin
     const text = await res.text();
     if (!res.ok) {
       let detail = '';
+      let blocked = false;
       try {
         const errors = (JSON.parse(text) as { errors?: Array<{ code?: unknown; title?: unknown; detail?: unknown }> }).errors;
         const first = errors?.[0];
         if (first) detail = [first.code, first.title, first.detail].filter(x => typeof x === 'string').join(' ');
+        blocked = (errors ?? []).some(e => String(e.code) === '40300');
       } catch {
         // keep the status only
       }
-      return { ok: false, error: `Telnyx ${res.status}${detail ? `: ${detail}` : ''}` };
+      return { ok: false, error: `Telnyx ${res.status}${detail ? `: ${detail}` : ''}`, blocked };
     }
     let id: string | null = null;
     try {
@@ -87,6 +106,6 @@ export async function sendTelnyx(deps: Deps, args: { apiKey: string; from: strin
     }
     return { ok: true, id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'network error' };
+    return { ok: false, error: e instanceof Error ? e.message : 'network error', blocked: false };
   }
 }

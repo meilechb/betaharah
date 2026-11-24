@@ -1,13 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { constantTimeEqual, decrypt, encrypt, sign, toBase64, verifyEd25519, verifySigned } from '../src/app/crypto';
+import { tidyNumber } from '../src/app/accounts';
+import {
+  checkPassword,
+  constantTimeEqual,
+  decrypt,
+  encrypt,
+  fingerprint,
+  hashPassword,
+  PASSWORD_ITERATIONS,
+  randomCode,
+  randomId,
+  randomToken,
+  sign,
+  toBase64,
+  verifyEd25519,
+  verifySigned,
+} from '../src/app/crypto';
 import type { ExistingEvent } from '../src/app/google';
 import { authorizationUrl, CALENDAR_SCOPE } from '../src/app/google';
-import { DEFAULT_APP_SETTINGS, parseAppSettings, parsePlace, assertSunTimesExist, PLACES, ValidationError } from '../src/app/settings';
+import { HELP_TEXT } from '../src/app/commands';
+import { DEFAULT_SITE_CONFIG, newHousehold } from '../src/app/model';
+import { codeText, HELP_REPLY, inboundKind, REMINDERS_ON_TEXT, TEST_TEXT } from '../src/app/service';
+import {
+  DEFAULT_APP_SETTINGS,
+  parseAppSettings,
+  parsePhoneNumber,
+  parsePhoneOptions,
+  parsePlace,
+  assertSunTimesExist,
+  PLACES,
+  REMINDER_KINDS,
+  ValidationError,
+} from '../src/app/settings';
+import { parseSiteConfig } from '../src/app/store';
 import { readTelnyxWebhook } from '../src/app/sms';
 import { planSync, toDesired, type DesiredEvent } from '../src/app/sync';
 import { civilToAbs } from '../src/engine/civil';
-import type { CalendarEvent } from '../src/engine/present';
+import type { CalendarEvent } from '../src/engine/calendar';
 import { DEFAULT_HALACHIC_SETTINGS, HALACHIC_CHOICES, parseHalachicSettings, SettingsError } from '../src/engine/settings';
+import { fill } from '../src/engine/terms';
 import { NoSunError } from '../src/engine/zmanim';
 import { FakeTelnyx } from './fakes';
 
@@ -29,6 +60,46 @@ describe('encryption and signatures', () => {
     await expect(decrypt(KEY, altered)).rejects.toThrow();
     await expect(decrypt('y'.repeat(40), a)).rejects.toThrow();
     await expect(encrypt('short', 'x')).rejects.toThrow();
+  });
+
+  it('binds what it encrypts to a context: one account\'s data cannot be read as another\'s', async () => {
+    const a = await encrypt(KEY, 'the entries of household A', 'household:A');
+    expect(await decrypt(KEY, a, 'household:A')).toBe('the entries of household A');
+    await expect(decrypt(KEY, a, 'household:B')).rejects.toThrow();
+    await expect(decrypt(KEY, a)).rejects.toThrow();
+  });
+
+  it('fingerprints are keyed, stable, and differ by purpose', async () => {
+    const a = await fingerprint(KEY, 'phone', '+17325550123');
+    expect(a).toBe(await fingerprint(KEY, 'phone', '+17325550123'));
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    expect(a).not.toBe(await fingerprint(KEY, 'phone', '+17325550124'));
+    expect(a).not.toBe(await fingerprint(KEY, 'invite', '+17325550123'));
+    expect(a).not.toBe(await fingerprint('y'.repeat(40), 'phone', '+17325550123'));
+  });
+
+  it('keeps a password as a salted record that needs the server key to check', async () => {
+    const record = await hashPassword(KEY, 'a long enough password');
+    expect(record).toMatch(new RegExp(`^v1\\$${PASSWORD_ITERATIONS}\\$[A-Za-z0-9+/=]+\\$[A-Za-z0-9+/=]+$`));
+    expect(record).not.toContain('password');
+    expect(await checkPassword(KEY, 'a long enough password', record)).toBe(true);
+    expect(await checkPassword(KEY, 'a long enough passwore', record)).toBe(false);
+    expect(await checkPassword('y'.repeat(40), 'a long enough password', record)).toBe(false);
+    expect(await hashPassword(KEY, 'a long enough password')).not.toBe(record); // a fresh salt each time
+    for (const bad of ['', 'v1$1$x$y', 'v2$20000$AAAA$AAAA', 'v1$20000$AAAA', 'v1$99999999$AAAA$AAAA']) expect(await checkPassword(KEY, 'x', bad)).toBe(false);
+  });
+
+  it('makes codes of six digits and ids that do not repeat', () => {
+    const codes = new Set<string>();
+    for (let i = 0; i < 500; i++) {
+      const code = randomCode();
+      expect(code).toMatch(/^\d{6}$/);
+      codes.add(code);
+    }
+    expect(codes.size).toBeGreaterThan(480);
+    expect(randomToken()).toMatch(/^[A-Za-z0-9_-]{32}$/);
+    expect(randomId()).toMatch(/^[A-Za-z0-9_-]{16}$/);
+    expect(randomToken()).not.toBe(randomToken());
   });
 
   it('signs and verifies, per purpose', async () => {
@@ -74,8 +145,12 @@ describe('halachic settings', () => {
     for (const c of HALACHIC_CHOICES) {
       expect(c.options.map(o => o.value)).toContain(DEFAULT_HALACHIC_SETTINGS[c.key]);
       expect(c.options.length).toBeGreaterThanOrEqual(2);
-      expect(c.title).toMatch(/[֐-׿]/);
-      for (const o of c.options) expect(o.label).toMatch(/[֐-׿]/);
+      // the texts are English sentences whose terms can be filled in either form
+      expect(c.title).not.toMatch(/[֐-׿]/);
+      for (const text of [c.title, c.help, ...c.options.map(o => o.label)]) {
+        expect(fill(text, 'en')).not.toMatch(/[{}]/);
+        expect(fill(text, 'he')).not.toMatch(/[{}]/);
+      }
     }
     // every setting except tzeit is offered as a choice
     expect(HALACHIC_CHOICES.map(c => c.key).sort()).toEqual(Object.keys(DEFAULT_HALACHIC_SETTINGS).filter(k => k !== 'tzeit').sort());
@@ -103,25 +178,75 @@ describe('halachic settings', () => {
 });
 
 describe('app settings', () => {
-  const valid = { ...DEFAULT_APP_SETTINGS, place: PLACES[0], phones: [{ number: '+1 (732) 555-0123', name: 'M', canUpdate: true, reminders: ['hefsek', 'onah'] }] };
+  const valid = { ...DEFAULT_APP_SETTINGS, place: PLACES[0] };
 
-  it('accepts valid settings and tidies the phone number', () => {
+  it('accepts valid settings', () => {
     const s = parseAppSettings(valid);
-    expect(s.phones[0]!.number).toBe('+17325550123');
     expect(s.place!.name).toBe('Lakewood, NJ');
     expect(parseAppSettings(DEFAULT_APP_SETTINGS)).toEqual(DEFAULT_APP_SETTINGS);
+    expect(parseAppSettings({ ...valid, terms: 'he' }).terms).toBe('he');
+    expect(DEFAULT_APP_SETTINGS.terms).toBe('en');
+  });
+
+  it('a new household starts from its own copy of the defaults', () => {
+    const a = newHousehold();
+    const b = newHousehold();
+    a.app.terms = 'he';
+    a.halachic.minWaitDays = '4';
+    a.app.reminders.hefsek.on = false;
+    expect(b.app.terms).toBe('en');
+    expect(b.halachic.minWaitDays).toBe('5');
+    expect(DEFAULT_APP_SETTINGS.terms).toBe('en');
+    expect(DEFAULT_APP_SETTINGS.reminders.hefsek.on).toBe(true);
+    expect(DEFAULT_HALACHIC_SETTINGS.minWaitDays).toBe('5');
+  });
+
+  it('tidies phone numbers and checks their form', () => {
+    expect(parsePhoneNumber('+1 (732) 555-0123')).toBe('+17325550123');
+    expect(() => parsePhoneNumber('7325550123')).toThrow(ValidationError);
+    expect(() => parsePhoneNumber('+1')).toThrow(ValidationError);
+    expect(() => parsePhoneNumber(17325550123)).toThrow(ValidationError);
+    // as people type them, when North American numbers are allowed
+    expect(tidyNumber('(732) 555-0123')).toBe('+17325550123');
+    expect(tidyNumber('732.555.0123')).toBe('+17325550123');
+    expect(tidyNumber('1 732 555 0123')).toBe('+17325550123');
+    expect(tidyNumber('+44 20 7946 0958')).toBe('+442079460958');
+    expect(() => tidyNumber('555-0123')).toThrow(ValidationError);
+    expect(() => tidyNumber('(732) 555-0123', { ...DEFAULT_SITE_CONFIG, allowedPrefixes: ['+44'] })).toThrow(ValidationError);
+    expect(() => tidyNumber(undefined)).toThrow(ValidationError);
+  });
+
+  it('checks what a household may change about a phone', () => {
+    expect(parsePhoneOptions({ name: ' M ', canUpdate: true, reminders: ['hefsek', 'onah', 'hefsek'], number: 'ignored', verifiedAt: 1 })).toEqual({ name: 'M', canUpdate: true, reminders: ['hefsek', 'onah'] });
+    expect(() => parsePhoneOptions({ name: 'M', canUpdate: true, reminders: ['everything'] })).toThrow(ValidationError);
+    expect(() => parsePhoneOptions({ name: 'M', canUpdate: 'yes', reminders: [] })).toThrow(ValidationError);
+    expect(() => parsePhoneOptions({ name: 'x'.repeat(41), canUpdate: true, reminders: [] })).toThrow(ValidationError);
+    expect(REMINDER_KINDS).toHaveLength(6);
+  });
+
+  it('checks the site settings', () => {
+    expect(parseSiteConfig(DEFAULT_SITE_CONFIG)).toEqual(DEFAULT_SITE_CONFIG);
+    const bad = (patch: Record<string, unknown>) => () => parseSiteConfig({ ...DEFAULT_SITE_CONFIG, ...patch });
+    expect(bad({ signup: 'everyone' })).toThrow(ValidationError);
+    expect(bad({ allowedPrefixes: [] })).toThrow(ValidationError);
+    expect(bad({ allowedPrefixes: ['1'] })).toThrow(ValidationError);
+    expect(bad({ dailyCodeLimit: -1 })).toThrow(ValidationError);
+    expect(bad({ monthlyMessageLimit: 1.5 })).toThrow(ValidationError);
+    expect(bad({ contactEmail: 'not an address' })).toThrow(ValidationError);
+    expect(bad({ smsEnabled: 'yes' })).toThrow(ValidationError);
+    expect(parseSiteConfig({ ...DEFAULT_SITE_CONFIG, allowedPrefixes: ['+1', '+44', '+1'] }).allowedPrefixes).toEqual(['+1', '+44']);
   });
 
   it('rejects bad values', () => {
     const bad = (patch: Record<string, unknown>) => () => parseAppSettings({ ...valid, ...patch });
-    expect(bad({ phones: [{ number: '7325550123', name: 'M', canUpdate: true, reminders: [] }] })).toThrow(ValidationError);
-    expect(bad({ phones: [{ number: '+17325550123', name: 'M', canUpdate: true, reminders: ['everything'] }] })).toThrow(ValidationError);
-    expect(bad({ phones: [valid.phones[0], valid.phones[0]] })).toThrow(ValidationError);
     expect(bad({ place: { ...PLACES[0], latitude: 91 } })).toThrow(ValidationError);
     expect(bad({ place: { ...PLACES[0], timeZone: 'Nowhere/Land' } })).toThrow(ValidationError);
     expect(bad({ place: { ...PLACES[0], name: ' ' } })).toThrow(ValidationError);
-    expect(bad({ calendar: { style: 'fancy', historyDays: 400 } })).toThrow(ValidationError);
-    expect(bad({ calendar: { style: 'hebrew', historyDays: 5 } })).toThrow(ValidationError);
+    expect(bad({ calendar: { name: 'B', style: 'fancy', historyDays: 400 } })).toThrow(ValidationError);
+    expect(bad({ calendar: { name: 'B', style: 'words', historyDays: 5 } })).toThrow(ValidationError);
+    expect(bad({ calendar: { name: ' ', style: 'words', historyDays: 400 } })).toThrow(ValidationError);
+    expect(bad({ calendar: { name: 'x'.repeat(41), style: 'words', historyDays: 400 } })).toThrow(ValidationError);
+    expect(bad({ terms: 'yi' })).toThrow(ValidationError);
     expect(bad({ boundaryMarginMinutes: -1 })).toThrow(ValidationError);
     expect(bad({ reminders: { ...DEFAULT_APP_SETTINGS.reminders, hefsek: { on: 'yes', minutesBeforeSunset: 120 } } })).toThrow(ValidationError);
     expect(bad({ reminders: { ...DEFAULT_APP_SETTINGS.reminders, bedikot: { ...DEFAULT_APP_SETTINGS.reminders.bedikot, morningHour: 24 } } })).toThrow(ValidationError);
@@ -222,7 +347,13 @@ describe('reading a Telnyx webhook', () => {
     const telnyx = await FakeTelnyx.create();
     const req = await telnyx.inbound({ from: '+17325550123', to: '+18885550100', text: '1', eventId: 'e1', nowMs: NOW });
     const r = await readTelnyxWebhook(req.body, { signature: req.headers['telnyx-signature-ed25519']!, timestamp: req.headers['telnyx-timestamp']! }, telnyx.publicKey, NOW);
-    expect(r).toEqual({ ok: true, message: { eventId: 'e1', from: '+17325550123', to: '+18885550100', text: '1' } });
+    expect(r).toEqual({ ok: true, message: { eventId: 'e1', from: '+17325550123', to: '+18885550100', text: '1', autoresponseType: null } });
+  });
+  it('passes on the keyword Telnyx says it acted on', async () => {
+    const telnyx = await FakeTelnyx.create();
+    const req = await telnyx.inbound({ from: '+17325550123', to: '+18885550100', text: 'Stop', eventId: 'e1', nowMs: NOW, autoresponseType: 'STOP' });
+    const r = await readTelnyxWebhook(req.body, { signature: req.headers['telnyx-signature-ed25519']!, timestamp: req.headers['telnyx-timestamp']! }, telnyx.publicKey, NOW);
+    expect(r).toMatchObject({ ok: true, message: { text: 'Stop', autoresponseType: 'STOP' } });
   });
   it('rejects a changed body, a wrong key, a missing or old signature', async () => {
     const telnyx = await FakeTelnyx.create();
@@ -241,5 +372,48 @@ describe('reading a Telnyx webhook', () => {
     const req = await telnyx.inbound({ from: '+1', to: '+2', text: '', eventId: 'e2', nowMs: NOW, eventType: 'message.finalized' });
     const r = await readTelnyxWebhook(req.body, { signature: req.headers['telnyx-signature-ed25519']!, timestamp: req.headers['telnyx-timestamp']! }, telnyx.publicKey, NOW);
     expect(r).toEqual({ ok: true, message: null });
+  });
+});
+
+describe('received texts', () => {
+  const kind = (text: string, autoresponseType: string | null = null) => inboundKind({ text, autoresponseType });
+
+  it('recognises the opt-out and opt-in words Telnyx acts on, in any case', () => {
+    for (const word of ['STOP', 'stop', ' Stop ', 'STOPALL', 'stop all', 'Unsubscribe', 'CANCEL', 'END', 'QUIT', 'REVOKE', 'OPT OUT', 'optout', 'Opt-Out']) expect(kind(word), word).toBe('stop');
+    for (const word of ['START', 'start', 'UNSTOP', ' unstop ']) expect(kind(word), word).toBe('start');
+    expect(kind('HELP')).toBe('help');
+    expect(kind('info')).toBe('help');
+  });
+
+  it('follows what Telnyx reports, whatever the words were', () => {
+    expect(kind('please stop texting me', 'STOP')).toBe('stop');
+    expect(kind('ok', 'START')).toBe('start');
+    // a help keyword Telnyx has already answered is not answered twice
+    expect(kind('HELP', 'HELP')).toBe('help_answered');
+  });
+
+  it('everything else is a command for the calendar, including "?" and digits', () => {
+    for (const text of ['1', '2 yesterday', '?', '9', 'stop it', 'yes', 'hello', '']) expect(kind(text), text).toBe('command');
+  });
+});
+
+describe('the texts the site sends', () => {
+  it('each fits one text message in the basic character set', () => {
+    const basic = /^[A-Za-z0-9 .,:;()\-\/?!'&]+$/;
+    for (const text of [codeText('123456'), REMINDERS_ON_TEXT, HELP_REPLY, TEST_TEXT, HELP_TEXT]) {
+      expect(text, text).toMatch(basic);
+      expect(text.length, text).toBeLessThanOrEqual(160);
+    }
+  });
+
+  it('say who they are from and how to stop, where the carriers require it', () => {
+    expect(codeText('123456')).toBe('Betaharah code: 123456. It expires in 10 minutes. Do not share it.');
+    for (const text of [REMINDERS_ON_TEXT, HELP_REPLY]) {
+      expect(text).toMatch(/^Betaharah: /);
+      expect(text).toContain('Msg&data rates may apply');
+      expect(text).toContain('STOP');
+    }
+    expect(REMINDERS_ON_TEXT).toContain('HELP');
+    expect(HELP_REPLY).toContain('betaharah.com/help');
   });
 });

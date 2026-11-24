@@ -7,10 +7,11 @@
   "routes": [{ "pattern": "betaharah.com", "custom_domain": true }],
   "workers_dev": false,
   "preview_urls": false,
-  // The dashboard page. Requests that match no file (the API and the webhook) go to the Worker.
+  // The pages in ./public are served as files. The paths listed here always go to the Worker.
   "assets": {
     "directory": "./public",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/webhooks/*", "/cal/*", "/help", "/privacy", "/terms"]
   },
   "d1_databases": [
     {
@@ -19,11 +20,16 @@
       "database_id": "e6e769d9-dffe-48e9-bb8a-4e1420dc8db8"
     }
   ],
-  // Every 5 minutes: send reminders that are due and keep the calendar current.
+  // Every minute: send the reminders that are due and keep one household's calendar current.
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["* * * * *"]
   },
+  // Errors are logged. The per-request log, which would record every address
+  // requested (calendar links included), is turned off.
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": {
+      "invocation_logs": false
+    }
   }
 }

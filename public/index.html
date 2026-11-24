@@ -1,16 +1,107 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex, nofollow" />
-    <meta name="referrer" content="no-referrer" />
-    <title>בטהרה</title>
-    <link rel="stylesheet" href="/app.css" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="A free mikvah calendar that works by text message and shows up in your own calendar. Calculated by your customs." />
+    <title>Betaharah: a mikvah calendar by text message</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/site.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <noscript>This page needs JavaScript.</noscript>
-    <script src="/app.js" defer></script>
+    <header class="site">
+      <a class="brand" href="/">Betaharah</a>
+      <nav>
+        <a href="/help">Help</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a class="button" href="/app/">Sign in</a>
+      </nav>
+    </header>
+
+    <main class="landing">
+      <section class="hero">
+        <h1>A mikvah calendar you update by text message</h1>
+        <p class="lead">
+          Text one digit when something happens. Betaharah works out the onot perishah, the hefsek taharah, the seven clean days and mikvah night
+          by your customs, shows them in your own calendar, and reminds you by text.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="/app/">Get started</a>
+          <a class="button" href="/help">How it works</a>
+        </div>
+        <p class="note">Free. For family and friends. You sign up with a phone number and nothing else.</p>
+      </section>
+
+      <div class="grid">
+        <div class="card">
+          <h3>No app to open</h3>
+          <p>Record by texting a number. See the dates in Google Calendar, Apple Calendar or Outlook, next to everything else in your day.</p>
+        </div>
+        <div class="card">
+          <h3>Your customs</h3>
+          <p>Every point on which customs differ is a setting: the days of onah beinonit, Or Zarua, how the haflagah is counted, five days or four, nightfall, and more.</p>
+        </div>
+        <div class="card">
+          <h3>Private</h3>
+          <p>No name, no email, no tracking. Each account's data is encrypted before it is stored, and you can delete it at any time.</p>
+        </div>
+      </div>
+
+      <h2>How it works</h2>
+      <div class="grid">
+        <div class="card">
+          <ol class="steps">
+            <li><strong>Sign in with your phone number.</strong> A code is texted to you; type it in.</li>
+            <li><strong>Choose your location and your customs.</strong> Review the customs with your rav.</li>
+            <li><strong>Record the most recent dates</strong>, on the website or by text.</li>
+            <li><strong>Optional:</strong> connect your calendar, turn on text reminders, and add your spouse's phone to the same account.</li>
+          </ol>
+        </div>
+        <div class="phone-demo" aria-label="Example of a text conversation">
+          <div class="bubble out">1</div>
+          <div class="bubble in">Recorded: flow Sun Nov 22 by day. Hefsek from Thu Nov 26. 0 to undo.</div>
+          <div class="bubble out">2</div>
+          <div class="bubble in">Recorded: hefsek Thu Nov 26. Clean days Fri Nov 27 - Thu Dec 3. Mikvah Thu Dec 3 after 5:16 PM. 0 to undo.</div>
+        </div>
+      </div>
+
+      <h2>What it calculates</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>The onot perishah</h3>
+          <p>Onah beinonit, veset hachodesh and veset haflagah, by day or by night as the Hebrew date and the sun require, with each reason written out.</p>
+        </div>
+        <div class="card">
+          <h3>Hefsek taharah and the seven clean days</h3>
+          <p>The first day the hefsek can be done and its time before sunset, then each of the seven days, and what changes if the count is broken.</p>
+        </div>
+        <div class="card">
+          <h3>Mikvah night</h3>
+          <p>The night and the time of nightfall for your location, moved past Yom Kippur and Tisha B'Av, with a note when it is Shabbat or Yom Tov.</p>
+        </div>
+      </div>
+
+      <h2>What it does not do</h2>
+      <p>
+        It does not rule on halachic questions. It keeps track of dates by the customs you choose. For stains, for anything unclear, and when a veset kavua may have been
+        established (the calendar points it out and does not apply it), ask your rav.
+      </p>
+
+      <h2>Text messages</h2>
+      <p class="muted small">
+        Betaharah sends a sign-in code when you ask for one, replies to the commands you text, and sends reminders only if you turn them on in your settings. Message
+        frequency varies. Message and data rates may apply. Reply STOP to stop, HELP for help. See the <a href="/terms">Terms</a> and the
+        <a href="/privacy">Privacy page</a>.
+      </p>
+    </main>
+
+    <footer class="site">
+      <a href="/app/">Sign in</a>
+      <a href="/help">Help</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+    </footer>
   </body>
 </html>

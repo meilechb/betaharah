@@ -1,246 +1,438 @@
-/** Everything that reads or writes the database. */
-import type { LogEntry } from '../engine/cycle';
-import type { OnahPart } from '../engine/onah';
-import { DEFAULT_HALACHIC_SETTINGS, parseHalachicSettings, type HalachicSettings } from '../engine/settings';
-import { decrypt, encrypt } from './crypto';
+/**
+ * Everything that reads or writes the database.
+ *
+ * Isolation between households: a household's document can be read only by
+ * its id, and the id always comes from a verified session, a verified text
+ * message, or a secret calendar link, never from anything a visitor types.
+ * The document is encrypted with its id bound in, so a row copied over
+ * another household's row will not decrypt.
+ */
+import { parseHalachicSettings } from '../engine/settings';
+import { decrypt, encrypt, fingerprint, randomId } from './crypto';
 import type { Env } from './env';
-import { DEFAULT_APP_SETTINGS, parseAppSettings, type AppSettings } from './settings';
+import {
+  DEFAULT_SITE_CONFIG,
+  SITE_SECRET_KEYS,
+  type HouseholdData,
+  type Site,
+  type SiteConfig,
+  type SiteSecrets,
+} from './model';
+import { nextWake } from './queue';
+import { parseAppSettings, ValidationError } from './settings';
 
-// ---------- single values ----------
+// ---------- the site's settings ----------
 
-async function putKv(db: D1Database, key: string, value: unknown, now: number): Promise<void> {
+export function parseSiteConfig(input: unknown): SiteConfig {
+  if (typeof input !== 'object' || input === null) throw new ValidationError('expected an object');
+  const o = input as Record<string, unknown>;
+  const int = (v: unknown, what: string, min: number, max: number): number => {
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) throw new ValidationError(`${what}: a whole number from ${min} to ${max}`);
+    return v;
+  };
+  const text = (v: unknown, what: string, max: number): string => {
+    if (typeof v !== 'string' || v.length > max) throw new ValidationError(`${what}: text of at most ${max} characters`);
+    return v.trim();
+  };
+  if (o.signup !== 'open' && o.signup !== 'invite' && o.signup !== 'closed') throw new ValidationError('signup: open, invite or closed');
+  if (typeof o.smsEnabled !== 'boolean') throw new ValidationError('smsEnabled: true or false');
+  if (!Array.isArray(o.allowedPrefixes) || o.allowedPrefixes.length === 0 || o.allowedPrefixes.length > 20) {
+    throw new ValidationError('allowedPrefixes: between 1 and 20 prefixes');
+  }
+  const allowedPrefixes = o.allowedPrefixes.map(p => {
+    if (typeof p !== 'string' || !/^\+[1-9]\d{0,5}$/.test(p)) throw new ValidationError('allowedPrefixes: each must look like +1 or +44');
+    return p;
+  });
+  const contactEmail = text(o.contactEmail, 'contactEmail', 120);
+  if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) throw new ValidationError('contactEmail: not an email address');
+  return {
+    signup: o.signup,
+    smsEnabled: o.smsEnabled,
+    allowedPrefixes: [...new Set(allowedPrefixes)],
+    dailyCodeLimit: int(o.dailyCodeLimit, 'dailyCodeLimit', 0, 100_000),
+    monthlyMessageLimit: int(o.monthlyMessageLimit, 'monthlyMessageLimit', 0, 1_000_000),
+    householdMonthlyLimit: int(o.householdMonthlyLimit, 'householdMonthlyLimit', 0, 10_000),
+    contactName: text(o.contactName, 'contactName', 80),
+    contactEmail,
+  };
+}
+
+async function putSite(db: D1Database, key: string, value: string, now: number): Promise<void> {
   await db
-    .prepare('INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
-    .bind(key, JSON.stringify(value), now)
+    .prepare('INSERT INTO site (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
+    .bind(key, value, now)
     .run();
 }
 
-export interface HalachicState {
-  settings: HalachicSettings;
-  /** When the settings were last reviewed and saved in the dashboard; null if never. */
-  confirmedAt: number | null;
+export async function loadSite(env: Env): Promise<Site> {
+  const { results } = await env.DB.prepare('SELECT key, value FROM site').all<{ key: string; value: string }>();
+  const map = new Map(results.map(r => [r.key, r.value]));
+  const config = map.has('config') ? parseSiteConfig(JSON.parse(map.get('config') as string)) : DEFAULT_SITE_CONFIG;
+  const secrets = map.has('secrets') ? (JSON.parse(await decrypt(env.ENCRYPTION_KEY, map.get('secrets') as string, 'site')) as SiteSecrets) : {};
+  return { config, secrets };
 }
 
-function parseHalachicState(stored: unknown): HalachicState {
-  if (!stored) return { settings: DEFAULT_HALACHIC_SETTINGS, confirmedAt: null };
-  const s = stored as { settings: unknown; confirmedAt: number | null };
-  return { settings: parseHalachicSettings(s.settings), confirmedAt: s.confirmedAt };
+export async function saveSiteConfig(env: Env, input: unknown, now: number): Promise<SiteConfig> {
+  const config = parseSiteConfig(input);
+  await putSite(env.DB, 'config', JSON.stringify(config), now);
+  return config;
 }
 
-export async function saveHalachic(db: D1Database, input: unknown, now: number): Promise<HalachicState> {
-  const state: HalachicState = { settings: parseHalachicSettings(input), confirmedAt: now };
-  await putKv(db, 'halachic', state, now);
-  return state;
-}
-
-export async function saveApp(db: D1Database, input: unknown, now: number): Promise<AppSettings> {
-  const settings = parseAppSettings(input);
-  await putKv(db, 'app', settings, now);
-  return settings;
-}
-
-// ---------- secrets (encrypted) ----------
-
-export interface Secrets {
-  googleClientId?: string;
-  googleClientSecret?: string;
-  googleRefreshToken?: string;
-  telnyxApiKey?: string;
-  telnyxPublicKey?: string;
-  /** The number messages are sent from and received on, E.164. */
-  telnyxNumber?: string;
-}
-
-export const SECRET_KEYS = ['googleClientId', 'googleClientSecret', 'googleRefreshToken', 'telnyxApiKey', 'telnyxPublicKey', 'telnyxNumber'] as const;
-
-/** Merges `patch` into the stored secrets. A value of '' or null removes that secret. */
-export async function saveSecrets(
-  env: Env,
-  current: Secrets,
-  patch: Partial<Record<keyof Secrets, string | null>>,
-  now: number,
-): Promise<Secrets> {
-  const next: Secrets = { ...current };
-  for (const key of SECRET_KEYS) {
+/** Merges `patch` into the stored keys. A value of '' or null removes that key. */
+export async function saveSiteSecrets(env: Env, current: SiteSecrets, patch: Partial<Record<keyof SiteSecrets, string | null>>, now: number): Promise<SiteSecrets> {
+  const next: SiteSecrets = { ...current };
+  for (const key of SITE_SECRET_KEYS) {
     if (!(key in patch)) continue;
     const value = patch[key];
     if (value === null || value === undefined || value.trim() === '') delete next[key];
     else next[key] = value.trim();
   }
-  await putKv(env.DB, 'secrets', { data: await encrypt(env.ENCRYPTION_KEY, JSON.stringify(next)) }, now);
+  await putSite(env.DB, 'secrets', await encrypt(env.ENCRYPTION_KEY, JSON.stringify(next), 'site'), now);
   return next;
 }
 
-export interface GoogleState {
-  calendarId: string;
-  connectedAt: number;
+// ---------- counters (rate limits and usage) ----------
+
+/** Adds one to a counter and returns its new value. The counter disappears after `ttlMs`. */
+export async function bump(db: D1Database, key: string, ttlMs: number, now: number): Promise<number> {
+  const row = await db
+    .prepare(
+      `INSERT INTO counters (key, value, expires_at) VALUES (?1, 1, ?2)
+       ON CONFLICT (key) DO UPDATE SET
+         value = CASE WHEN counters.expires_at <= ?3 THEN 1 ELSE counters.value + 1 END,
+         expires_at = CASE WHEN counters.expires_at <= ?3 THEN ?2 ELSE counters.expires_at END
+       RETURNING value`,
+    )
+    .bind(key, now + ttlMs, now)
+    .first<{ value: number }>();
+  if (!row) throw new Error('counter update returned nothing');
+  return row.value;
 }
 
-export const saveGoogle = (db: D1Database, state: GoogleState, now: number): Promise<void> => putKv(db, 'google', state, now);
-export async function clearGoogle(db: D1Database): Promise<void> {
-  await db.prepare("DELETE FROM kv WHERE key = 'google'").run();
+export async function readCounter(db: D1Database, key: string, now: number): Promise<number> {
+  const row = await db.prepare('SELECT value FROM counters WHERE key = ? AND expires_at > ?').bind(key, now).first<{ value: number }>();
+  return row?.value ?? 0;
 }
 
-export interface SyncState {
-  /** Something changed since the calendar was last brought fully up to date. */
-  dirty: boolean;
-  lastRunAt: number | null;
-  lastOkAt: number | null;
-  lastError: string | null;
+export async function clearCounter(db: D1Database, key: string): Promise<void> {
+  await db.prepare('DELETE FROM counters WHERE key = ?').bind(key).run();
 }
 
-const NEW_SYNC_STATE: SyncState = { dirty: true, lastRunAt: null, lastOkAt: null, lastError: null };
-
-export const saveSync = (db: D1Database, state: SyncState, now: number): Promise<void> => putKv(db, 'sync', state, now);
-
-/** Notes that the calendar needs bringing up to date. */
-export async function markDirty(db: D1Database, current: SyncState, now: number): Promise<void> {
-  if (!current.dirty) await saveSync(db, { ...current, dirty: true }, now);
-}
-
-/** Everything kept as single values, read with one query. */
-export interface Stored {
-  halachic: HalachicState;
-  app: AppSettings;
-  secrets: Secrets;
-  google: GoogleState | null;
-  sync: SyncState;
-}
-
-export async function loadStored(env: Env): Promise<Stored> {
-  const { results } = await env.DB.prepare('SELECT key, value FROM kv').all<{ key: string; value: string }>();
-  const map = new Map(results.map(r => [r.key, JSON.parse(r.value) as unknown]));
-  const secretsRow = map.get('secrets') as { data: string } | undefined;
-  return {
-    halachic: parseHalachicState(map.get('halachic')),
-    app: map.has('app') ? parseAppSettings(map.get('app')) : DEFAULT_APP_SETTINGS,
-    secrets: secretsRow ? (JSON.parse(await decrypt(env.ENCRYPTION_KEY, secretsRow.data)) as Secrets) : {},
-    google: (map.get('google') as GoogleState | undefined) ?? null,
-    sync: (map.get('sync') as SyncState | undefined) ?? NEW_SYNC_STATE,
-  };
-}
-
-// ---------- the log ----------
-
-export interface StoredEntry {
-  entry: LogEntry;
-  source: string;
-  note: string | null;
-  createdAt: number;
-}
-
-interface LogRow {
-  id: string;
-  kind: LogEntry['kind'];
-  abs: number;
-  part: OnahPart | null;
-  veset: number;
-  source: string;
-  note: string | null;
-  created_at: number;
-}
-
-function rowToEntry(r: LogRow): LogEntry {
-  switch (r.kind) {
-    case 'flow':
-      if (!r.part) throw new Error(`log row ${r.id}: flow without an onah`);
-      return { id: r.id, kind: 'flow', onah: { abs: r.abs, part: r.part }, veset: r.veset === 1 };
-    case 'stain':
-    case 'broken':
-      if (!r.part) throw new Error(`log row ${r.id}: ${r.kind} without an onah`);
-      return { id: r.id, kind: r.kind, onah: { abs: r.abs, part: r.part } };
-    case 'hefsek':
-    case 'mikvah':
-      return { id: r.id, kind: r.kind, abs: r.abs };
-  }
-}
-
-/** Entries that have not been removed, oldest first by time of recording. */
-export async function listEntries(db: D1Database): Promise<StoredEntry[]> {
-  const { results } = await db
-    .prepare('SELECT id, kind, abs, part, veset, source, note, created_at FROM log WHERE deleted_at IS NULL ORDER BY created_at, id')
-    .all<LogRow>();
-  return results.map(r => ({ entry: rowToEntry(r), source: r.source, note: r.note, createdAt: r.created_at }));
-}
-
-export async function addEntry(db: D1Database, entry: LogEntry, source: string, note: string | null, now: number): Promise<void> {
-  const abs = 'onah' in entry ? entry.onah.abs : entry.abs;
-  const part = 'onah' in entry ? entry.onah.part : null;
-  const veset = entry.kind === 'flow' ? (entry.veset ? 1 : 0) : 0;
-  if (!Number.isInteger(abs)) throw new RangeError('entry date must be a whole day number');
-  await db
-    .prepare('INSERT INTO log (id, kind, abs, part, veset, source, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(entry.id, entry.kind, abs, part, veset, source, note, now)
-    .run();
-}
-
-/** Marks an entry removed. Returns false if there was no such entry. */
-export async function removeEntry(db: D1Database, id: string, now: number): Promise<boolean> {
-  const result = await db.prepare('UPDATE log SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').bind(now, id).run();
-  return result.meta.changes > 0;
-}
-
-// ---------- text messages ----------
-
-/** Records a received message. Returns false if this message id was already recorded. */
-export async function recordInbound(db: D1Database, id: string, from: string, body: string, now: number): Promise<boolean> {
-  const result = await db
-    .prepare("INSERT OR IGNORE INTO sms (id, direction, peer, body, at, status) VALUES (?, 'in', ?, ?, ?, 'received')")
-    .bind(id, from, body.slice(0, 500), now)
-    .run();
-  return result.meta.changes > 0;
-}
-
-export async function setSmsStatus(db: D1Database, id: string, status: string, detail: string | null): Promise<void> {
-  await db.prepare('UPDATE sms SET status = ?, detail = ? WHERE id = ?').bind(status, detail?.slice(0, 500) ?? null, id).run();
-}
-
-export async function recordOutbound(db: D1Database, id: string, to: string, body: string, now: number, status: string, detail: string | null): Promise<void> {
-  await db
-    .prepare("INSERT INTO sms (id, direction, peer, body, at, status, detail) VALUES (?, 'out', ?, ?, ?, ?, ?)")
-    .bind(id, to, body.slice(0, 500), now, status, detail?.slice(0, 500) ?? null)
-    .run();
-}
-
-export interface SmsRow {
-  id: string;
-  direction: 'in' | 'out';
-  peer: string;
-  body: string;
-  at: number;
-  status: string;
-  detail: string | null;
-}
-
-export async function recentSms(db: D1Database, limit: number): Promise<SmsRow[]> {
-  const { results } = await db.prepare('SELECT id, direction, peer, body, at, status, detail FROM sms ORDER BY at DESC, rowid DESC LIMIT ?').bind(limit).all<SmsRow>();
-  return results;
-}
-
-/** Number of messages received from a number since a time; used to limit abuse. */
-export async function inboundCountSince(db: D1Database, from: string, since: number): Promise<number> {
-  const row = await db.prepare("SELECT COUNT(*) AS n FROM sms WHERE direction = 'in' AND peer = ? AND at >= ?").bind(from, since).first<{ n: number }>();
-  return row?.n ?? 0;
-}
-
-// ---------- reminders ----------
-
-/** Claims a reminder for a phone. Returns true only the first time. */
-export async function claimReminder(db: D1Database, key: string, phone: string, now: number): Promise<boolean> {
-  const result = await db.prepare('INSERT OR IGNORE INTO reminders_sent (key, phone, sent_at) VALUES (?, ?, ?)').bind(key, phone, now).run();
-  return result.meta.changes > 0;
-}
-
-// ---------- sign-in rate limit ----------
-
-export async function recordAuthFailure(db: D1Database, now: number): Promise<void> {
+/** Removes expired counters, codes and invitations. Cheap; run now and then. */
+export async function sweep(db: D1Database, now: number): Promise<void> {
   await db.batch([
-    db.prepare('INSERT INTO auth_failures (at) VALUES (?)').bind(now),
-    db.prepare('DELETE FROM auth_failures WHERE at < ?').bind(now - 24 * 3_600_000),
+    db.prepare('DELETE FROM counters WHERE expires_at <= ?').bind(now),
+    db.prepare('DELETE FROM codes WHERE expires_at <= ?').bind(now - 86_400_000),
+    db.prepare('DELETE FROM invites WHERE expires_at <= ?').bind(now - 30 * 86_400_000),
   ]);
 }
 
-export async function authFailuresSince(db: D1Database, since: number): Promise<number> {
-  const row = await db.prepare('SELECT COUNT(*) AS n FROM auth_failures WHERE at >= ?').bind(since).first<{ n: number }>();
-  return row?.n ?? 0;
+// ---------- households ----------
+
+export interface Household {
+  id: string;
+  version: number;
+  data: HouseholdData;
+}
+
+const context = (id: string): string => `household:${id}`;
+
+/** Checks a decrypted document, so that a damaged or outdated one is noticed at once. */
+function parseHousehold(raw: unknown): HouseholdData {
+  const d = raw as HouseholdData;
+  return {
+    halachic: parseHalachicSettings(d.halachic),
+    halachicConfirmedAt: d.halachicConfirmedAt ?? null,
+    app: parseAppSettings(d.app),
+    phones: Array.isArray(d.phones) ? d.phones : [],
+    entries: Array.isArray(d.entries) ? d.entries : [],
+    removed: Array.isArray(d.removed) ? d.removed : [],
+    google: d.google ?? null,
+    sync: d.sync ?? { dirty: true, lastRunAt: null, lastOkAt: null, lastError: null },
+    calendarLinkToken: d.calendarLinkToken ?? null,
+    messages: Array.isArray(d.messages) ? d.messages : [],
+    queue: Array.isArray(d.queue) ? d.queue : [],
+    usage: d.usage && typeof d.usage.month === 'string' && typeof d.usage.texts === 'number' ? d.usage : { month: '', texts: 0 },
+    seenTexts: Array.isArray(d.seenTexts) ? d.seenTexts : [],
+  };
+}
+
+async function linkHash(env: Env, data: HouseholdData): Promise<string | null> {
+  return data.calendarLinkToken ? fingerprint(env.ENCRYPTION_KEY, 'link', data.calendarLinkToken) : null;
+}
+
+export async function createHousehold(env: Env, data: HouseholdData, now: number): Promise<Household> {
+  const id = randomId();
+  await env.DB.prepare('INSERT INTO households (id, version, data, created_at, updated_at, refresh_at, wake_at, link_hash) VALUES (?, 1, ?, ?, ?, ?, ?, ?)')
+    .bind(id, await encrypt(env.ENCRYPTION_KEY, JSON.stringify(data), context(id)), now, now, now, nextWake(data), await linkHash(env, data))
+    .run();
+  return { id, version: 1, data };
+}
+
+export async function loadHousehold(env: Env, id: string): Promise<Household | null> {
+  const row = await env.DB.prepare('SELECT version, data FROM households WHERE id = ?').bind(id).first<{ version: number; data: string }>();
+  if (!row) return null;
+  const data = parseHousehold(JSON.parse(await decrypt(env.ENCRYPTION_KEY, row.data, context(id))));
+  return { id, version: row.version, data };
+}
+
+/**
+ * Saves a household if nobody else saved it since it was loaded. Returns
+ * false when someone did; the caller loads again and repeats its change.
+ * The time of its next reminder is written alongside, from the data itself,
+ * so the two can never disagree.
+ */
+export async function saveHousehold(env: Env, h: Household, now: number, refreshAt?: number): Promise<boolean> {
+  const encrypted = await encrypt(env.ENCRYPTION_KEY, JSON.stringify(h.data), context(h.id));
+  const hash = await linkHash(env, h.data);
+  const wake = nextWake(h.data);
+  const result =
+    refreshAt === undefined
+      ? await env.DB.prepare('UPDATE households SET version = version + 1, data = ?, updated_at = ?, link_hash = ?, wake_at = ? WHERE id = ? AND version = ?')
+          .bind(encrypted, now, hash, wake, h.id, h.version)
+          .run()
+      : await env.DB.prepare('UPDATE households SET version = version + 1, data = ?, updated_at = ?, link_hash = ?, wake_at = ?, refresh_at = ? WHERE id = ? AND version = ?')
+          .bind(encrypted, now, hash, wake, refreshAt, h.id, h.version)
+          .run();
+  if (result.meta.changes === 0) return false;
+  h.version += 1;
+  return true;
+}
+
+export class ConflictError extends Error {
+  constructor() {
+    super('The data changed at the same moment. Please try again.');
+    this.name = 'ConflictError';
+  }
+}
+
+/**
+ * Loads a household, applies `change` to it, and saves. If another request
+ * saved in between, loads again and repeats. `change` must not have effects
+ * outside the data it is given, because it can run more than once.
+ */
+export async function changeHousehold<T>(
+  env: Env,
+  id: string,
+  now: number,
+  change: (data: HouseholdData) => T | Promise<T>,
+  refreshAt?: number,
+): Promise<{ household: Household; result: T } | null> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const household = await loadHousehold(env, id);
+    if (!household) return null;
+    const result = await change(household.data);
+    if (await saveHousehold(env, household, now, refreshAt)) return { household, result };
+  }
+  throw new ConflictError();
+}
+
+export async function householdIdByLink(env: Env, token: string): Promise<string | null> {
+  const row = await env.DB.prepare('SELECT id FROM households WHERE link_hash = ?')
+    .bind(await fingerprint(env.ENCRYPTION_KEY, 'link', token))
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
+/** Households whose calendar and reminders are due to be refreshed, most overdue first. */
+export async function householdsDue(db: D1Database, now: number, limit: number): Promise<string[]> {
+  const { results } = await db.prepare('SELECT id FROM households WHERE refresh_at <= ? ORDER BY refresh_at LIMIT ?').bind(now, limit).all<{ id: string }>();
+  return results.map(r => r.id);
+}
+
+export async function setRefresh(db: D1Database, id: string, at: number): Promise<void> {
+  await db.prepare('UPDATE households SET refresh_at = ? WHERE id = ?').bind(at, id).run();
+}
+
+/** Households with a reminder due, the longest-waiting first. */
+export async function householdsToWake(db: D1Database, now: number, limit: number): Promise<string[]> {
+  const { results } = await db.prepare('SELECT id FROM households WHERE wake_at <= ? ORDER BY wake_at LIMIT ?').bind(now, limit).all<{ id: string }>();
+  return results.map(r => r.id);
+}
+
+/** Stops the periodic job from opening a household whose data cannot be read. */
+export async function clearWake(db: D1Database, id: string): Promise<void> {
+  await db.prepare('UPDATE households SET wake_at = NULL WHERE id = ?').bind(id).run();
+}
+
+/** Deletes a household and everything that belongs to it. */
+export async function deleteHousehold(db: D1Database, id: string): Promise<void> {
+  await db.batch([
+    db.prepare('DELETE FROM codes WHERE household_id = ?').bind(id),
+    db.prepare('DELETE FROM phones WHERE household_id = ?').bind(id),
+    db.prepare('DELETE FROM households WHERE id = ?').bind(id),
+  ]);
+}
+
+// ---------- phones (sign-in identities) ----------
+
+export interface PhoneRow {
+  hash: string;
+  household_id: string;
+  password: string | null;
+  session_epoch: number;
+  created_at: number;
+}
+
+export const phoneHash = (env: Env, number: string): Promise<string> => fingerprint(env.ENCRYPTION_KEY, 'phone', number);
+
+export async function getPhone(db: D1Database, hash: string): Promise<PhoneRow | null> {
+  return db.prepare('SELECT hash, household_id, password, session_epoch, created_at FROM phones WHERE hash = ?').bind(hash).first<PhoneRow>();
+}
+
+/** Registers a phone for a household. Returns false if the number already belongs to an account. */
+export async function insertPhone(db: D1Database, hash: string, householdId: string, password: string | null, now: number): Promise<boolean> {
+  const result = await db.prepare('INSERT OR IGNORE INTO phones (hash, household_id, password, created_at) VALUES (?, ?, ?, ?)').bind(hash, householdId, password, now).run();
+  return result.meta.changes > 0;
+}
+
+export async function deletePhone(db: D1Database, hash: string, householdId: string): Promise<void> {
+  await db.batch([
+    db.prepare('DELETE FROM phones WHERE hash = ? AND household_id = ?').bind(hash, householdId),
+    db.prepare('DELETE FROM codes WHERE phone_hash = ?').bind(hash),
+  ]);
+}
+
+export async function setPassword(db: D1Database, hash: string, password: string | null): Promise<void> {
+  await db.prepare('UPDATE phones SET password = ? WHERE hash = ?').bind(password, hash).run();
+}
+
+/** Ends every session of this phone. */
+export async function endSessions(db: D1Database, hash: string): Promise<void> {
+  await db.prepare('UPDATE phones SET session_epoch = session_epoch + 1 WHERE hash = ?').bind(hash).run();
+}
+
+// ---------- codes ----------
+
+export interface CodeRow {
+  phone_hash: string;
+  purpose: 'login' | 'add';
+  household_id: string | null;
+  code_hash: string;
+  expires_at: number;
+  attempts: number;
+  sent_at: number;
+  window_start: number;
+  window_count: number;
+}
+
+export async function getCode(db: D1Database, hash: string): Promise<CodeRow | null> {
+  return db
+    .prepare('SELECT phone_hash, purpose, household_id, code_hash, expires_at, attempts, sent_at, window_start, window_count FROM codes WHERE phone_hash = ?')
+    .bind(hash)
+    .first<CodeRow>();
+}
+
+export async function putCode(db: D1Database, row: CodeRow): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO codes (phone_hash, purpose, household_id, code_hash, expires_at, attempts, sent_at, window_start, window_count)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
+       ON CONFLICT (phone_hash) DO UPDATE SET purpose = excluded.purpose, household_id = excluded.household_id, code_hash = excluded.code_hash,
+         expires_at = excluded.expires_at, attempts = 0, sent_at = excluded.sent_at, window_start = excluded.window_start, window_count = excluded.window_count`,
+    )
+    .bind(row.phone_hash, row.purpose, row.household_id, row.code_hash, row.expires_at, row.sent_at, row.window_start, row.window_count)
+    .run();
+}
+
+/** Counts a wrong guess. Returns the number of guesses made so far. */
+export async function countAttempt(db: D1Database, hash: string): Promise<number> {
+  const row = await db.prepare('UPDATE codes SET attempts = attempts + 1 WHERE phone_hash = ? RETURNING attempts').bind(hash).first<{ attempts: number }>();
+  return row?.attempts ?? 0;
+}
+
+/**
+ * Uses up a code so that it cannot be entered again. Returns false if it
+ * was already used (two requests at the same moment). The send-rate
+ * history is kept.
+ */
+export async function spendCode(db: D1Database, hash: string, codeHash: string): Promise<boolean> {
+  const result = await db.prepare("UPDATE codes SET code_hash = '', expires_at = 0 WHERE phone_hash = ? AND code_hash = ?").bind(hash, codeHash).run();
+  return result.meta.changes > 0;
+}
+
+// ---------- invitations ----------
+
+export interface InviteRow {
+  hash: string;
+  kind: 'signup' | 'setup';
+  /** For a 'setup' invitation: the fingerprint of the one number it is for. */
+  phone_hash: string | null;
+  note: string | null;
+  created_at: number;
+  expires_at: number;
+  max_uses: number;
+  uses: number;
+}
+
+export const inviteHash = (env: Env, code: string): Promise<string> => fingerprint(env.ENCRYPTION_KEY, 'invite', code);
+
+export async function createInvite(db: D1Database, row: Omit<InviteRow, 'uses'>): Promise<void> {
+  await db
+    .prepare('INSERT INTO invites (hash, kind, phone_hash, note, created_at, expires_at, max_uses) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(row.hash, row.kind, row.phone_hash, row.note, row.created_at, row.expires_at, row.max_uses)
+    .run();
+}
+
+export async function getInvite(db: D1Database, hash: string, now: number): Promise<InviteRow | null> {
+  const row = await db
+    .prepare('SELECT hash, kind, phone_hash, note, created_at, expires_at, max_uses, uses FROM invites WHERE hash = ?')
+    .bind(hash)
+    .first<InviteRow>();
+  if (!row || row.expires_at <= now || row.uses >= row.max_uses) return null;
+  return row;
+}
+
+/** Uses an invitation once. Returns false if it was used up or expired in the meantime. */
+export async function useInvite(db: D1Database, hash: string, now: number): Promise<boolean> {
+  const result = await db.prepare('UPDATE invites SET uses = uses + 1 WHERE hash = ? AND uses < max_uses AND expires_at > ?').bind(hash, now).run();
+  return result.meta.changes > 0;
+}
+
+export async function listInvites(db: D1Database, now: number): Promise<InviteRow[]> {
+  const { results } = await db
+    .prepare('SELECT hash, kind, phone_hash, note, created_at, expires_at, max_uses, uses FROM invites WHERE expires_at > ? AND uses < max_uses ORDER BY created_at DESC LIMIT 100')
+    .bind(now)
+    .all<InviteRow>();
+  return results;
+}
+
+export async function deleteInvite(db: D1Database, hash: string): Promise<boolean> {
+  const result = await db.prepare('DELETE FROM invites WHERE hash = ?').bind(hash).run();
+  return result.meta.changes > 0;
+}
+
+// ---------- totals for the operator ----------
+
+export interface SiteTotals {
+  households: number;
+  phones: number;
+  /** Households that have a reminder waiting to be sent. */
+  waiting: number;
+}
+
+export async function siteTotals(db: D1Database): Promise<SiteTotals> {
+  const row = await db
+    .prepare(
+      'SELECT (SELECT COUNT(*) FROM households) AS households, (SELECT COUNT(*) FROM phones) AS phones, (SELECT COUNT(*) FROM households WHERE wake_at IS NOT NULL) AS waiting',
+    )
+    .first<SiteTotals>();
+  return row ?? { households: 0, phones: 0, waiting: 0 };
+}
+
+export interface HouseholdSummary {
+  id: string;
+  created_at: number;
+  updated_at: number;
+  phones: number;
+}
+
+/** A list of households with nothing personal in it: ids, dates and a count of phones. */
+export async function listHouseholds(db: D1Database): Promise<HouseholdSummary[]> {
+  const { results } = await db
+    .prepare(
+      'SELECT h.id, h.created_at, h.updated_at, (SELECT COUNT(*) FROM phones p WHERE p.household_id = h.id) AS phones FROM households h ORDER BY h.created_at DESC LIMIT 500',
+    )
+    .all<HouseholdSummary>();
+  return results;
 }

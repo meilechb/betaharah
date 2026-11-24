@@ -1,10 +1,14 @@
 /**
  * Halachic settings: every point on which customs differ and the couple
- * (with their rav) chooses. The labels are in Hebrew because those are the
- * terms the settings are known by.
+ * (with their rav) chooses.
+ *
+ * The explanations are English sentences; the halachic terms inside them
+ * are written as {key} and shown in English letters or Hebrew script
+ * according to the household's choice (see terms.ts).
  *
  * Sources for the options are listed in docs/HALACHA.md.
  */
+import { fill, type TermLanguage } from './terms';
 import type { TzeitRule } from './zmanim';
 
 export interface HalachicSettings {
@@ -58,9 +62,9 @@ type ChoiceKey = Exclude<keyof HalachicSettings, 'tzeit'>;
 
 export interface ChoiceSpec<K extends ChoiceKey = ChoiceKey> {
   key: K;
-  /** Hebrew title */
+  /** English sentence with {term} places */
   title: string;
-  /** Hebrew explanation shown under the title */
+  /** Explanation shown under the title; may be empty */
   help: string;
   options: Array<{ value: HalachicSettings[K]; label: string }>;
 }
@@ -69,119 +73,140 @@ function spec<K extends ChoiceKey>(s: ChoiceSpec<K>): ChoiceSpec {
   return s as unknown as ChoiceSpec;
 }
 
-/** The settings as the dashboard presents them, in order. */
+/** The settings as the dashboard presents them, in order. Texts are templates. */
 export const HALACHIC_CHOICES: ChoiceSpec[] = [
   spec({
     key: 'minWaitDays',
-    title: 'ימי המתנה קודם הפסק טהרה',
-    help: 'מונים מיום תחילת האיסור (יום הראייה או מציאת הכתם), והוא היום הראשון. למונים ארבעה ימים מיום התשמיש יש לשאול רב.',
+    title: 'Days to wait before the {hefsek}',
+    help: 'Counted from the day she became {niddah} (the day of the {flow}, or of finding the {stain}), which is day 1. For those who count four days from the last relations, ask a {rav}.',
     options: [
-      { value: '5', label: 'חמישה ימים (מנהג אשכנז וחלק מקהילות הספרדים)' },
-      { value: '4', label: 'ארבעה ימים (מנהג חלק מקהילות הספרדים)' },
+      { value: '5', label: 'Five days (Ashkenazi custom, and some Sephardi communities)' },
+      { value: '4', label: 'Four days (some Sephardi communities)' },
     ],
   }),
   spec({
     key: 'beinonitDays',
-    title: 'עונה בינונית',
-    help: 'יום הראייה הוא היום הראשון למניין.',
+    title: '{onah_beinonit}: which day',
+    help: 'The day of the {flow} is day 1.',
     options: [
-      { value: '30', label: 'יום ל׳ בלבד' },
-      { value: '31', label: 'יום ל״א בלבד' },
-      { value: '30_31', label: 'יום ל׳ ויום ל״א' },
+      { value: '30', label: 'Day 30 only' },
+      { value: '31', label: 'Day 31 only' },
+      { value: '30_31', label: 'Day 30 and day 31' },
     ],
   }),
   spec({
     key: 'beinonitLength',
-    title: 'משך העונה הבינונית',
+    title: '{onah_beinonit}: how long',
     help: '',
     options: [
-      { value: 'onah', label: 'עונה אחת, כעונת הראייה (יום או לילה)' },
-      { value: 'full', label: 'מעת לעת: הלילה והיום של אותו תאריך' },
+      { value: 'onah', label: 'One {onah}, the same as that of the {flow} (day or night)' },
+      { value: 'full', label: 'The {full_day}: the night and the day of that date' },
     ],
   }),
   spec({
     key: 'chodeshLength',
-    title: 'משך וסת החודש',
+    title: '{veset_hachodesh}: how long',
     help: '',
     options: [
-      { value: 'onah', label: 'עונה אחת, כעונת הראייה (יום או לילה)' },
-      { value: 'full', label: 'מעת לעת: הלילה והיום של אותו תאריך' },
+      { value: 'onah', label: 'One {onah}, the same as that of the {flow} (day or night)' },
+      { value: 'full', label: 'The {full_day}: the night and the day of that date' },
     ],
   }),
   spec({
     key: 'orZarua',
-    title: 'עונת האור זרוע',
-    help: 'פרישה גם בעונה שקודם עונת הוסת.',
+    title: 'The {onah} of the {or_zarua}',
+    help: 'Separation also on the {onah} before each {veset_onah}.',
     options: [
-      { value: 'yes', label: 'חוששים' },
-      { value: 'no', label: 'אין חוששים' },
+      { value: 'yes', label: 'Observed' },
+      { value: 'no', label: 'Not observed' },
     ],
   }),
   spec({
     key: 'haflagahMethod',
-    title: 'חשבון וסת ההפלגה',
-    help: 'במניין העונות יש לרשום את יום הפסק הטהרה בכל חודש, שממנו מתחיל החשבון.',
+    title: 'How the {veset_haflagah} is counted',
+    help: 'When counting in {onot}, record the {hefsek} every month: the count starts from it.',
     options: [
-      { value: 'days', label: 'מניין ימים, מתחילת ראייה עד תחילת הראייה שאחריה' },
-      { value: 'onot_from_hefsek', label: 'מניין עונות, מהפסק טהרה עד הראייה (שולחן ערוך הרב, מנהג חב״ד)' },
+      { value: 'days', label: 'In days, from the start of one {flow} to the start of the next' },
+      { value: 'onot_from_hefsek', label: 'In {onot}, from the {hefsek} to the next {flow} (Shulchan Aruch HaRav; Chabad custom)' },
     ],
   }),
   spec({
     key: 'longerHaflagah',
-    title: 'הפלגה ארוכה שלא נעקרה',
-    help: 'ראתה בהפלגה קצרה קודם שהגיע יום ההפלגה הארוכה שלפניה.',
+    title: 'A longer {haflagah} that was never passed',
+    help: 'A {flow} came after a shorter interval, before the day of the earlier, longer one arrived.',
     options: [
-      { value: 'latest_only', label: 'חוששים להפלגה האחרונה בלבד' },
-      { value: 'keep_unsurpassed', label: 'חוששים גם לכל הפלגה ארוכה שעדיין לא עברה עליה בלא ראייה' },
+      { value: 'latest_only', label: 'Only the latest {haflagah} is observed' },
+      { value: 'keep_unsurpassed', label: 'Every longer {haflagah} not yet passed without a {flow} is observed too' },
     ],
   }),
   spec({
     key: 'chodesh30',
-    title: 'ראתה ביום ל׳ בחודש, והחודש הבא חסר',
+    title: 'A {flow} on the 30th, when the next month has 29 days',
     help: '',
     options: [
-      { value: 'first_of_following', label: 'חוששים לא׳ בחודש שלאחריו' },
-      { value: 'day29', label: 'חוששים לכ״ט בחודש' },
-      { value: 'both', label: 'חוששים לכ״ט ולא׳ בחודש שלאחריו' },
-      { value: 'none', label: 'אין חוששים לוסת החודש באותו חודש' },
+      { value: 'first_of_following', label: 'The 1st of the month after is observed' },
+      { value: 'day29', label: 'The 29th is observed' },
+      { value: 'both', label: 'Both the 29th and the 1st of the month after are observed' },
+      { value: 'none', label: 'No {veset_hachodesh} that month' },
     ],
   }),
   spec({
     key: 'longCycle',
-    title: 'הרגילה לראות לאחר יום ל״א',
-    help: 'שלוש פעמים רצופות ראתה לאחר יום ל״א לראייתה הקודמת.',
+    title: 'Cycles that regularly run past day 31',
+    help: 'Three times in a row the {flow} began after day 31 from the one before.',
     options: [
-      { value: 'observe', label: 'חוששת לעונה בינונית ולוסת החודש כרגיל' },
-      { value: 'exempt', label: 'אינה חוששת לעונה בינונית ולוסת החודש, כל זמן שלא חזרה לראות מוקדם' },
+      { value: 'observe', label: '{onah_beinonit} and {veset_hachodesh} are observed as usual' },
+      { value: 'exempt', label: 'They are not observed, as long as a {flow} does not come earlier again' },
     ],
   }),
   spec({
     key: 'vesatot',
-    title: 'חישוב הוסתות',
-    help: 'מעוברת, מניקה, או על פי הוראת רב.',
+    title: 'Calculating {vesatot}',
+    help: 'Pregnancy, nursing, or on the instruction of a {rav}.',
     options: [
-      { value: 'active', label: 'מחשבים וסתות' },
-      { value: 'paused', label: 'אין מחשבים וסתות כעת' },
+      { value: 'active', label: '{vesatot} are calculated' },
+      { value: 'paused', label: 'No {vesatot} are calculated for now' },
     ],
   }),
   spec({
     key: 'yomTov',
-    title: 'יום טוב',
+    title: '{yom_tov}',
     help: '',
     options: [
-      { value: 'diaspora', label: 'חוץ לארץ (שני ימים טובים של גלויות)' },
-      { value: 'israel', label: 'ארץ ישראל' },
+      { value: 'diaspora', label: 'Outside Israel (two days)' },
+      { value: 'israel', label: 'Israel' },
     ],
   }),
 ];
 
 /** Presets offered for nightfall; any other value can be typed in. */
 export const TZEIT_PRESETS: Array<{ rule: TzeitRule; label: string }> = [
-  { rule: { kind: 'degrees', value: 8.5 }, label: 'השמש 8.5 מעלות תחת האופק' },
-  { rule: { kind: 'degrees', value: 7.083 }, label: 'השמש 7.083 מעלות תחת האופק' },
-  { rule: { kind: 'minutes', value: 50 }, label: '50 דקות אחר השקיעה' },
-  { rule: { kind: 'minutes', value: 72 }, label: '72 דקות אחר השקיעה (רבינו תם)' },
+  { rule: { kind: 'degrees', value: 8.5 }, label: 'The sun 8.5 degrees below the horizon' },
+  { rule: { kind: 'degrees', value: 7.083 }, label: 'The sun 7.083 degrees below the horizon' },
+  { rule: { kind: 'minutes', value: 50 }, label: '50 minutes after {sunset}' },
+  { rule: { kind: 'minutes', value: 72 }, label: '72 minutes after {sunset} (Rabbeinu Tam)' },
 ];
+
+export const TZEIT_TITLE = '{nightfall}, for the time of {immersion}';
+
+/** The choices with every term filled in for one language. */
+export function choicesFor(lang: TermLanguage): ChoiceSpec[] {
+  return HALACHIC_CHOICES.map(c => ({
+    key: c.key,
+    title: capitalFirst(fill(c.title, lang)),
+    help: capitalFirst(fill(c.help, lang)),
+    options: c.options.map(o => ({ value: o.value, label: capitalFirst(fill(o.label, lang)) })),
+  }));
+}
+
+export function tzeitPresetsFor(lang: TermLanguage): Array<{ rule: TzeitRule; label: string }> {
+  return TZEIT_PRESETS.map(p => ({ rule: p.rule, label: fill(p.label, lang) }));
+}
+
+function capitalFirst(text: string): string {
+  // Hebrew has no capitals; an English first letter is raised.
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 export class SettingsError extends Error {
   constructor(message: string) {
@@ -195,11 +220,11 @@ function parseTzeit(input: unknown): TzeitRule {
   const { kind, value } = input as { kind?: unknown; value?: unknown };
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new SettingsError('tzeit.value: expected a number');
   if (kind === 'degrees') {
-    if (value < 3 || value > 20) throw new SettingsError('tzeit degrees must be between 3 and 20');
+    if (value < 3 || value > 20) throw new SettingsError('Nightfall in degrees must be between 3 and 20.');
     return { kind, value };
   }
   if (kind === 'minutes') {
-    if (value < 10 || value > 120) throw new SettingsError('tzeit minutes must be between 10 and 120');
+    if (value < 10 || value > 120) throw new SettingsError('Nightfall in minutes must be between 10 and 120.');
     return { kind, value };
   }
   throw new SettingsError('tzeit.kind: expected "degrees" or "minutes"');

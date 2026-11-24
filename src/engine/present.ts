@@ -1,16 +1,12 @@
 /**
- * Turns the timeline into what people see: calendar events and reminder
- * texts. Calendar text is Hebrew (or neutral symbols, for a calendar that
- * may be seen by others); text messages are plain English letters so that
- * each fits in one SMS.
+ * Reminder texts and the one-line status. Text messages are plain English
+ * letters so that each fits in one SMS. (Calendar events are in calendar.ts.)
  */
-import { gematriya } from '@hebcal/hdate';
 import { absToCivil, dayOfWeek, localAbs, localDateTime, localToInstant } from './civil';
-import { formatHebrewDate, hebrewWeekday } from './hebrew';
 import { isRestDay } from './holidays';
 import { onahIndex } from './onah';
 import type { GeoPoint } from './sun';
-import type { OnahView, PeriodView, Timeline } from './timeline';
+import type { OnahView, Timeline } from './timeline';
 import type { BaseReason, VesetReason } from './vesatot';
 import { dayTimes, type ZmanimOptions } from './zmanim';
 
@@ -18,7 +14,7 @@ import { dayTimes, type ZmanimOptions } from './zmanim';
 
 const MINUTE = 60_000;
 
-function roundToMinute(ms: number, mode: 'floor' | 'ceil'): number {
+export function roundToMinute(ms: number, mode: 'floor' | 'ceil'): number {
   return (mode === 'floor' ? Math.floor(ms / MINUTE) : Math.ceil(ms / MINUTE)) * MINUTE;
 }
 
@@ -47,29 +43,6 @@ export function englishDate(abs: number): string {
   return `${EN_DAYS[dayOfWeek(abs)]} ${EN_MONTHS[c.m - 1]} ${c.d}`;
 }
 
-const HEBREW_DAY_NUMBERS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ז׳'] as const;
-
-function baseReasonHebrew(r: BaseReason): string {
-  switch (r.kind) {
-    case 'beinonit':
-      return `עונה בינונית (יום ${gematriya(r.day)})`;
-    case 'chodesh':
-      if (r.rule === 'same_date') return `וסת החודש (${gematriya(r.dayOfMonth)} בחודש)`;
-      if (r.rule === 'day29') return 'וסת החודש (כ״ט בחודש, לראייה שביום ל׳)';
-      return 'וסת החודש (א׳ בחודש שלאחריו, לראייה שביום ל׳)';
-    case 'haflagah': {
-      const unit = r.unit === 'days' ? 'ימים' : 'עונות';
-      return r.latest ? `וסת ההפלגה (${r.length} ${unit})` : `הפלגה קודמת שלא נעקרה (${r.length} ${unit})`;
-    }
-  }
-}
-
-export function reasonHebrew(r: VesetReason): string {
-  if (r.kind === 'or_zarua') return `אור זרוע של ${baseReasonHebrew(r.of)}`;
-  if (r.kind === 'full_day') return `מעת לעת של ${baseReasonHebrew(r.of)}`;
-  return baseReasonHebrew(r);
-}
-
 function baseOf(r: VesetReason): BaseReason {
   return r.kind === 'or_zarua' || r.kind === 'full_day' ? r.of : r;
 }
@@ -93,181 +66,6 @@ export function reasonsEnglish(reasons: readonly VesetReason[], maxItems = 4): s
   return shown.join(', ') + (more > 0 ? ` +${more} more` : '');
 }
 
-// ---------- calendar events ----------
-
-export type TitleStyle = 'hebrew' | 'discreet';
-
-export interface CalendarEvent {
-  /** Stable identity of the event, used to update rather than duplicate it. */
-  key: string;
-  kind: 'flow' | 'onah' | 'hefsek' | 'clean_day' | 'mikvah';
-  title: string;
-  description: string;
-  /** Set for events with clock times (epoch ms). */
-  timed?: { start: number; end: number };
-  /** Set for all-day events: civil dates as R.D. numbers, end exclusive. */
-  allDay?: { startAbs: number; endAbsExclusive: number };
-  /** True when the event rests on an assumption (the hefsek has not been recorded yet). */
-  projected: boolean;
-  /** True for an onah that is only an Or Zarua onah; shown in a lighter colour. */
-  light?: boolean;
-}
-
-export interface CalendarOptions {
-  style: TitleStyle;
-  timeZone: string;
-}
-
-const PROJECTED_SUFFIX = ' (משוער)';
-
-function onahEvent(o: OnahView, opts: CalendarOptions): CalendarEvent {
-  const part = o.onah.part === 'night' ? 'לילה' : 'יום';
-  const timed = { start: roundToMinute(o.start, 'floor'), end: roundToMinute(o.end, 'ceil') };
-  const key = `onah:${onahIndex(o.onah)}`;
-  if (opts.style === 'discreet') {
-    return { key, kind: 'onah', title: o.veset ? '◆' : '◇', description: '', timed, projected: false, light: !o.veset };
-  }
-  const lines = [
-    `${hebrewWeekday(o.onah.abs)}, ${formatHebrewDate(o.onah.abs)}, עונת ה${part}`,
-    `מ־${clock24(o.start, opts.timeZone, 'floor')} עד ${clock24(o.end, opts.timeZone, 'ceil')}`,
-    '',
-    ...o.reasons.map(reasonHebrew),
-    '',
-    o.veset ? 'פרישה ובדיקה.' : 'פרישה.',
-  ];
-  if (o.onMikvahNight) lines.push('', 'עונה זו חלה בליל הטבילה. יש לשאול רב.');
-  return {
-    key,
-    kind: 'onah',
-    title: o.veset ? `עונת הוסת (${part})` : `אור זרוע (${part})`,
-    description: lines.join('\n'),
-    timed,
-    projected: false,
-    light: !o.veset,
-  };
-}
-
-function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): CalendarEvent[] {
-  const out: CalendarEvent[] = [];
-  const discreet = opts.style === 'discreet';
-  const tz = opts.timeZone;
-  const suffix = p.projected ? PROJECTED_SUFFIX : '';
-
-  // The start of the period.
-  const part = p.start.part === 'night' ? 'לילה' : 'יום';
-  out.push({
-    key: `flow:${p.startId}`,
-    kind: 'flow',
-    title: discreet ? '•' : `${p.cause === 'flow' ? 'ראייה' : 'תחילת איסור (כתם)'} (${part})`,
-    description: discreet ? '' : `${hebrewWeekday(p.start.abs)}, ${formatHebrewDate(p.start.abs)}, עונת ה${part}`,
-    timed: { start: roundToMinute(p.startWindow.start, 'floor'), end: roundToMinute(p.startWindow.end, 'ceil') },
-    projected: false,
-  });
-
-  // Hefsek taharah.
-  const hefsekTimed = { start: roundToMinute(p.hefsekMinchaKetana, 'ceil'), end: roundToMinute(p.hefsekSunset, 'floor') };
-  if (p.hefsekAbs !== null) {
-    const lines = [`${hebrewWeekday(p.hefsekAbs)}, ${formatHebrewDate(p.hefsekAbs)}`];
-    if (p.hefsekEarly) lines.push('', 'ההפסק נעשה קודם שעברו ימי ההמתנה; שבעת הנקיים מתחילים רק לאחריהם. יש לשאול רב.');
-    out.push({
-      key: `hefsek:${p.startId}`,
-      kind: 'hefsek',
-      title: discreet ? 'H ✓' : 'הפסק טהרה ✓',
-      description: discreet ? '' : lines.join('\n'),
-      timed: hefsekTimed,
-      projected: false,
-    });
-  } else if (p.mikvahDoneAbs === null) {
-    const deadline = clock24(p.hefsekSunset, tz, 'floor');
-    const lines = [
-      `${hebrewWeekday(p.planHefsekAbs)}, ${formatHebrewDate(p.planHefsekAbs)}`,
-      `קודם השקיעה: ${deadline}`,
-      `לכתחילה אחר מנחה קטנה: ${clock24(p.hefsekMinchaKetana, tz, 'ceil')}`,
-    ];
-    if (p.planHefsekAbs > p.earliestHefsekAbs) {
-      lines.push('', `אפשר היה להפסיק בטהרה כבר מ${hebrewWeekday(p.earliestHefsekAbs)}, ${formatHebrewDate(p.earliestHefsekAbs, false)}.`);
-    }
-    out.push({
-      key: `hefsek:${p.startId}`,
-      kind: 'hefsek',
-      title: discreet ? `H < ${deadline}` : `הפסק טהרה (עד ${deadline})`,
-      description: discreet ? '' : lines.join('\n'),
-      timed: hefsekTimed,
-      projected: true,
-    });
-  }
-
-  // The seven clean days.
-  for (const day of p.planCleanDays) {
-    const name = HEBREW_DAY_NUMBERS[day.n - 1] as string;
-    const lines = [
-      `${hebrewWeekday(day.abs)}, ${formatHebrewDate(day.abs)}`,
-      `בדיקה בבוקר, ובדיקה קודם השקיעה (${clock24(day.sunset, tz, 'floor')}).`,
-    ];
-    if (day.n === 1 || day.n === 7) lines.push('בדיקה ביום זה מעכבת.');
-    if (p.projected) lines.push('', 'משוער: בהנחה שהפסק הטהרה ייעשה ביום הראשון האפשרי.');
-    out.push({
-      key: `clean:${p.startId}:${day.n}`,
-      kind: 'clean_day',
-      title: discreet ? `${day.n}/7${p.projected ? ' ?' : ''}` : `שבעה נקיים: יום ${name}${suffix}`,
-      description: discreet ? '' : lines.join('\n'),
-      allDay: { startAbs: day.abs, endAbsExclusive: day.abs + 1 },
-      projected: p.projected,
-    });
-  }
-
-  // Immersion.
-  if (p.doneMikvah) {
-    const m = p.doneMikvah;
-    out.push({
-      key: `mikvah:${p.startId}`,
-      kind: 'mikvah',
-      title: discreet ? 'M ✓' : 'טבילה ✓',
-      description: discreet ? '' : `ליל ${hebrewWeekday(m.nightAbs)}, ${formatHebrewDate(m.nightAbs)}`,
-      timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 60 * MINUTE },
-      projected: false,
-    });
-  } else {
-    const m = p.planMikvah;
-    const after = clock24(m.tzeit, tz, 'ceil');
-    const lines = [
-      `ליל ${hebrewWeekday(m.nightAbs)}, ${formatHebrewDate(m.nightAbs)}`,
-      `הטבילה אחר צאת הכוכבים: ${after}`,
-    ];
-    if (m.postponedOver.length > 0) lines.push('נדחה: אין טובלים בליל יום הכיפורים ובליל תשעה באב.');
-    if (m.restNight) lines.push('ליל שבת או יום טוב: החפיפה מבעוד יום.');
-    if (m.afterRestDay && !m.restNight) lines.push('מוצאי שבת או יום טוב.');
-    if (m.afterRestDay && m.restNight) lines.push('היום שלפניו שבת או יום טוב: החפיפה קודם לכן.');
-    if (clash) lines.push('', 'ליל הטבילה חל בעונת פרישה. יש לשאול רב.');
-    if (p.projected) lines.push('', 'משוער: בהנחה שהפסק הטהרה ייעשה ביום הראשון האפשרי.');
-    out.push({
-      key: `mikvah:${p.startId}`,
-      kind: 'mikvah',
-      title: discreet ? `M > ${after}${p.projected ? ' ?' : ''}` : `ליל טבילה (אחר ${after})${suffix}`,
-      description: discreet ? '' : lines.join('\n'),
-      timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 90 * MINUTE },
-      projected: p.projected,
-    });
-  }
-  return out;
-}
-
-/** Every event of the timeline. The caller chooses which window of time to publish. */
-export function buildCalendar(t: Timeline, opts: CalendarOptions): CalendarEvent[] {
-  const events: CalendarEvent[] = [];
-  const clashNights = new Set(t.onot.filter(o => o.onMikvahNight).map(o => o.onah.abs));
-  for (const p of t.periods) {
-    events.push(...periodEvents(p, p.mikvahDoneAbs === null && clashNights.has(p.planMikvah.nightAbs), opts));
-  }
-  for (const o of t.onot) events.push(onahEvent(o, opts));
-  const seen = new Set<string>();
-  for (const e of events) {
-    if (seen.has(e.key)) throw new Error(`duplicate calendar event key ${e.key}`);
-    seen.add(e.key);
-  }
-  return events;
-}
-
 // ---------- reminders ----------
 
 export type ReminderKind = 'hefsek' | 'bedikah_morning' | 'bedikah_afternoon' | 'mikvah' | 'mikvah_confirm' | 'onah';
@@ -278,8 +76,16 @@ export interface Reminder {
   kind: ReminderKind;
   /** When to send it, epoch ms. */
   at: number;
+  /**
+   * It is no longer sent from this time on: a few hours after `at`, or the
+   * start of the next Shabbat or Yom Tov if that comes first.
+   */
+  until: number;
   text: string;
 }
+
+/** A reminder not sent within this long of its time is dropped. */
+export const REMINDER_WINDOW_MS = 3 * 3_600_000;
 
 export interface ReminderOptions {
   style: 'plain' | 'discreet';
@@ -318,6 +124,20 @@ const BEFORE_REST_DAY_MINUTES = 90;
 
 /** How long after nightfall a reminder held over Shabbat or Yom Tov is sent. */
 const AFTER_REST_DAY_MINUTES = 45;
+
+/**
+ * Candle lighting of the next Shabbat or Yom Tov that begins after `at`
+ * (the start of the first day of a stretch of such days).
+ */
+export function nextRestStart(at: number, ctx: ReminderContext): number {
+  const civil = localAbs(at, ctx.place.timeZone);
+  for (let day = civil; day <= civil + 9; day++) {
+    if (!isRestDay(day, ctx.yomTov) || isRestDay(day - 1, ctx.yomTov)) continue;
+    const start = dayTimes(day - 1, ctx.place, ctx.zopts).sunset - CANDLE_LIGHTING_MINUTES * MINUTE;
+    if (start > at) return start;
+  }
+  throw new Error('no Shabbat found in the coming days');
+}
 
 /**
  * The Shabbat or Yom Tov (as an R.D. Hebrew date) that an instant falls in,
@@ -409,7 +229,9 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
       if (onRestDay === 'drop') return;
       when = onRestDay === 'before' ? moveBeforeRestDay(at, ctx) : moveAfterRestDay(at, ctx);
     }
-    out.push({ key, kind, at: when, text });
+    let until = when + REMINDER_WINDOW_MS;
+    if (opts.beforeRestDays) until = Math.min(until, nextRestStart(when, ctx));
+    out.push({ key, kind, at: when, until, text });
   };
   const localTime = (abs: number, hh: number, mi: number): number => {
     const c = absToCivil(abs);

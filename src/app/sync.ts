@@ -8,7 +8,7 @@
  * by hand have no mk property and are never touched.
  */
 import { absToCivil, localToInstant } from '../engine/civil';
-import type { CalendarEvent } from '../engine/present';
+import type { CalendarEvent } from '../engine/calendar';
 import type { EventResource, ExistingEvent, GoogleCalendar } from './google';
 
 const COLOR: Record<CalendarEvent['kind'], string> = {

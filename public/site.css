@@ -2,7 +2,7 @@
   --bg: #f6f4ef;
   --card: #ffffff;
   --ink: #1f2430;
-  --muted: #646b7a;
+  --muted: #5d6473;
   --line: #dedad0;
   --accent: #2f5d8a;
   --accent-ink: #ffffff;
@@ -56,20 +56,180 @@ body {
   color: var(--ink);
   font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans Hebrew', Arial, sans-serif;
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
+
+a {
+  color: var(--accent);
+}
+
+/* ---------- shared header and footer ---------- */
+
+header.site {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+header.site .brand {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+header.site nav {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+header.site nav a:not(.button) {
+  color: var(--muted);
+  text-decoration: none;
+}
+header.site nav a:not(.button):hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+footer.site {
+  max-width: 960px;
+  margin: 32px auto 0;
+  padding: 24px 16px 48px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+footer.site a {
+  color: var(--muted);
+}
+
+/* ---------- landing page ---------- */
+
+main.landing {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+.hero {
+  padding: 40px 0 28px;
+  max-width: 700px;
+}
+.hero h1 {
+  font-size: clamp(1.9rem, 5vw, 2.7rem);
+  line-height: 1.15;
+  margin: 0 0 14px;
+}
+.hero p.lead {
+  font-size: 1.15rem;
+  color: var(--muted);
+  margin: 0 0 22px;
+}
+.hero .actions .button {
+  font-size: 1.05rem;
+  padding: 11px 20px;
+}
+.hero .note {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 8px 0 24px;
+}
+.grid .card {
+  margin: 0;
+}
+main.landing h2 {
+  font-size: 1.35rem;
+  margin: 36px 0 12px;
+}
+main.landing .card h3 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+main.landing .card p {
+  margin: 0;
+  color: var(--muted);
+}
+ol.steps {
+  padding-left: 1.3em;
+  margin: 0;
+}
+ol.steps li {
+  margin-bottom: 8px;
+}
+.phone-demo {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  max-width: 420px;
+}
+.bubble {
+  border-radius: 14px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  max-width: 88%;
+  font-size: 0.95rem;
+}
+.bubble.out {
+  background: var(--accent);
+  color: var(--accent-ink);
+  margin-left: auto;
+  width: fit-content;
+}
+.bubble.in {
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+/* ---------- document pages (help, privacy, terms) ---------- */
+
+main.doc {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px 16px 24px;
+}
+main.doc h1 {
+  font-size: 1.8rem;
+  margin: 12px 0 8px;
+}
+main.doc h2 {
+  font-size: 1.15rem;
+  margin: 28px 0 8px;
+}
+main.doc li {
+  margin-bottom: 6px;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0 12px;
+}
+th,
+td {
+  text-align: left;
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+/* ---------- the dashboard and the console ---------- */
 
 #root {
   max-width: 760px;
   margin: 0 auto;
   padding: 16px 16px 64px;
-}
-
-[dir='ltr'] {
-  text-align: left;
-}
-[dir='rtl'] {
-  text-align: right;
 }
 
 header.top {
@@ -83,6 +243,10 @@ header.top {
 header.top h1 {
   margin: 0;
   font-size: 1.5rem;
+}
+header.top h1 a {
+  color: inherit;
+  text-decoration: none;
 }
 header.top .today {
   color: var(--muted);
@@ -101,6 +265,7 @@ nav.tabs button {
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
+  border-radius: 0;
   color: var(--muted);
   font: inherit;
   padding: 10px 14px;
@@ -155,9 +320,11 @@ nav.tabs button[aria-selected='true'] {
 }
 .alert.ok {
   border-color: var(--ok);
+  background: transparent;
 }
 .alert.bad {
   border-color: var(--bad);
+  background: transparent;
 }
 
 .muted {
@@ -190,12 +357,20 @@ button.primary,
 button.danger {
   color: var(--bad);
 }
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+}
 button:disabled {
   opacity: 0.5;
   cursor: default;
 }
 button:focus-visible,
 .button:focus-visible,
+a:focus-visible,
 input:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--accent);
@@ -206,10 +381,26 @@ select:focus-visible {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 .actions button[aria-pressed='true'] {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.toggle button {
+  border: none;
+  border-radius: 0;
+}
+.toggle button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 
@@ -219,6 +410,7 @@ input[type='number'],
 input[type='date'],
 input[type='time'],
 input[type='tel'],
+input[type='email'],
 select {
   font: inherit;
   color: var(--ink);
@@ -231,6 +423,15 @@ select {
 input[type='number'] {
   width: 7.5em;
 }
+input.wide {
+  width: 100%;
+}
+input.code {
+  font-size: 1.4rem;
+  letter-spacing: 0.3em;
+  width: 9.5em;
+  text-align: center;
+}
 
 .field {
   margin: 12px 0;
@@ -241,7 +442,8 @@ input[type='number'] {
   font-weight: 600;
   margin-bottom: 4px;
 }
-.field .help {
+.field .help,
+.help {
   color: var(--muted);
   font-size: 0.875rem;
   margin: 2px 0 6px;
@@ -268,6 +470,7 @@ fieldset {
   border-top: 1px solid var(--line);
   margin: 0;
   padding: 14px 0 6px;
+  min-width: 0;
 }
 fieldset:first-of-type {
   border-top: none;
@@ -276,7 +479,7 @@ fieldset:first-of-type {
 legend {
   font-weight: 700;
   padding: 0;
-  float: inline-start;
+  float: left;
   width: 100%;
   margin-bottom: 4px;
 }
@@ -322,6 +525,29 @@ ul.list pre {
   font-size: 0.9rem;
   margin: 6px 0 0;
 }
+ul.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+ul.checklist li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 5px 0;
+}
+ul.checklist .mark {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  color: var(--muted);
+}
+ul.checklist li.done .mark {
+  color: var(--ok);
+}
+ul.checklist li.done .text {
+  color: var(--muted);
+}
 
 .dot {
   width: 12px;
@@ -365,9 +591,8 @@ code,
   border-radius: 8px;
   padding: 6px 10px;
   display: block;
-  direction: ltr;
-  text-align: left;
   user-select: all;
+  margin: 4px 0;
 }
 
 .phone {
@@ -378,20 +603,37 @@ code,
   border-top: none;
   padding-top: 0;
 }
+.phone .number {
+  font-weight: 600;
+}
 .phone .checks {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   column-gap: 12px;
   margin-bottom: 8px;
 }
+.tag {
+  display: inline-block;
+  font-size: 0.78rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 8px;
+  margin-left: 6px;
+  color: var(--muted);
+  font-weight: 400;
+}
 
 .login {
-  max-width: 360px;
-  margin: 12vh auto 0;
+  max-width: 400px;
+  margin: 6vh auto 0;
+}
+.login h2 {
+  font-size: 1.3rem;
 }
 .toast {
   position: fixed;
-  inset-inline: 16px;
+  left: 16px;
+  right: 16px;
   bottom: 16px;
   max-width: 728px;
   margin: 0 auto;
@@ -405,9 +647,6 @@ code,
 .toast.bad {
   background: var(--bad);
   color: #fff;
-}
-.spacer {
-  flex: 1;
 }
 hr {
   border: none;

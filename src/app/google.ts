@@ -10,6 +10,7 @@ import type { Deps } from './env';
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const API = 'https://www.googleapis.com/calendar/v3';
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.app.created';
 
@@ -83,6 +84,24 @@ export async function refreshAccessToken(deps: Deps, args: { clientId: string; c
   });
   if (typeof body.access_token !== 'string') throw new GoogleError('Google did not return an access token', 200, null);
   return body.access_token;
+}
+
+/**
+ * Withdraws the app's access to the Google account. Used when a household
+ * disconnects its calendar or deletes its account. Returns false if Google
+ * did not confirm; the saved token is deleted either way.
+ */
+export async function revokeToken(deps: Deps, refreshToken: string): Promise<boolean> {
+  try {
+    const res = await deps.fetch(REVOKE_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: refreshToken }).toString(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 /** The fields of a Google Calendar event that the app sets. */

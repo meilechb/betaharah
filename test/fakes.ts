@@ -4,7 +4,7 @@ import { getPlatformProxy } from 'wrangler';
 import { toBase64 } from '../src/app/crypto';
 import type { Deps, Env } from '../src/app/env';
 import type { EventResource } from '../src/app/google';
-import { ensureSchema } from '../src/app/schema';
+import { ensureSchema, TABLES } from '../src/app/schema';
 
 export interface TestDb {
   db: D1Database;
@@ -22,7 +22,7 @@ export async function startDb(): Promise<TestDb> {
   return {
     db,
     reset: async () => {
-      await db.batch(['kv', 'log', 'sms', 'reminders_sent', 'auth_failures'].map(t => db.prepare(`DELETE FROM ${t}`)));
+      await db.batch(TABLES.map(t => db.prepare(`DELETE FROM ${t}`)));
     },
     dispose: () => proxy.dispose(),
   };
@@ -45,11 +45,19 @@ export class FakeGoogle {
   calendars = new Map<string, { summary: string; timeZone: string; events: StoredEvent[] }>();
   calls: string[] = [];
   refreshTokenValid = true;
+  revoked: string[] = [];
   private n = 0;
 
   handle(url: URL, init: RequestInit | undefined): Response | null {
     const method = init?.method ?? 'GET';
     const json = (status: number, body: unknown): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    if (url.href.startsWith('https://oauth2.googleapis.com/revoke')) {
+      const token = new URLSearchParams(String(init?.body ?? '')).get('token');
+      this.calls.push(`revoke:${token}`);
+      this.revoked.push(String(token));
+      if (token === 'refresh-1') this.refreshTokenValid = false;
+      return json(200, {});
+    }
     if (url.href.startsWith('https://oauth2.googleapis.com/token')) {
       const params = new URLSearchParams(String(init?.body ?? ''));
       this.calls.push(`token:${params.get('grant_type')}`);
@@ -125,6 +133,8 @@ export class FakeGoogle {
 export class FakeTelnyx {
   sent: Array<{ from: string; to: string; text: string }> = [];
   failNext = 0;
+  /** Numbers that have opted out with the carrier: sending to them is refused. */
+  blocked = new Set<string>();
   privateKey!: CryptoKey;
   publicKey!: string;
 
@@ -146,18 +156,28 @@ export class FakeTelnyx {
       return new Response(JSON.stringify({ errors: [{ code: '40008', title: 'Message filtered' }] }), { status: 422 });
     }
     const body = JSON.parse(String(init?.body)) as { from: string; to: string; text: string };
+    if (this.blocked.has(body.to)) {
+      return new Response(JSON.stringify({ errors: [{ code: '40300', title: 'Blocked due to STOP message', detail: 'Messages cannot be sent due to an existing block rule.' }] }), { status: 400 });
+    }
     this.sent.push(body);
     return new Response(JSON.stringify({ data: { id: `msg-${this.sent.length}` } }), { status: 200 });
   }
 
   /** A signed webhook request for a received message. */
-  async inbound(args: { from: string; to: string; text: string; eventId: string; nowMs: number; eventType?: string }): Promise<{ body: string; headers: Record<string, string> }> {
+  async inbound(args: { from: string; to: string; text: string; eventId: string; nowMs: number; eventType?: string; autoresponseType?: string }): Promise<{ body: string; headers: Record<string, string> }> {
     const body = JSON.stringify({
       data: {
         event_type: args.eventType ?? 'message.received',
         id: args.eventId,
         occurred_at: new Date(args.nowMs).toISOString(),
-        payload: { direction: 'inbound', from: { phone_number: args.from }, to: [{ phone_number: args.to }], text: args.text, type: 'SMS' },
+        payload: {
+          direction: 'inbound',
+          from: { phone_number: args.from },
+          to: [{ phone_number: args.to }],
+          text: args.text,
+          type: 'SMS',
+          ...(args.autoresponseType ? { autoresponse_type: args.autoresponseType } : {}),
+        },
         record_type: 'event',
       },
       meta: { attempt: 1 },

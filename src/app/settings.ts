@@ -5,6 +5,7 @@
 import { civilToAbs, isValidTimeZone } from '../engine/civil';
 import { DEFAULT_REMINDER_OPTIONS, type ReminderKind, type ReminderOptions } from '../engine/present';
 import type { GeoPoint } from '../engine/sun';
+import type { TermLanguage } from '../engine/terms';
 import { dayTimes, type ZmanimOptions } from '../engine/zmanim';
 
 export interface PlaceSetting {
@@ -16,7 +17,7 @@ export interface PlaceSetting {
   elevation: number;
 }
 
-export interface PhoneSetting {
+export interface PhoneRecord {
   /** E.164, e.g. +17325550123 */
   number: string;
   name: string;
@@ -24,17 +25,27 @@ export interface PhoneSetting {
   canUpdate: boolean;
   /** Which reminders this phone receives. */
   reminders: ReminderKind[];
+  /** When the owner of the phone proved it by entering the code sent to it. */
+  verifiedAt: number | null;
+  /** When consent to receive text messages was given in the dashboard. */
+  consentAt: number | null;
+  /** The phone replied STOP; nothing is sent to it until it replies START. */
+  optedOut: boolean;
 }
 
 export interface AppSettings {
   place: PlaceSetting | null;
   useElevation: boolean;
+  /** Halachic terms in English letters or in Hebrew script, on the dashboard and in the calendar. */
+  terms: TermLanguage;
   calendar: {
-    style: 'hebrew' | 'discreet';
+    /** The calendar's name in Google Calendar and in the subscription feed. */
+    name: string;
+    /** Words (in the chosen form of the terms), or symbols only. */
+    style: 'words' | 'discreet';
     /** How far back events are kept up to date in Google Calendar. */
     historyDays: number;
   };
-  phones: PhoneSetting[];
   reminders: ReminderOptions;
   /**
    * When an event is recorded "now" within this many minutes of sunrise or
@@ -46,8 +57,8 @@ export interface AppSettings {
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   place: null,
   useElevation: false,
-  calendar: { style: 'hebrew', historyDays: 400 },
-  phones: [],
+  terms: 'en',
+  calendar: { name: 'Betaharah', style: 'words', historyDays: 400 },
   reminders: DEFAULT_REMINDER_OPTIONS,
   boundaryMarginMinutes: 20,
 };
@@ -93,6 +104,24 @@ function oneOf<T extends string>(input: unknown, what: string, values: readonly 
 }
 
 export const E164 = /^\+[1-9]\d{7,14}$/;
+
+/** Tidies a typed phone number and checks it is in full international form. */
+export function parsePhoneNumber(input: unknown, what = 'number'): string {
+  const number = str(input, what, 24).replace(/[\s().-]/g, '');
+  if (!E164.test(number)) throw new ValidationError('Write the full number with its country code, like +17325550123.');
+  return number;
+}
+
+/** The parts of a phone's settings that its household can change. */
+export function parsePhoneOptions(input: unknown): Pick<PhoneRecord, 'name' | 'canUpdate' | 'reminders'> {
+  const o = obj(input, 'phone');
+  if (!Array.isArray(o.reminders)) throw new ValidationError('reminders: expected a list');
+  return {
+    name: str(o.name, 'name', 40),
+    canUpdate: bool(o.canUpdate, 'canUpdate'),
+    reminders: [...new Set(o.reminders.map(r => oneOf(r, 'reminders', REMINDER_KINDS)))],
+  };
+}
 
 /** Checks that sunrise, sunset and nightfall exist on every day of a year at this place. */
 export function assertSunTimesExist(place: GeoPoint, zopts: ZmanimOptions): void {
@@ -142,28 +171,24 @@ function parseReminders(input: unknown): ReminderOptions {
   };
 }
 
+function calendarName(input: unknown): string {
+  const name = str(input, 'calendar.name', 40);
+  if (!name) throw new ValidationError('calendar.name: required');
+  return name;
+}
+
 export function parseAppSettings(input: unknown): AppSettings {
   const o = obj(input, 'settings');
   const calendar = obj(o.calendar, 'calendar');
-  if (!Array.isArray(o.phones)) throw new ValidationError('phones: expected a list');
-  if (o.phones.length > 6) throw new ValidationError('phones: at most 6');
-  const phones = o.phones.map((p, i) => {
-    const ph = obj(p, `phones[${i}]`);
-    const number = str(ph.number, `phones[${i}].number`, 20).replace(/[\s().-]/g, '');
-    if (!E164.test(number)) throw new ValidationError(`phones[${i}].number: write the full number with country code, like +17325550123`);
-    if (!Array.isArray(ph.reminders)) throw new ValidationError(`phones[${i}].reminders: expected a list`);
-    const reminders = [...new Set(ph.reminders.map(r => oneOf(r, `phones[${i}].reminders`, REMINDER_KINDS)))];
-    return { number, name: str(ph.name, `phones[${i}].name`, 40), canUpdate: bool(ph.canUpdate, `phones[${i}].canUpdate`), reminders };
-  });
-  if (new Set(phones.map(p => p.number)).size !== phones.length) throw new ValidationError('phones: the same number is listed twice');
   return {
     place: o.place === null || o.place === undefined ? null : parsePlace(o.place),
     useElevation: bool(o.useElevation, 'useElevation'),
+    terms: oneOf(o.terms, 'terms', ['en', 'he'] as const),
     calendar: {
-      style: oneOf(calendar.style, 'calendar.style', ['hebrew', 'discreet'] as const),
+      name: calendarName(calendar.name),
+      style: oneOf(calendar.style, 'calendar.style', ['words', 'discreet'] as const),
       historyDays: num(calendar.historyDays, 'calendar.historyDays', 30, 800, true),
     },
-    phones,
     reminders: parseReminders(o.reminders),
     boundaryMarginMinutes: num(o.boundaryMarginMinutes, 'boundaryMarginMinutes', 0, 120, true),
   };
