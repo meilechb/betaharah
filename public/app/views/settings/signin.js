@@ -86,7 +86,7 @@ function passwordForm() {
           );
         },
       },
-      textField({ id: 'npw1', label: acc.hasPassword ? 'New password' : 'Password', type: 'password', autocomplete: 'new-password', value: pw.a, help: 'At least 10 characters. A few words in a row are easy to remember.', error: pw.errA, oninput: e => (pw.a = e.target.value) }),
+      textField({ id: 'npw1', label: acc.hasPassword ? 'New password' : 'Password', type: 'password', autocomplete: 'new-password', value: pw.a, help: 'At least 10 characters.', error: pw.errA, oninput: e => (pw.a = e.target.value) }),
       textField({ id: 'npw2', label: 'The same password again', type: 'password', autocomplete: 'new-password', value: pw.b, error: pw.errB, oninput: e => (pw.b = e.target.value) }),
       pw.error ? alert({ kind: 'bad', role: 'alert' }, pw.error) : null,
       h(
@@ -146,7 +146,7 @@ function passwordGroup() {
     // The server refuses to set or remove a password here; say why instead of offering it.
     return group({ title: 'Password', id: 'sec-password' }, infoRow({ icon: 'lock', title: 'No password in this session', summary: GOOGLE_NO_PASSWORD }));
   }
-  const state = infoRow({ icon: 'lock', leadKind: acc.hasPassword ? 'ok' : null, title: acc.hasPassword ? 'A password is set' : 'No password', summary: acc.hasPassword ? 'You can sign in with it instead of waiting for a text.' : 'Optional. With a password you can sign in without waiting for a text.' });
+  const state = infoRow({ icon: 'lock', leadKind: acc.hasPassword ? 'ok' : null, title: acc.hasPassword ? 'A password is set' : 'No password', summary: acc.hasPassword ? null : 'Optional: sign in without waiting for a text.' });
   if (!acc.fresh) {
     return group(
       { title: 'Password', id: 'sec-password' },
@@ -154,7 +154,7 @@ function passwordGroup() {
       blockRow(
         alert(
           { kind: 'info', title: 'Sign in again first' },
-          'To ' + (acc.hasPassword ? 'change or remove the password' : 'set a password') + ', sign out and sign in again, then come back here within 15 minutes. Signing in again confirms that it is you, and not someone using a device you left signed in.',
+          'To ' + (acc.hasPassword ? 'change or remove the password' : 'set a password') + ', sign out, sign in again and come back within 15 minutes.',
         ),
         h('div', { class: 'actions' }, button({ label: 'Sign out to sign in again', icon: 'log-out', attrs: { id: 'pw-relogin' }, onclick: signOut })),
       ),
@@ -182,7 +182,7 @@ function passwordGroup() {
             }),
             S.sms.ready ? removeButton() : null,
           ),
-          !S.sms.ready ? h('p', { class: 'help' }, 'Sign-in by text message is not available on this site yet, so the password is the only way in and cannot be removed.') : null,
+          !S.sms.ready ? h('p', { class: 'help' }, 'Texting is not available here yet, so the password cannot be removed.') : null,
           pw.error ? alert({ kind: 'bad', role: 'alert' }, pw.error) : null,
         ),
   );
@@ -232,13 +232,13 @@ function googleGroup() {
   if (email) {
     return group(
       { title: 'Google', id: 'sec-google' },
-      infoRow({ icon: 'user', leadKind: 'ok', title: 'Google sign-in is on', summary: h('span', {}, 'This account can be signed in to with the Google account ', h('strong', { class: 'st-email' }, email), '.') }),
+      infoRow({ icon: 'user', leadKind: 'ok', title: 'Google sign-in is on', summary: h('strong', { class: 'st-email' }, email) }),
     );
   }
   if (!googleInfo().available) return null;
   return group(
     { title: 'Google', id: 'sec-google' },
-    infoRow({ icon: 'user', title: 'Add Google sign-in', summary: 'After you choose a Google account, you can sign in to this account with it as well as with your phone number.' }),
+    infoRow({ icon: 'user', title: 'Add Google sign-in', summary: 'Sign in with a Google account as well as your phone.' }),
     blockRow(h('div', { class: 'actions' }, googleButton())),
   );
 }
@@ -257,7 +257,7 @@ function view() {
       group(
         { title: 'Sessions', id: 'sec-sessions' },
         blockRow(
-          h('p', { class: 'help' }, google ? 'Sign out here, or on every device where this Google account is signed in to this account, for example after using a shared computer.' : 'Sign out here, or on every device where this phone number is signed in, for example after using a shared computer.'),
+          h('p', { class: 'help' }, 'After using a shared computer, sign out everywhere.'),
           h(
             'div',
             { class: 'actions' },

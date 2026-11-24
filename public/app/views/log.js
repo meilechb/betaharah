@@ -52,14 +52,14 @@ function entryRow(e) {
     h(
       'div',
       { class: 'entry-main' },
-      h('div', { class: 'title' }, h('strong', {}, kindText), rest ? h('span', { class: 'entry-date' }, rest) : null),
+      // The kind and the date on one line (a <b>, not the <strong> the stylesheet sets on a line of its own).
+      h('div', { class: 'title' }, h('b', {}, kindText), rest ? [' · ', h('span', { class: 'entry-date' }, rest)] : null),
       e.note ? h('p', { class: 'entry-note' }, icon('message', { size: 'sm' }), h('span', {}, e.note)) : null,
-      h('div', { class: 'when' }, sourceLabel(e.source) + ' · ' + when(e.createdAt)),
       open
         ? h(
             'div',
             { class: 'entry-options', id: 'entry-options-' + e.id },
-            h('p', { class: 'help' }, 'Removing an entry recalculates the calendar and the reminders. It is kept, marked as removed, in "Download my data".'),
+            h('p', { class: 'help when' }, sourceLabel(e.source) + ' · ' + when(e.createdAt)),
             button({
               label: 'Remove this entry',
               variant: 'danger',
@@ -82,11 +82,12 @@ function entryRow(e) {
       'div',
       { class: 'trail' },
       button({
-        label: open ? 'Close' : 'Options',
+        label: (open ? 'Close the options for ' : 'Options for ') + e.text,
+        iconOnly: true,
         size: 'sm',
         variant: 'link',
         icon: open ? 'chevron-up' : 'chevron-down',
-        attrs: { id: 'entry-more-' + e.id, 'aria-expanded': String(open), 'aria-controls': open ? 'entry-options-' + e.id : null, 'aria-label': (open ? 'Close the options for ' : 'Options for ') + e.text },
+        attrs: { id: 'entry-more-' + e.id, 'aria-expanded': String(open), 'aria-controls': open ? 'entry-options-' + e.id : null },
         onclick: () => {
           openEntry = open ? null : e.id;
           refresh('entries');
@@ -100,7 +101,7 @@ function entriesCard() {
   return card(
     { title: 'Entries', icon: 'list', headerAction: saveStatus('entries') },
     region('entries', () => {
-      if (S.entries.length === 0) return h('div', {}, emptyState({ icon: 'list', title: 'Nothing recorded yet.', body: t('Record a {flow} on the Today tab, or add a past entry below.') }));
+      if (S.entries.length === 0) return h('div', {}, emptyState({ icon: 'list', title: 'Nothing recorded yet.', body: t('Record a {flow} on Today, or add a past entry above.') }));
       const groups = periods();
       return h(
         'div',
@@ -130,10 +131,9 @@ function messagesCard() {
     S.demo ? tryTextCard() : null,
     card(
       { title: 'Text messages', icon: 'message', className: 'messages-card' },
-      S.demo ? h('p', { class: 'help' }, 'In the test account nothing is sent: replies, reminders and codes are kept here marked “simulated”.') : null,
       region('messages', () =>
         msgs.length === 0
-          ? h('div', {}, emptyState({ icon: 'message', title: 'No text messages yet.', body: S.sms.ready ? 'Texts sent to this account, and its replies and reminders, are listed here.' : 'Text messaging is not available on this site yet.' }))
+          ? h('div', {}, emptyState({ icon: 'message', title: 'No text messages yet.', body: S.sms.ready ? null : 'Text messaging is not available on this site yet.' }))
           : h(
               'div',
               {},

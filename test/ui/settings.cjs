@@ -104,9 +104,9 @@ const H = { 'x-betaharah': '1' };
       location: 'Lakewood, NJ · sunset today ' + sunset,
       phones: '2 phones · reminders on for both',
       reminders: '5 of 5 kinds on · nothing sent on Shabbat or Yom Tov',
-      calendar: 'Not in a calendar app · titles in words',
-      language: 'Halachic terms in English letters',
-      texting: 'Text (888) 555-0100 · ' + s.sms.usedThisMonth + ' of ' + s.sms.monthlyLimit + ' texts used this month',
+      calendar: 'Not connected',
+      language: 'Terms in English letters',
+      texting: '(888) 555-0100 · ' + s.sms.usedThisMonth + ' of ' + s.sms.monthlyLimit + ' texts this month',
       security: 'A code by text · no password',
     };
     for (const [id, text] of Object.entries(checks)) if ((await summary(id)) !== text) throw new Error(id + ': ' + (await summary(id)));
@@ -359,7 +359,7 @@ const H = { 'x-betaharah': '1' };
     await savedIn('calendar');
     if ((await state()).app.calendar.style !== 'discreet') throw new Error('style not saved');
     await backToHome();
-    if ((await summary('calendar')) !== 'Subscription link · discreet titles') throw new Error('summary: ' + (await summary('calendar')));
+    if ((await summary('calendar')) !== 'Subscription link · discreet') throw new Error('summary: ' + (await summary('calendar')));
     await openSection('calendar', 'Calendar');
     await page.click('label[for="r-cal-style-words"]');
     await savedIn('calendar');
@@ -386,7 +386,7 @@ const H = { 'x-betaharah': '1' };
     await savedIn('language');
     await page.waitForSelector('#lang-example .st-sample:has-text("הפסק")');
     await backToHome();
-    if ((await summary('language')) !== 'Halachic terms in Hebrew script') throw new Error('summary: ' + (await summary('language')));
+    if ((await summary('language')) !== 'Terms in Hebrew script') throw new Error('summary: ' + (await summary('language')));
     if (!(await summary('reminders')).includes('שבת')) throw new Error('reminders summary not in Hebrew terms: ' + (await summary('reminders')));
     await page.setViewportSize({ width: 360, height: 800 });
     for (const id of ['', 'location', 'phones', 'phones/17325550100', 'phones/add', 'reminders', 'reminders/scheduled', 'calendar', 'language', 'texting', 'security', 'data']) {

@@ -122,7 +122,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     for (const href of ['/terms', '/privacy', '/help']) if ((await page.locator(`form.login .legal a[href="${href}"]`).count()) !== 1) throw new Error('no link to ' + href);
     if (/google/i.test(await page.innerHTML('#root'))) throw new Error('Google is mentioned while it is not offered');
     const aside = await page.textContent('.auth-aside');
-    if (!aside.includes('No internet at home? Text JOIN to (732) 999-0000 and set everything up by text.')) throw new Error('aside: ' + aside);
+    if (!aside.includes('No internet? Text JOIN to (732) 999-0000 to use it by text.')) throw new Error('aside: ' + aside);
     const input = page.locator('#number');
     if ((await input.getAttribute('inputmode')) !== 'tel' || (await input.getAttribute('autocomplete')) !== 'tel' || (await input.getAttribute('type')) !== 'tel') throw new Error('keyboard attributes');
     if ((await page.evaluate(() => document.activeElement.id)) !== 'number') throw new Error('focus is not on the number');

@@ -236,7 +236,7 @@ const H = { 'x-betaharah': '1' };
     await tab('Log');
     const row = page.locator('li.entry:has-text("checked by the browser test")');
     await row.waitFor();
-    await row.locator('button:has-text("Options")').click();
+    await row.locator('button[aria-label^="Options for"]').click();
     await row.locator('button:has-text("Remove this entry")').click();
     await page.waitForSelector('dialog[open] h2:has-text("Remove this entry?")');
     await page.click('dialog button:has-text("Remove entry")');

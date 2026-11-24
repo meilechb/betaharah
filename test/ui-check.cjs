@@ -405,7 +405,7 @@ const problems = [];
     await page.waitForSelector('li.entry');
     if ((await page.locator('li.entry').count()) !== 3) throw new Error('entries ' + (await page.locator('li.entry').count()));
     const first = page.locator('li.entry').first();
-    await first.locator('button:has-text("Options")').click();
+    await first.locator('button[aria-label^="Options for"]').click();
     await first.locator('button:has-text("Remove this entry")').click();
     await page.waitForSelector('dialog[open]');
     for (let i = 0; i < 6; i += 1) await page.keyboard.press('Tab');

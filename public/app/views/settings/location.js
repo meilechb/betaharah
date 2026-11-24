@@ -134,7 +134,7 @@ function currentPlace() {
       'div',
       { class: 'st-hero none' },
       h('span', { class: 'st-hero-icon' }, icon('alert')),
-      h('div', {}, h('p', { class: 'st-hero-title' }, 'No location is chosen yet.'), h('p', { class: 'st-hero-meta' }, tn('Nothing can be calculated until one is chosen: not {sunset}, not the dates, not the reminders.'))),
+      h('div', {}, h('p', { class: 'st-hero-title' }, 'No location is chosen yet.'), h('p', { class: 'st-hero-meta' }, 'Dates and reminders need one.')),
     );
   }
   const sun = sunToday();
@@ -154,7 +154,6 @@ function currentPlace() {
             h('div', {}, h('dt', {}, icon('moon', { size: 'sm' }), tn('{sunset}', true)), h('dd', {}, sun.sunset || '—')),
           )
         : null,
-      sun ? h('p', { class: 'st-hero-note' }, 'Today’s times, as the calendar and the reminders use them.') : null,
     ),
   );
 }
@@ -189,7 +188,7 @@ function zipForm() {
         }),
         button({ label: 'Find', type: 'submit', variant: 'primary', attrs: { id: 'zip-find' } }),
       ),
-      h('p', { class: 'help', id: 'zip-help' }, 'A 5-digit US ZIP code or a Canadian postal code.'),
+      h('p', { class: 'help', id: 'zip-help' }, 'US ZIP or Canadian postal code.'),
       errorText('zip-error', zipError),
     ),
   );
@@ -202,7 +201,7 @@ function view() {
     title: 'Location',
     parent: '',
     statusKey: 'location',
-    lead: tn('Sunrise, {sunset} and {nightfall} are calculated for this place. Change it when you travel.'),
+    lead: 'Change it when you travel.',
     body: [
       currentPlace(),
       refused
@@ -234,7 +233,6 @@ function view() {
               'div',
               { class: 'st-device' },
               button({ label: 'Use this device’s location', icon: 'map', attrs: { id: 'place-device' }, onclick: e => useDevice(e.currentTarget) }),
-              h('p', { class: 'help' }, 'Your browser asks first.'),
               geoError ? h('div', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, geoError)) : null,
             ),
           ),
@@ -242,13 +240,13 @@ function view() {
       ),
       more(
         { id: 'loc-adv', summary: 'Advanced: coordinates and elevation' },
-        group({ title: 'Coordinates', intro: 'For a place that is not in the list and has no ZIP code.' }, blockRow(coordinatesForm())),
+        group({ title: 'Coordinates' }, blockRow(coordinatesForm())),
         group(
           {},
           switchRow({
             id: 'use-elevation',
             label: tn('Adjust sunrise and {sunset} for elevation'),
-            help: S.app.useElevation ? 'On: the times are for ' + (place ? place.elevation : 0) + ' metres above sea level.' : 'Off: the times at sea level, as most calendars print them.',
+            help: S.app.useElevation ? 'Times for ' + (place ? place.elevation : 0) + ' metres above sea level.' : 'Times at sea level, as most calendars print them.',
             checked: S.app.useElevation,
             onchange: e => {
               const on = e.target.checked;
@@ -271,6 +269,6 @@ export const locationSection = {
     const sun = sunToday();
     return [placeName(p), sun && sun.sunset ? [tn(' · {sunset} today '), sun.sunset] : ''];
   },
-  flag: () => (S.app.place ? null : { kind: 'warn', text: 'Needed to calculate anything' }),
+  flag: () => (S.app.place ? null : { kind: 'warn', text: 'Needed for the dates' }),
   view,
 };

@@ -93,7 +93,7 @@ export async function showSignIn(params) {
       auth.linkProblem =
         e && e.status !== undefined
           ? 'This link has expired or was already used. Sign in below instead.'
-          : 'The link could not be checked because the site could not be reached. Check the internet connection and open the link again, or sign in below.';
+          : 'The site could not be reached. Check the internet connection and open the link again, or sign in below.';
     }
   }
   const invite = params.get('invite');
@@ -103,7 +103,7 @@ export async function showSignIn(params) {
       auth.invite = invite;
       auth.inviteKind = info.kind;
     } catch (e) {
-      auth.inviteProblem = e && e.status === 404 ? 'This invitation link is not valid any more: it was used already or it has expired. Ask the person who sent it for a new one.' : messageOf(e);
+      auth.inviteProblem = e && e.status === 404 ? 'This invitation link is not valid any more: it was used or has expired. Ask for a new one.' : messageOf(e);
     }
   }
   const googleError = params.get('google_error');
@@ -231,8 +231,8 @@ export function renderAuth() {
   if (a.googleError) notes.push(alert({ kind: 'bad', role: 'alert', title: 'Signing in with Google did not work' }, a.googleError));
   if (a.linkProblem) notes.push(alert({ kind: 'bad', role: 'alert' }, a.linkProblem));
   if (a.inviteProblem) notes.push(alert({ kind: 'bad', role: 'alert' }, a.inviteProblem));
-  if (!a.invite && P.signup === 'invite') notes.push(alert({ kind: 'info' }, 'New accounts are by invitation only. If you already have an account, sign in here.'));
-  if (!a.invite && P.signup === 'closed') notes.push(alert({ kind: 'info' }, 'New accounts cannot be opened at the moment. If you already have an account, sign in here.'));
+  if (!a.invite && P.signup === 'invite') notes.push(alert({ kind: 'info' }, 'New accounts are by invitation only.'));
+  if (!a.invite && P.signup === 'closed') notes.push(alert({ kind: 'info' }, 'New accounts cannot be opened at the moment.'));
 
   const form = (screen, onsubmit, ...children) =>
     h(
@@ -265,7 +265,7 @@ export function renderAuth() {
       },
       h('h2', {}, 'Set up your account'),
       notes,
-      h('p', { class: 'muted' }, 'You were invited to Betaharah. Enter the mobile number the invitation was made for, and choose a password.'),
+      h('p', { class: 'muted' }, 'Use the number the invitation was made for.'),
       numberField(),
       textField({
         id: 'pw1',
@@ -276,7 +276,7 @@ export function renderAuth() {
         required: true,
         minlength: 10,
         value: a.password,
-        help: 'At least 10 characters. A few ordinary words in a row work well.',
+        help: 'At least 10 characters.',
         error: err('pw1'),
         oninput: e => {
           a.password = e.target.value;
@@ -324,11 +324,11 @@ export function renderAuth() {
         ? alert(
             { kind: 'info' },
             P.google
-              ? 'This invitation is used with a code sent by text message, which this site cannot send yet. Continue with Google below, or open the link again later.'
-              : 'This invitation is used with a code sent by text message, which this site cannot send yet; open the link again later.',
+              ? 'This invitation needs a texted code, which this site cannot send yet. Continue with Google, or open the link again later.'
+              : 'This invitation needs a texted code, which this site cannot send yet. Open the link again later.',
           )
         : !P.sms
-          ? alert({ kind: 'info' }, P.google ? 'Sign-in by text message is not available yet. Sign in with your password, or continue with Google.' : 'Sign-in by text message is not available yet, so sign in with your password.')
+          ? alert({ kind: 'info' }, P.google ? 'Sign-in by text message is not available yet. Use your password or Google.' : 'Sign-in by text message is not available yet. Use your password.')
           : null,
       numberField(),
       textField({
@@ -349,7 +349,6 @@ export function renderAuth() {
       submit('Sign in', a.busy),
       googleChoice(a.inviteKind === 'signup' ? a.invite : null),
       P.sms ? linkRow('Sign in with a texted code instead', () => set({ mode: 'code', step: 'number', errors: {}, message: '', focus: 'number' })) : null,
-      P.sms ? h('p', { class: 'muted small' }, 'A password is optional. Without one, sign in with a code texted to your phone.') : null,
       legal(),
     );
   } else if (a.step === 'number') {
@@ -367,13 +366,7 @@ export function renderAuth() {
       },
       h('h2', {}, signup ? 'Create your account' : P.signup === 'open' ? 'Sign in or sign up' : 'Sign in'),
       notes,
-      h(
-        'p',
-        { class: 'muted' },
-        signup
-          ? 'You were invited to Betaharah. Enter your mobile number, and we text you a 6-digit code to open your account.'
-          : 'Enter your mobile number. We text you a 6-digit code. That is all it takes, the first time and every time.',
-      ),
+      signup ? h('p', { class: 'muted' }, 'You were invited to Betaharah.') : null,
       numberField(true),
       submit('Text me a code', a.busy),
       googleChoice(signup ? a.invite : null),
@@ -385,7 +378,7 @@ export function renderAuth() {
         'p',
         { class: 'auth-aside muted' },
         icon('message'),
-        h('span', {}, 'No internet at home? Text ', h('strong', {}, 'JOIN'), ' to ', h('a', { href: 'sms:' + P.textingNumber, class: 'nowrap' }, pretty(P.textingNumber)), ' and set everything up by text.'),
+        h('span', {}, 'No internet? Text ', h('strong', {}, 'JOIN'), ' to ', h('a', { href: 'sms:' + P.textingNumber, class: 'nowrap' }, pretty(P.textingNumber)), ' to use it by text.'),
       );
     }
   } else {
@@ -400,7 +393,7 @@ export function renderAuth() {
       h('h2', {}, 'Enter the code'),
       notes,
       h('p', {}, 'If this number can sign in here, a 6-digit code is on its way to ', h('strong', { class: 'nowrap' }, pretty(a.sentTo)), '.'),
-      h('p', { class: 'muted small' }, 'The code works for ' + minutes + ' minutes. It can take a minute to arrive.'),
+      h('p', { class: 'muted small' }, 'The code works for ' + minutes + ' minutes.'),
       codeField({
         id: 'code',
         label: 'The 6-digit code',
@@ -428,16 +421,10 @@ export function renderAuth() {
         h(
           'ul',
           {},
-          h('li', {}, 'Wait a minute. Text messages sometimes arrive late.'),
-          h('li', {}, 'Check the number above. If it is not right, choose “Use a different number”.'),
-          h(
-            'li',
-            {},
-            P.signup === 'open'
-              ? 'A code is sent only to a number that can sign in here.'
-              : 'A code is sent only to a number that already has an account here' + (a.invite ? ', or that uses a valid invitation.' : '. New accounts are by invitation.'),
-          ),
-          h('li', {}, 'If you set a password, you can sign in with it instead.'),
+          h('li', {}, 'Wait a minute. Texts sometimes arrive late.'),
+          h('li', {}, 'Check the number above.'),
+          P.signup === 'open' ? null : h('li', {}, 'A code is sent only to a number with an account here' + (a.invite ? ', or with a valid invitation.' : '.')),
+          h('li', {}, 'If you set a password, sign in with it instead.'),
           P.contactEmail ? h('li', {}, 'Still nothing? Write to ' + (P.contactName || 'us') + ' at ', h('a', { href: 'mailto:' + P.contactEmail }, P.contactEmail), '.') : null,
         ),
       ),
@@ -484,7 +471,7 @@ function startResendTicker() {
             btn.disabled = true;
             api('POST', '/api/auth/code', { number: a.sentTo, invite: a.invite || undefined }).then(
               () => {
-                Object.assign(a, { sentAt: Date.now(), code: '', errors: {}, status: 'A new code was asked for. If this number can sign in here, it is on its way. Use the newest code.', focus: 'code' });
+                Object.assign(a, { sentAt: Date.now(), code: '', errors: {}, status: 'A new code was asked for. Use the newest code.', focus: 'code' });
                 renderAuth();
               },
               err => {

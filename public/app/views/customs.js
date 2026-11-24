@@ -31,7 +31,7 @@ setLeaveGuard({
   ask: async () => {
     const ok = await confirmDialog({
       title: 'Leave without saving your customs?',
-      body: 'The changes you made on this tab are not saved. If you leave, they are lost.',
+      body: 'Your changes on this tab will be lost.',
       confirmLabel: 'Leave without saving',
       cancelLabel: 'Stay and save',
       danger: true,
@@ -213,7 +213,7 @@ function saveBar() {
           'div',
           { class: 'save-bar-text' },
           h('strong', {}, dirty ? 'Unsaved changes' + (n > 1 ? ' (' + n + ')' : '') : 'Not confirmed yet'),
-          h('span', {}, dirty ? 'Save them, or discard them to go back to what was saved.' : 'Until you save, the stricter option of each is used.'),
+          dirty ? null : h('span', {}, 'The stricter options are in use until you save.'),
           saveError ? h('span', { class: 'error', role: 'alert', id: 'cu-save-error', tabindex: '-1' }, icon('alert', { size: 'sm' }), saveError) : null,
         ),
         h(
@@ -250,7 +250,7 @@ export function viewCustoms() {
       'section',
       { class: 'card customs-intro' },
       h('h2', {}, 'Customs'),
-      h('p', {}, t('Wherever customs differ, choose here as your {rav} instructs. This calendar does not rule: for a {stain}, for a {bedikah}, and for every doubt, ask your {rav}.')),
+      h('p', {}, t('Choose as your {rav} instructs. For a {stain}, a {bedikah} or any doubt, ask your {rav}.')),
       termsToggle({
         keep: () => {
           const kept = clone(draft.halachic);
@@ -260,10 +260,9 @@ export function viewCustoms() {
           };
         },
       }),
-      h('p', { class: 'help' }, 'This chooses how halachic terms are written on the whole site and in your calendar. The site itself stays in English.'),
       S.halachic.confirmedAt
         ? h('p', { class: 'small muted last-saved' }, icon('check', { size: 'sm' }), 'Last saved: ' + when(S.halachic.confirmedAt))
-        : alert({ kind: 'warn', title: 'Not yet confirmed: the stricter options are in use' }, t('These customs have not been saved yet. Until they are, the stricter option of each is used. Review them, ideally with your {rav}, and choose Save and confirm.')),
+        : alert({ kind: 'warn', title: 'Not confirmed yet: the stricter options are in use' }, t('Review them with your {rav}, then choose Save and confirm.')),
     ),
     h(
       'div',

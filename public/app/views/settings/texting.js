@@ -23,17 +23,17 @@ export const DIGITS = [
 ];
 
 const WORDS = [
-  ['MENU', 'Lists every word'],
-  ['STATUS', 'Where you are now (the same as 9)'],
-  ['HISTORY', 'The latest five entries; ERASE and a letter removes one'],
-  ['LOCATION', 'Shows the place; LOCATION and a ZIP code changes it'],
-  ['CUSTOMS', 'Shows or changes one custom at a time'],
-  ['REMINDERS', 'This phone’s reminders: ON, OFF, KINDS, WORDING'],
-  ['PHONES', 'The phones on the account; REMOVE or LEAVE takes one off'],
-  ['ADD', 'A code for another phone to join this account'],
-  ['CALENDAR', 'The calendar link: LINK, NEW or OFF'],
-  ['WEB', 'A one-time sign-in link to this website'],
-  ['SETUP', 'Goes through the first questions again'],
+  ['MENU', 'Every word'],
+  ['STATUS', 'Where you are now (same as 9)'],
+  ['HISTORY', 'The latest entries, to remove one'],
+  ['LOCATION', 'Show or change the place'],
+  ['CUSTOMS', 'Show or change a custom'],
+  ['REMINDERS', 'This phone’s reminders'],
+  ['PHONES', 'The phones on the account'],
+  ['ADD', 'A code for another phone to join'],
+  ['CALENDAR', 'The calendar link'],
+  ['WEB', 'A one-time sign-in link'],
+  ['SETUP', 'The first questions again'],
   ['DELETE ACCOUNT', 'Deletes the account, after asking'],
 ];
 
@@ -77,7 +77,7 @@ function usage() {
   return blockRow(
     h('p', { class: 'st-block-title', id: 'usage-label' }, (sms.simulated ? 'Texts simulated this month: ' : 'Texts sent this month: ') + used + ' of ' + limit),
     h('span', { class: 'st-meter', role: 'img', 'aria-labelledby': 'usage-label' }, bar),
-    h('p', { class: 'help' }, used >= limit ? 'The limit is reached. Reminders and replies stop until next month; recording on this website still works.' : 'Reminders and replies count toward this limit. It starts again on the 1st of each month.'),
+    h('p', { class: 'help' }, used >= limit ? 'Limit reached: no texts until the 1st. This website still works.' : 'Starts again on the 1st of each month.'),
   );
 }
 
@@ -88,7 +88,7 @@ function view() {
       title: 'Texting',
       parent: '',
       body: [
-        group({ title: 'Not available yet' }, infoRow({ icon: 'info', title: 'Text messaging is not available on this site yet.', summary: 'Everything can be recorded here on the website. Once texting is set up, this page shows the number to text and the commands.' })),
+        group({ title: 'Not available yet' }, infoRow({ icon: 'info', title: 'Text messaging is not available on this site yet.', summary: 'Record everything here on the website.' })),
       ],
     };
   }
@@ -97,14 +97,14 @@ function view() {
   return {
     title: 'Texting',
     parent: '',
-    lead: 'Record and check by text message, from a phone on this account that may record by text.',
+    lead: 'Record and check by text, from a phone on this account.',
     body: [
       S.phones.length === 0
         ? h(
             'p',
             { class: 'st-note', id: 'txt-no-phone' },
             icon('info', { size: 'sm' }),
-            h('span', {}, 'No phone is on this account yet, and texts are accepted only from a phone on the account. ', h('a', { href: '#settings/phones/add' }, 'Add a phone under Phones'), '.'),
+            h('span', {}, 'No phone is on this account yet. ', h('a', { href: '#settings/phones/add' }, 'Add a phone'), ' to text from it.'),
           )
         : null,
       group(
@@ -113,15 +113,15 @@ function view() {
           icon: 'message',
           leadKind: 'accent',
           title: h('span', { class: 'st-big' }, pretty(sms.number)),
-          summary: sms.simulated ? 'In the test account nothing is sent. Use “Try a text” on the Today tab to see the replies.' : 'Save it in your contacts as Betaharah.',
+          summary: sms.simulated ? 'Nothing is sent. Use “Try a text” on Today.' : 'Save it in your contacts as Betaharah.',
           trail: sms.simulated ? null : h('a', { class: 'button sm', href: 'sms:' + sms.number, id: 'txt-open' }, icon('message'), 'Text it'),
         }),
         usage(),
       ),
       group({ title: 'Record with a digit', id: 'txt-digits', footer: note }, blockRow(commandTable('cmd-digits', 'Digits', digits))),
-      group({ title: 'Words', id: 'txt-words', footer: 'Capital letters are not needed. Each word sent alone shows its own options.' }, blockRow(commandTable('cmd-words', 'Words', WORDS, true))),
+      group({ title: 'Words', id: 'txt-words', footer: 'Send a word alone to see its options.' }, blockRow(commandTable('cmd-words', 'Words', WORDS, true))),
       group({ title: 'For every text service', id: 'txt-carrier' }, blockRow(commandTable('cmd-carrier', 'Carrier words', CARRIER))),
-      h('p', { class: 'help st-foot' }, 'All the replies are described on the ', h('a', { href: '/help' }, 'Help page'), '.'),
+      h('p', { class: 'help st-foot' }, 'More on the ', h('a', { href: '/help' }, 'Help page'), '.'),
     ],
   };
 }
@@ -133,7 +133,7 @@ export const textingSection = {
   summary: () => {
     const sms = S.sms;
     if (!sms.ready) return 'Not available on this site yet';
-    return 'Text ' + pretty(sms.number) + ' · ' + sms.usedThisMonth + ' of ' + sms.monthlyLimit + ' texts used this month';
+    return pretty(sms.number) + ' · ' + sms.usedThisMonth + ' of ' + sms.monthlyLimit + ' texts this month';
   },
   flag: () => {
     const sms = S.sms;

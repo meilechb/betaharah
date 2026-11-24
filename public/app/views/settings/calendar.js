@@ -39,8 +39,8 @@ function googleGroup() {
       leadKind: g.connected ? (err ? 'warn' : 'ok') : null,
       title: g.connected ? 'Connected' : 'Not connected',
       summary: g.connected
-        ? 'The calendar “' + S.app.calendar.name + '” in your Google account is kept up to date.' + (sync.lastOkAt ? ' Last updated ' + when(sync.lastOkAt) + (sync.dirty ? '; changes waiting.' : '.') : '')
-        : 'The site creates one calendar in your Google account and keeps it up to date. It can see and change only that calendar.',
+        ? '“' + S.app.calendar.name + '”' + (sync.lastOkAt ? ' · updated ' + when(sync.lastOkAt) + (sync.dirty ? '; changes waiting' : '') : '')
+        : 'Adds one calendar to your Google account. The site can change only that calendar.',
     }),
     err ? blockRow(alert({ kind: 'warn', title: 'The last update failed' }, err)) : null,
     blockRow(
@@ -63,7 +63,7 @@ function googleGroup() {
             })
           : linkButton({ href: '/api/google/start', label: 'Connect Google Calendar', variant: 'primary', icon: 'calendar', attrs: { id: 'google-connect' } }),
       ),
-      g.connected ? h('p', { class: 'help' }, 'To share it with your spouse, share the calendar from Google Calendar.') : null,
+      g.connected ? h('p', { class: 'help' }, 'To share it, use Google Calendar.') : null,
     ),
   );
 }
@@ -73,17 +73,17 @@ function linkGroup() {
   if (!cal.link) {
     return group(
       { title: 'Subscription link', id: 'cal-link' },
-      infoRow({ icon: 'link', title: 'No link yet', summary: 'A private address that Apple Calendar, Outlook or Google Calendar can subscribe to. No account needs to be connected.' }),
+      infoRow({ icon: 'link', title: 'No link yet', summary: 'A private address for Apple Calendar, Outlook or Google Calendar.' }),
       blockRow(h('div', { class: 'actions' }, button({ label: 'Create a subscription link', icon: 'link', variant: S.calendar.google.connected ? 'secondary' : 'primary', attrs: { id: 'link-create' }, onclick: () => save('calendar', () => api('POST', '/api/calendar-link'), { message: 'The link is ready' }) }))),
     );
   }
   return group(
-    { title: 'Subscription link', id: 'cal-link', footer: 'Anyone who has the address can read the calendar, so share it only with your spouse. Calendar apps look for changes on their own schedule; Google says it can take up to 12 hours.' },
-    infoRow({ icon: 'link', leadKind: 'ok', title: 'The link is on', summary: 'Add it once in your calendar app; it stays up to date from then on.' }),
+    { title: 'Subscription link', id: 'cal-link', footer: 'Anyone with the link can read the calendar: share it only with your spouse. Changes can take up to 12 hours to show.' },
+    infoRow({ icon: 'link', leadKind: 'ok', title: 'The link is on' }),
     blockRow(
       copyField({ value: cal.link, label: 'Copy link', copiedMessage: 'The link is copied.' }),
       h('div', { class: 'actions' }, linkButton({ href: cal.link.replace(/^https?:/, 'webcal:'), label: 'Open in my calendar app', icon: 'calendar', variant: 'primary', attrs: { id: 'link-open' } })),
-      h('p', { class: 'help' }, 'Or add the address in your calendar app as a subscribed calendar. In Google Calendar: Other calendars, then +, then From URL.'),
+      h('p', { class: 'help' }, 'In Google Calendar: Other calendars, +, From URL.'),
     ),
   );
 }
@@ -132,7 +132,7 @@ function nameField() {
           else refresh('cal-name-wrap');
         },
       }),
-      h('p', { class: 'help', id: 'cal-name-help' }, 'Used when the calendar is first created. Afterwards, rename it in your calendar app. Saved when you leave the box.'),
+      h('p', { class: 'help', id: 'cal-name-help' }, 'Used when the calendar is first made.'),
       errorText('cal-name-error', nameError),
     ),
   );
@@ -164,7 +164,7 @@ function historyField() {
           saveApp('calendar', a => (a.calendar.historyDays = v));
         },
       }),
-      h('p', { class: 'help', id: 'cal-history-help' }, 'From 30 to 800. Older events are left as they are.'),
+      h('p', { class: 'help', id: 'cal-history-help' }, 'From 30 to 800.'),
       errorText('cal-history-error', historyError),
     ),
   );
@@ -178,7 +178,7 @@ function moreGroup() {
         button({
           label: 'Replace link',
           attrs: { id: 'link-replace' },
-          onclick: confirmThen({ title: 'Replace the link?', body: 'The old address stops working at once, and calendars subscribed to it stop updating. You then add the new one.', confirmLabel: 'Replace link', danger: true }, () => api('POST', '/api/calendar-link'), 'A new link was made'),
+          onclick: confirmThen({ title: 'Replace the link?', body: 'The old address stops working at once, and calendars subscribed to it stop updating.', confirmLabel: 'Replace link', danger: true }, () => api('POST', '/api/calendar-link'), 'A new link was made'),
         }),
         button({
           label: 'Remove link',
@@ -202,7 +202,7 @@ function moreGroup() {
       : null;
   return more(
     { id: 'cal-more', summary: 'More' },
-    linkActions ? group({ title: 'Subscription link' }, blockRow(h('p', { class: 'help' }, 'Replacing makes a new address and stops the old one, for example after it was shared by mistake.'), h('div', { class: 'actions' }, linkActions))) : null,
+    linkActions ? group({ title: 'Subscription link' }, blockRow(h('p', { class: 'help' }, 'Replace it if it was shared by mistake.'), h('div', { class: 'actions' }, linkActions))) : null,
     googleActions ? group({ title: 'Google Calendar' }, blockRow(h('div', { class: 'actions' }, googleActions))) : null,
     g.available ? group({ title: 'History' }, blockRow(historyField())) : null,
     !linkActions && !googleActions && !g.available ? h('p', { class: 'help' }, 'Nothing more to set until a link is created.') : null,
@@ -215,20 +215,20 @@ function view() {
     title: 'Calendar',
     parent: '',
     statusKey: 'calendar',
-    lead: 'Optional. See your dates in your own calendar app. This page always shows everything in words.',
+    lead: 'Optional: see your dates in your calendar app.',
     body: [
       googleGroup(),
       linkGroup(),
       group(
-        { title: 'How events look in the calendar app', id: 'cal-style' },
+        { title: 'Event titles', id: 'cal-style' },
         blockRow(
           choiceCards({
             name: 'cal-style',
-            legend: 'How events look in the calendar app',
+            legend: 'Event titles in the calendar app',
             value: style,
             options: [
-              { value: 'words', label: 'In words', help: 'Anyone who sees your calendar can read what each event is.', example: preview('words') },
-              { value: 'discreet', label: 'Discreet', help: tn('Symbols only: • a start, H {hefsek}, 1/7 to 7/7 {clean_days}, M {mikvah_night}, ◆ {veset_onah}, ◇ {or_zarua}. “?” marks a projected date.'), example: preview('discreet') },
+              { value: 'words', label: 'In words', help: 'Anyone who sees your calendar can read them.', example: preview('words') },
+              { value: 'discreet', label: 'Discreet', help: tn('Symbols: • start, H {hefsek}, 1/7–7/7 {clean_days}, M {mikvah_night}, ◆ {veset_onah}, ◇ {or_zarua}, ? projected.'), example: preview('discreet') },
             ],
             onchange: v => saveApp('calendar', a => (a.calendar.style = v)),
           }),
@@ -249,8 +249,8 @@ export const calendarSection = {
     const ways = [];
     if (cal.google.connected) ways.push('Google Calendar');
     if (cal.link) ways.push('Subscription link');
-    const head = ways.length ? ways.join(' and ') : 'Not in a calendar app';
-    return head + ' · ' + (S.app.calendar.style === 'words' ? 'titles in words' : 'discreet titles');
+    if (!ways.length) return 'Not connected';
+    return ways.join(' and ') + ' · ' + (S.app.calendar.style === 'words' ? 'in words' : 'discreet');
   },
   flag: () => (S.calendar.google.connected && googleError() ? { kind: 'warn', text: 'Google Calendar could not be updated' } : null),
   view,
