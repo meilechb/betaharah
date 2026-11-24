@@ -128,8 +128,9 @@ site can send is 3,000 texts a month.
    number with SMS.
 2. Create a **Messaging Profile** and assign the number to it. Leave the
    profile's opt-out settings at their defaults (do not add custom
-   auto-responses: on toll-free numbers the carrier answers STOP and START
-   itself, and the site answers HELP).
+   auto-responses: on toll-free numbers the carrier confirms STOP and START
+   itself; the site answers HELP and START with the wording in the table
+   below).
    Note the profile's **Messaging Profile ID**: RCS needs it later.
 3. Set the profile's **inbound webhook URL** to the address the console
    shows (`https://betaharah.com/webhooks/telnyx`).

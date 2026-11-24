@@ -357,8 +357,8 @@ export function buildChecklist(s: ChecklistInput): ChecklistItem[] {
   );
   items.push(
     s.googleReady
-      ? { key: 'google', title: 'Google Calendar (optional)', status: 'done', detail: 'People can connect their Google Calendar.', next: null, section: 'keys', optional: true }
-      : { key: 'google', title: 'Google Calendar (optional)', status: 'optional', detail: 'Not set up. People can still use the calendar subscription link.', next: null, section: 'keys', optional: true },
+      ? { key: 'google', title: 'Google: sign-in and Calendar (optional)', status: 'done', detail: 'People can sign in with Google and connect their Google Calendar.', next: null, section: 'keys', optional: true }
+      : { key: 'google', title: 'Google: sign-in and Calendar (optional)', status: 'optional', detail: 'Not set up. People sign in with a phone number, and can still use the calendar subscription link.', next: null, section: 'keys', optional: true },
   );
   return items;
 }

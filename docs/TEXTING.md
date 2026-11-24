@@ -46,9 +46,12 @@ text always says in words what to send.
    stays open). None of them is used as a command word here. YES is used
    only to confirm an action that was just described, never as an opt-in.
    STOP: the carrier confirms it, and the site sends nothing more to that
-   phone (not even replies) until it texts START. HELP gets:
-   `Betaharah: mikvah calendar reminders and replies. Text MENU for the commands. Help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.`
-   (nothing, when Telnyx has already answered the HELP itself).
+   phone (not even replies) until it texts START. HELP and START get the
+   wording filed for the toll-free verification, also when Telnyx marks
+   the keyword as already answered. HELP:
+   `Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.`
+   START:
+   `Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.`
 8. **Anything that cannot be undone asks first.** Erasing an entry,
    removing a phone, leaving the account, deleting the account, replacing
    or removing the calendar link, and pausing vesatot each need YES.
@@ -124,9 +127,10 @@ By invitation, one reply is sent, because someone who heard about the
 service needs to know that an invitation word is what is missing; a wrong
 word gets one reply, because people mistype.
 
-`HELP` from a number without an account gets the HELP text above (while
-sign-up by text is allowed, and within the same limits); STOP and START
-get nothing from the site.
+`HELP` and `START` from a number without an account get the two texts
+above, whatever the sign-up settings are (a carrier's check of the number
+texts these), within their own limits: 4 replies to one number in 24
+hours and 100 a day for the site. STOP gets nothing from the site.
 
 **Limits for numbers without an account** (each reply costs about a cent;
 the constants are in `src/app/conversation.ts`, and everything is counted
