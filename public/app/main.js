@@ -33,7 +33,9 @@ const TAB_IDS = TABS.map(x => x.id);
 
 /** The tab drawn last: a redraw of the same tab keeps the page's height while it is rebuilt. */
 let lastDrawn = null;
-let tab = TAB_IDS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'today';
+/** The tab named in the address: the part of the hash before the first "/" ("#settings/phones" is the Settings tab). */
+const hashTab = () => location.hash.slice(1).split('/')[0];
+let tab = TAB_IDS.includes(hashTab()) ? hashTab() : 'today';
 
 /**
  * The date line: the Hebrew date, day or night, the civil date, and today's sunset.
@@ -185,7 +187,7 @@ configureApi({
 });
 
 window.addEventListener('hashchange', async () => {
-  const next = location.hash.slice(1) || 'today';
+  const next = hashTab() || 'today';
   if (!S || !TAB_IDS.includes(next) || next === tab) return;
   if (!(await mayLeave())) {
     history.replaceState(null, '', '#' + tab);

@@ -6,7 +6,7 @@
 //
 // Covers: the month calendar (navigation, choosing a day, keyboard, events on
 // the right days), recording and removing an entry, a refusal shown next to the
-// form, Customs (edit, discard, the leave guard, save), each Settings card, the
+// form, Customs (edit, discard, the leave guard, save), the Settings tab (its sections: settings.cjs), the
 // test-account banner and "Try a text", both forms of the terms, and no sideways
 // scrolling at 360 px. Exits 0 when every step passed.
 const { chromium } = require('playwright');
@@ -44,7 +44,6 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector(`nav.tabs button[aria-selected="true"]:has-text("${name}")`);
   };
   const state = async () => (await (await page.request.get(base + '/api/state', { headers: H })).json()).state;
-  const savedIn = async key => page.waitForSelector(`#status-${key}.saved`, { timeout: 8000 });
 
   await step('open the test account', async () => {
     const r1 = await page.request.post(base + '/api/admin/login', { headers: H, data: { password: ADMIN_PASSWORD } });
@@ -271,95 +270,14 @@ const H = { 'x-betaharah': '1' };
 
   // ----- Settings -----
 
-  await step('settings: location from the list saves at once', async () => {
+  // Each Settings section has its own check in test/ui/settings.cjs; here only that the tab opens.
+  await step('settings: the tab opens with its list of sections', async () => {
     await tab('Settings');
-    await page.selectOption('#place', { label: 'Brooklyn, NY' });
-    await savedIn('location');
-    await page.waitForSelector('.current-place strong:has-text("Brooklyn, NY")');
-    await page.selectOption('#place', { label: 'Lakewood, NJ' });
-    await page.waitForSelector('.current-place strong:has-text("Lakewood, NJ")');
-  });
-
-  await step('settings: an unknown ZIP code falls back to the list', async () => {
-    await page.fill('#zip', '00000');
-    await page.click('#zip-find');
-    await page.waitForSelector('.zip-form .error:has-text("Choose the nearest place from the list")');
-  });
-
-  await step('settings: coordinates are checked before saving', async () => {
-    await page.click('#loc-adv summary');
-    await page.fill('#place-latitude', '123');
-    await page.click('#place-save');
-    await page.waitForSelector('#place-latitude[aria-invalid="true"]');
-  });
-
-  await step('a redraw keeps the scroll position and what was typed', async () => {
-    await page.fill('#add-number', '(732) 555');
-    await page.locator('#can-update-17325550199').scrollIntoViewIfNeeded();
-    const y = await page.evaluate(() => window.scrollY);
-    await page.click('#can-update-17325550199');
-    await savedIn('phones');
-    const y2 = await page.evaluate(() => window.scrollY);
-    if (Math.abs(y2 - y) > 4) throw new Error('scrolled from ' + y + ' to ' + y2);
-    if ((await page.inputValue('#add-number')) !== '(732) 555') throw new Error('the typed number was lost');
-    if ((await page.evaluate(() => document.activeElement.id)) !== 'can-update-17325550199') throw new Error('focus was lost');
-    await page.click('#can-update-17325550199');
-    await savedIn('phones');
-  });
-
-  await step('settings: phones (an option, and adding one with the shown code)', async () => {
-    await page.click('#can-update-17325550199');
-    await savedIn('phones');
-    await page.click('#can-update-17325550199');
-    await savedIn('phones');
-    await page.fill('#add-number', '(732) 555-0150');
-    await page.click('#add-send');
-    await page.waitForSelector('.add-phone .alert:has-text("instead of being texted")');
-    const title = await page.textContent('.add-phone .alert-title');
-    const code = (title.match(/\d{6}/) || [])[0];
-    if (!code) throw new Error('no code shown: ' + title);
-    await page.fill('#add-code', code);
-    await page.click('#add-confirm');
-    await page.waitForSelector('.phone-row:has-text("(732) 555-0150")');
-    await page.click('#phone-more-17325550150 summary');
-    await page.click('#remove-17325550150');
-    await page.click('dialog button:has-text("Remove phone")');
-    await page.waitForSelector('.phone-row:has-text("(732) 555-0150")', { state: 'detached' });
-  });
-
-  await step('settings: reminders save a number, and refuse one out of range', async () => {
-    await page.fill('#rem-hefsek-min', '100');
-    await page.press('#rem-hefsek-min', 'Tab');
-    await savedIn('reminders');
-    if ((await state()).app.reminders.hefsek.minutesBeforeSunset !== 100) throw new Error('not saved');
-    await page.fill('#rem-hefsek-min', '5');
-    await page.press('#rem-hefsek-min', 'Tab');
-    await page.waitForSelector('#rem-hefsek-min-error');
-    await page.waitForSelector('.timeline .tl-item');
-  });
-
-  await step('settings: calendar link and discreet titles', async () => {
-    await page.click('#link-create');
-    await page.waitForSelector('.calendar-settings code.copy');
-    await page.click('#style-discreet');
-    await savedIn('calendar');
-    if ((await state()).app.calendar.style !== 'discreet') throw new Error('style not saved');
-    await page.click('#style-words');
-    await savedIn('calendar');
-  });
-
-  await step('settings: texting help, signing in, your data', async () => {
-    await page.waitForSelector('table.commands kbd:has-text("9")');
-    await page.fill('#npw1', 'short');
-    await page.click('#pw-save');
-    await page.waitForSelector('#npw1[aria-invalid="true"]');
-    await page.fill('#npw1', 'a good long password');
-    await page.fill('#npw2', 'a different password');
-    await page.click('#pw-save');
-    await page.waitForSelector('#npw2[aria-invalid="true"]');
-    await page.waitForSelector('#open-setup');
-    await page.waitForSelector('a:has-text("Download my data")');
-    await page.waitForSelector('#delete-account');
+    await page.waitForSelector('#st-nav-location');
+    const rows = await page.locator('[id^="st-nav-"]').count();
+    if (rows !== 8) throw new Error('sections listed: ' + rows);
+    await page.click('#st-nav-texting');
+    await page.waitForSelector('#st-pane-texting');
   });
 
   for (const [w, scheme] of [

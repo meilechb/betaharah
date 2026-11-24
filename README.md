@@ -106,7 +106,7 @@ npm run typecheck
 npm run dev         # run locally at http://localhost:8787 (needs a .dev.vars file, see test/ui-check.cjs)
 ```
 
-`test/ui-check.cjs` drives the three pages in a real browser.
+`test/ui-check.cjs` drives the whole site in a real browser; `test/ui/*.cjs` cover the sign-in views, the dashboard, Settings, the home page and the operator's console in detail. Each needs its own local server on a new empty database (the first lines of each file say how).
 
 The Hebrew calendar arithmetic is `@hebcal/hdate` (GPL-2.0-or-later), so
 this project carries the same licence.

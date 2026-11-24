@@ -15,7 +15,8 @@ code; it is the only other document you need.
 | `public/app/onboarding.js` | The "Getting started" card (`onboardingCard()`), to become the guided setup. | Sign-up agent |
 | `public/app/auth.css` | Styles for the sign-in views and the guided setup. | Sign-up agent |
 | `public/app/views/today.js`, `log.js`, `customs.js`, `shared.js` | The tabs, and pieces two tabs use (`alertsBlock`, `termsToggle`, `saveApp`). | Dashboard agent |
-| `public/app/views/settings/*.js` | The Settings tab: `index.js` lays out one module per card. | Dashboard agent |
+| `public/app/views/settings/*.js`, `public/app/settings.css` | The Settings tab: `index.js` draws the list of sections (each row with a one-line summary) and the open section; one module per section; `route.js` keeps the open section in the address (`#settings/phones`); `ui.js` has the rows and switches. | Settings |
+| `test/ui/settings.cjs` | The browser run of every Settings section, on the test account and on a new account. | Settings |
 | `public/app/dashboard.css` | Styles for the signed-in tabs. | Dashboard agent |
 | `public/index.html`, `public/landing.css` | The public landing page. | Console and landing agent |
 | `public/admin/*` (`admin.js`, `admin.css`) | The operator console. `admin.js` is still a classic script; it may become a module that imports `/app/lib.js`. | Console and landing agent |

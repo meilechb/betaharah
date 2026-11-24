@@ -440,6 +440,8 @@ const problems = [];
   });
 
   await step('download my data', async () => {
+    await page.click('#st-nav-data');
+    await page.waitForSelector('a:has-text("Download my data")');
     const [download] = await Promise.all([page.waitForEvent('download'), page.click('a:has-text("Download my data")')]);
     const file = await download.path();
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -447,6 +449,7 @@ const problems = [];
   });
 
   await step('sign out: nothing of the account is left on screen, in the title or in the browser; then in again', async () => {
+    await page.click('#st-nav-security');
     await page.click('button:has-text("Sign out"):not(:has-text("everywhere"))');
     await page.waitForSelector('form.login');
     const text = await page.textContent('body');
@@ -469,6 +472,7 @@ const problems = [];
   await step('delete the account: typed confirmation, then gone, and its calendar link answers no more', async () => {
     feed = (await state()).calendar.link;
     await tab('Settings');
+    await page.click('#st-nav-data');
     await page.click('button:has-text("Delete my account")');
     await page.waitForSelector('dialog[open]');
     await page.fill('dialog[open] input', 'delete');
