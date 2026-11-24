@@ -159,7 +159,7 @@ export function tryTextCard() {
   if (!S.demo) return null;
   return card(
     { title: 'Try a text', icon: 'message', className: 'demo-card' },
-    h('p', { class: 'help' }, 'Type what you would text to ' + pretty(S.sms.number) + ' from ' + pretty(S.account.number) + '. It is handled exactly as a real text, and the reply is shown here instead of being sent.'),
+    h('p', { class: 'help' }, 'Type what you would text to ' + pretty(S.sms.number) + (S.account.number ? ' from ' + pretty(S.account.number) : '') + '. It is handled exactly as a real text, and the reply is shown here instead of being sent.'),
     region('demo-chat', () => {
       const recent = (S.messages || []).slice(0, 8);
       // The newest text is at the bottom: show it.

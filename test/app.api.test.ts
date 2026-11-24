@@ -2538,6 +2538,23 @@ describe('Sign in with Google', () => {
     expect(await count('phones')).toBe(0);
   });
 
+  it('an account made with Google can add a phone, which can then sign in to the same account', async () => {
+    await site({ google: true });
+    const c = await googleSignIn();
+    await addPhone(c, HUSBAND);
+    const s = await c.state();
+    expect(s.phones.map((p: any) => [p.number, p.verified, p.me])).toEqual([[HUSBAND, true, false]]);
+    expect(s.account).toMatchObject({ number: null, method: 'google', googleEmail: 'ada@example.com' });
+    world.clock.now += 2 * MINUTE; // a code for the same number may be asked for once a minute
+    const byPhone = await signIn(HUSBAND, new Client('203.0.113.52'));
+    expect((await byPhone.state()).account).toMatchObject({ number: HUSBAND, method: 'code', googleEmail: 'ada@example.com' });
+    expect(await count('households')).toBe(1);
+    // sign out everywhere in the Google session ends it, and leaves the phone's session alone
+    expect((await c.post('/api/auth/logout-all', {})).status).toBe(200);
+    expect((await c.get('/api/state')).status).toBe(401);
+    expect((await byPhone.get('/api/state')).status).toBe(200);
+  });
+
   it('deleting the account removes the Google sign-in with it', async () => {
     await site({ sms: false, google: true });
     const c = await googleSignIn();
