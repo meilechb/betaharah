@@ -83,10 +83,31 @@ export function configureApi(options) {
 }
 
 /** Calls the site's JSON API. Throws an Error with the server's message (and .status) when the answer is not 2xx. */
+/** How long a request may take before it is given up. */
+export const API_TIMEOUT_MS = 30000;
+
 export async function api(method, path, body) {
   const headers = { 'x-betaharah': '1' };
   if (body !== undefined) headers['content-type'] = 'application/json';
-  const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
+  // A request that has no answer after this long is given up, so that nothing waits for ever.
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), API_TIMEOUT_MS) : null;
+  let res;
+  try {
+    res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin', signal: controller ? controller.signal : undefined });
+  } catch (e) {
+    // No answer at all: the error has no status, so callers can tell it from a refusal.
+    const timedOut = controller && controller.signal.aborted;
+    throw new Error(
+      timedOut
+        ? method === 'GET'
+          ? 'The site took too long to answer. Check the internet connection and try again.'
+          : 'The site took too long to answer, so it is not known whether this was saved. Reload the page to see.'
+        : 'The site could not be reached. Check the internet connection and try again.',
+    );
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   let json = null;
   try {
     json = await res.json();
@@ -99,7 +120,7 @@ export async function api(method, path, body) {
     throw err;
   }
   if (!res.ok) {
-    const err = new Error((json && json.error) || 'The request failed (' + res.status + ').');
+    const err = new Error((json && json.error) || (res.status >= 500 ? 'The site had a problem (' + res.status + '). Reload the page to see whether anything was saved, then try again.' : 'The request failed (' + res.status + ').'));
     err.status = res.status;
     throw err;
   }

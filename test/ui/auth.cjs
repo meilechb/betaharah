@@ -297,7 +297,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     );
     await page.fill('#setup-zip', '123');
     await page.click('#setup-zip-go');
-    await expectText('.field .error', 'Enter the 5 digits');
+    await expectText('.field .error', 'Enter a 5-digit US ZIP code');
     await page.fill('#setup-zip', '08701');
     await page.click('#setup-zip-go');
     await expectText('#setup-chosen', 'Lakewood, NJ 08701');
@@ -498,20 +498,30 @@ async function variant(browser, name, width, scheme, offset, shots) {
   });
 
   // ----- coming back resumes at the first unfinished step; the ZIP lookup falls back to the list -----
-  await step('setup: resume after a reload; ZIP lookup not available falls back to the list', async () => {
+  await step('setup: ZIP codes against the real lookup (unknown, a place without times, Canada), then resume after a reload', async () => {
     const n = number(4);
     await openAccount(n);
     await page.goto(base + '/app/');
     await heading('Welcome to Betaharah');
     await page.click('#setup-start');
     await heading('Where do you live?');
+    await page.fill('#setup-zip', '00001');
+    await page.click('#setup-zip-go');
+    await expectText('.field .error', 'No place was found for that code.');
+    await page.fill('#setup-zip', '99501');
+    await page.click('#setup-zip-go');
+    await expectText('#setup-chosen', 'Anchorage, AK 99501');
+    await page.click('#setup-save-place');
+    await expectText('.setup-error', 'the times cannot be calculated');
+    await expectText('.setup-error', 'The location was not saved.');
+    if ((await api('GET', '/api/state')).state.app.place !== null) throw new Error('Anchorage was saved');
+    await shot('39-setup-zip-refused');
+    await page.fill('#setup-zip', 'h2x 1y4');
+    await page.click('#setup-zip-go');
+    await expectText('#setup-chosen', 'QC H2X');
     await page.fill('#setup-zip', '08701');
     await page.click('#setup-zip-go');
-    await expectText('.setup .alert.info', 'Looking up a ZIP code is not available yet.');
-    if ((await page.evaluate(() => document.activeElement.id)) !== 'setup-place-list') throw new Error('focus did not move to the list');
-    await shot('39-setup-zip-unavailable');
-    await page.selectOption('#setup-place-list', { label: 'Brooklyn, NY' });
-    await expectText('#setup-chosen', 'Brooklyn, NY');
+    await expectText('#setup-chosen', 'Lakewood, NJ 08701');
     await page.click('#setup-save-place');
     await heading('Your location is saved');
     await page.reload();

@@ -58,12 +58,10 @@ function record(e, kind) {
   }
   const body = { kind, date: form.date };
   if (kind === 'flow') body.part = form.part;
-  const before = new Set(S.entries.map(x => x.id));
   withBusy(btn, () => api('POST', '/api/entries', body)).then(
     r => {
       adopt(r.state);
-      const added = S.entries.find(x => !before.has(x.id));
-      last = { id: added ? added.id : null, kind, message: r.message || 'Recorded.' };
+      last = { id: r.entryId || null, kind, message: r.message || 'Recorded.' };
       note = '';
       flow.focus = 'sd-recorded';
       ask(kind === 'flow' ? 'hefsek' : kind === 'hefsek' ? 'mikvah' : 'summary');

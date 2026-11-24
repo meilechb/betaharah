@@ -12,7 +12,7 @@
  * Sentences are English. Halachic terms come from the server in the form the
  * household chose (English letters or Hebrew) and are filled in by t().
  */
-import { api, configureApi, h, alert, icon, mount, pageLoading, tabs, tabPanel, toast } from './lib.js';
+import { api, button, configureApi, h, alert, icon, mount, pageLoading, tabs, tabPanel, toast } from './lib.js';
 import { P, S, adopt, connect, setPublic, signOutLocally, t } from './store.js';
 import { renderAuth, setAuthMessage, showSignIn } from './auth.js';
 import { guidedSetupView, needsGuidedSetup } from './onboarding.js';
@@ -21,7 +21,7 @@ import { viewLog } from './views/log.js';
 import { viewCustoms } from './views/customs.js';
 import { viewSettings } from './views/settings/index.js';
 import { demoBanner } from './views/demo.js';
-import { captureFocus, captureOpen, hasUnsavedChanges, mayLeave, restoreFocus, restoreOpen } from './views/shared.js';
+import { captureFocus, captureOpen, fmtDate, hasUnsavedChanges, mayLeave, restoreFocus, restoreOpen } from './views/shared.js';
 
 const TABS = [
   { id: 'today', label: 'Today', icon: 'calendar', view: viewToday },
@@ -35,20 +35,26 @@ const TAB_IDS = TABS.map(x => x.id);
 let lastDrawn = null;
 let tab = TAB_IDS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'today';
 
-/** The date line: Hebrew date, day or night, civil date; and today's sunset. */
+/**
+ * The date line: the Hebrew date, day or night, the civil date, and today's sunset.
+ * After sunset the Hebrew date is already the next one while the civil date is not:
+ * the line then says "The night of ..." and "... evening", so the two do not seem to disagree.
+ */
 function dateLine() {
   if (!S.today) return null;
   const day = S.grid ? S.grid.days.find(d => d.date === S.grid.today) : null;
   const night = S.today.part === 'night';
+  const evening = night && S.today.civilDate && S.today.civilDate !== S.today.date;
+  const civil = S.today.civilDate ? fmtDate(S.today.civilDate, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }) : S.today.civil;
   return h(
     'div',
     { class: 'date-line' },
-    h('p', { class: 'hebrew', lang: S.terms === 'he' ? 'he' : null }, S.today.hebrew),
+    h('p', { class: 'hebrew', lang: S.terms === 'he' ? 'he' : null }, night ? 'The night of ' + S.today.hebrew : S.today.hebrew),
     h(
       'p',
       { class: 'civil' },
       h('span', { class: 'part' }, icon(night ? 'moon' : 'sun', { size: 'sm' }), night ? 'Night' : 'Day'),
-      h('span', {}, S.today.civil),
+      h('span', {}, evening ? civil + ', evening' : civil),
       day && day.sunset ? h('span', { class: 'sunset' }, t('{sunset} ') + day.sunset) : null,
     ),
   );
@@ -101,7 +107,8 @@ async function go(id) {
   }
   if (!(await mayLeave())) return;
   tab = id;
-  history.replaceState(null, '', '#' + id);
+  // Each tab is a step in the browser's history, so that Back returns to the tab before.
+  history.pushState(null, '', '#' + id);
   render();
   window.scrollTo(0, 0);
   const el = document.getElementById('tab-' + id);
@@ -109,7 +116,15 @@ async function go(id) {
 }
 
 function showFatal(e) {
-  mount(h('div', { class: 'card login' }, h('h2', {}, 'Could not load'), alert({ kind: 'bad' }, (e && e.message) || 'Unknown error')));
+  mount(
+    h(
+      'div',
+      { class: 'card login' },
+      h('h2', {}, 'The page could not be loaded'),
+      alert({ kind: 'bad', role: 'alert' }, (e && e.message) || 'Something went wrong.'),
+      h('div', { class: 'actions' }, button({ label: 'Try again', variant: 'primary', icon: 'refresh', attrs: { id: 'fatal-retry' }, onclick: () => restart() })),
+    ),
+  );
 }
 
 async function start() {
@@ -122,6 +137,7 @@ async function start() {
   const params = new URLSearchParams(location.search);
   if (P.signedIn) {
     adopt((await api('GET', '/api/state')).state);
+    wasSignedIn = true;
     if (params.get('google_error')) toast(params.get('google_error'), true);
     if (params.get('google') === 'connected') toast('Google Calendar is connected. It fills in within a minute.');
     if (location.search) history.replaceState(null, '', location.pathname + location.hash);
@@ -129,10 +145,31 @@ async function start() {
     return;
   }
   document.body.classList.remove('has-tabbar');
+  const note = NOTES[params.get('note')];
+  if (note) {
+    setAuthMessage(note);
+    params.delete('note');
+    history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash);
+  }
   await showSignIn(params);
 }
 
-const restart = () => start().catch(showFatal);
+/** Notes the sign-in page can be opened with (/app/?note=...), after a full reload. */
+const NOTES = {
+  deleted: 'The account was deleted: all dates, settings and phones. You are signed out.',
+  left: 'This phone is no longer on the account. You are signed out.',
+};
+
+/** Whether this page has shown an account. After signing out, the page is loaded afresh, so that nothing of it stays in memory or on screen. */
+let wasSignedIn = false;
+
+const restart = () => {
+  if (wasSignedIn && !S) {
+    location.replace('/app/');
+    return;
+  }
+  start().catch(showFatal);
+};
 
 connect({ render, go, restart, tab: () => tab });
 
@@ -148,7 +185,7 @@ configureApi({
 });
 
 window.addEventListener('hashchange', async () => {
-  const next = location.hash.slice(1);
+  const next = location.hash.slice(1) || 'today';
   if (!S || !TAB_IDS.includes(next) || next === tab) return;
   if (!(await mayLeave())) {
     history.replaceState(null, '', '#' + tab);
@@ -165,6 +202,5 @@ window.addEventListener('beforeunload', e => {
     e.returnValue = '';
   }
 });
-
 
 restart();

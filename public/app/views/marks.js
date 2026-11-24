@@ -91,5 +91,6 @@ export function legend() {
     legendItems().map(([m, text]) => h('li', {}, m, h('span', {}, text))),
     h('li', {}, h('span', { class: 'legend-day rest', 'aria-hidden': 'true' }, '7'), h('span', {}, t('Shaded, with a bar on top: {shabbat} or {yom_tov}'))),
     h('li', {}, h('span', { class: 'legend-day today', 'aria-hidden': 'true' }, '7'), h('span', {}, 'Outlined: today')),
+    h('li', { class: 'legend-note' }, h('span', {}, t('Each day shows the Hebrew date of its daytime. A Hebrew date begins at {sunset} the evening before, so a night belongs to the next day’s Hebrew date. A mark for a night is on the day whose evening it begins.'))),
   );
 }
