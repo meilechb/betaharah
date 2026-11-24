@@ -13,7 +13,7 @@ import type { EventResource, ExistingEvent, GoogleCalendar } from './google';
 
 const COLOR: Record<CalendarEvent['kind'], string> = {
   flow: '4', // flamingo
-  onah: '11', // tomato
+  onah: '9', // blueberry, the closest Google calendar color to tekhelet #2A3C6E
   hefsek: '5', // banana
   clean_day: '7', // peacock
   mikvah: '10', // basil

@@ -35,10 +35,11 @@ describe('public copy and the dashboard shell', () => {
     expect(admin).toContain('S.urls.rcsWebhook');
   });
 
-  it('the wine-disc mark is the icon on every page, and the old rounded mark is gone', () => {
+  it('the tekhelet disc is the icon on every page, and the old rounded mark is gone', () => {
     const svg = readFileSync('public/favicon.svg', 'utf8');
     expect(svg).toContain('<circle');
-    expect(svg).toContain('#6e3d45');
+    expect(svg).toContain('#2a3c6e');
+    expect(svg).not.toContain('#6e3d45');
     expect(svg).not.toContain('<rect');
     const ico = readFileSync('public/favicon.ico');
     expect(ico.readUInt16LE(2)).toBe(1);
@@ -58,7 +59,8 @@ describe('public copy and the dashboard shell', () => {
     png('public/icons/icon-maskable-512.png', 512, 512);
     png('public/brand/og-1200x630.png', 1200, 630);
     const manifest = JSON.parse(readFileSync('public/site.webmanifest', 'utf8'));
-    expect(manifest.theme_color).toBe('#6e3d45');
+    expect(manifest.theme_color).toBe('#2a3c6e');
+    expect(manifest.background_color).toBe('#f1ebe0');
     expect(manifest.icons.map((i: { sizes: string; purpose: string }) => `${i.sizes} ${i.purpose}`)).toEqual([
       '192x192 any',
       '512x512 any',
@@ -73,7 +75,7 @@ describe('public copy and the dashboard shell', () => {
       expect(html, file).toContain('href="/favicon.svg"');
       expect(html, file).toContain('href="/apple-touch-icon.png"');
       expect(html, file).toContain('href="/site.webmanifest"');
-      expect(html, file).toContain('content="#6e3d45"');
+      expect(html, file).toContain('content="#2a3c6e"');
       expect(html, file).toContain('name="twitter:card" content="summary_large_image"');
       expect(html, file).toContain(share);
     }

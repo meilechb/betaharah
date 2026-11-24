@@ -324,7 +324,7 @@ describe('planning a calendar sync', () => {
     expect(d.resource.end).toEqual({ dateTime: '2026-12-21T21:35:00.000Z', timeZone: 'America/New_York' });
     expect(d.resource.extendedProperties.private).toEqual({ mk: '1', k: 'onah:1', h: d.hash });
     expect(d.resource.transparency).toBe('transparent');
-    expect(d.resource.colorId).toBe('11');
+    expect(d.resource.colorId).toBe('9');
     expect(d.endMs).toBe(timed.timed!.end);
     expect((toDesired({ ...timed, light: true }, 'America/New_York')).resource.colorId).toBe('6');
 

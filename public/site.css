@@ -1,28 +1,29 @@
 :root {
-  --bg: #f3eee4;
-  --bg-deep: #e7dfd0;
-  --card: #fffdf8;
-  --ink: #2a241c;
-  --muted: #5c5148;
-  --line: #e4d9c8;
-  --accent: #6e3d45;
-  --accent-ink: #fffaf6;
-  --accent-soft: #f6e8e6;
-  --warn-bg: #fbf3df;
+  --bg: #f1ebe0;
+  --bg-deep: #e4dccb;
+  --card: #fffcf8;
+  --ink: #1c2230;
+  --muted: #3e465c;
+  --line: #ddd4c4;
+  --accent: #2a3c6e;
+  --accent-ink: #fffcf8;
+  --accent-soft: #e6eaf4;
+  --gold: #a8843a;
+  --warn-bg: #f8f1e2;
   --warn-line: #e0c98a;
-  --info-bg: #f4eee3;
-  --info-line: #d9cdb6;
-  --ok: #2c6b4e;
-  --ok-bg: #e6f2eb;
+  --info-bg: #eef1f8;
+  --info-line: #c5d0e6;
+  --ok: #1f5c40;
+  --ok-bg: #e5f2eb;
   --bad: #8c2e2a;
   --bad-bg: #f8e7e5;
-  --flow: #8d3d55;
-  --onah: #9a4030;
-  --light: #b07a3a;
-  --hefsek: #8a6a2f;
-  --clean: #3d6a74;
-  --mikvah: #2c6b4e;
-  --shadow: 0 1px 2px rgba(42, 36, 28, 0.04), 0 10px 28px rgba(42, 36, 28, 0.05);
+  --flow: #3d5a9a;
+  --onah: #2a3c6e;
+  --light: #a8843a;
+  --hefsek: #6e5a2e;
+  --clean: #3a6278;
+  --mikvah: #1f5c40;
+  --shadow: 0 1px 2px rgba(28, 34, 48, 0.04), 0 10px 28px rgba(28, 34, 48, 0.05);
   --serif: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, "Noto Serif", serif;
   --sans: "Avenir Next", "Segoe UI", system-ui, "Noto Sans Hebrew", sans-serif;
   color-scheme: light dark;
@@ -30,27 +31,28 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1b1714;
-    --bg-deep: #14110e;
-    --card: #262019;
-    --ink: #f6efe6;
-    --muted: #cbbbaa;
-    --line: #3c332b;
-    --accent: #e7b7b0;
-    --accent-ink: #2a1618;
-    --accent-soft: #3a2a2c;
+    --bg: #12151e;
+    --bg-deep: #0c0e14;
+    --card: #1c2230;
+    --ink: #f1ebe0;
+    --muted: #c9d0e4;
+    --line: #2e3548;
+    --accent: #c5d2f0;
+    --accent-ink: #12151e;
+    --accent-soft: #243049;
+    --gold: #e2c48a;
     --warn-bg: #3a311c;
     --warn-line: #a8883a;
-    --info-bg: #2c261e;
-    --info-line: #5c4e3c;
+    --info-bg: #1c2436;
+    --info-line: #3a4a6e;
     --ok: #8dceb0;
     --ok-bg: #1c3328;
     --bad: #f0a8a2;
     --bad-bg: #3a2220;
-    --flow: #e7a0b4;
-    --onah: #f0a090;
-    --light: #e8c08a;
-    --hefsek: #e6d09a;
+    --flow: #9bb0e0;
+    --onah: #c5d2f0;
+    --light: #e2c48a;
+    --hefsek: #d4bc86;
     --clean: #9fd0d8;
     --mikvah: #8dceb0;
     --shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
@@ -732,7 +734,7 @@ code,
 }
 .toast.bad {
   background: var(--bad);
-  color: #fffaf6;
+  color: #fffcf8;
 }
 hr {
   border: none;
