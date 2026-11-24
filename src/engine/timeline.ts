@@ -155,7 +155,11 @@ export function buildTimeline(input: EngineInput): Timeline {
   const todaySunset = dayTimes(todayCivil, place, zopts).sunset;
 
   const since = input.since ?? Number.NEGATIVE_INFINITY;
-  const shownPeriods = processed.periods.filter(p => p.mikvahDoneAbs === null || p.mikvahDoneAbs >= since);
+  const shownPeriods = processed.periods.filter(p => {
+    if (p.mikvahDoneAbs !== null) return p.mikvahDoneAbs >= since;
+    // a period the next one superseded with no immersion recorded: by the night she could have immersed
+    return !p.endedWithoutImmersion || p.mikvahNightAbs === null || p.mikvahNightAbs >= since;
+  });
   const periods: PeriodView[] = shownPeriods.map(p => {
     const projected = p.hefsekAbs === null;
     let planHefsekAbs: number;
@@ -191,7 +195,7 @@ export function buildTimeline(input: EngineInput): Timeline {
   const onot: OnahView[] = [];
   let vesatotNotes: VesatotNote[] = [];
   let latestIntervalDays: number | null = null;
-  const mikvahNights = new Set(periods.filter(p => p.mikvahDoneAbs === null).map(p => p.planMikvah.nightAbs));
+  const mikvahNights = new Set(periods.filter(p => p.mikvahDoneAbs === null && !p.endedWithoutImmersion).map(p => p.planMikvah.nightAbs));
   for (const p of periods) if (p.mikvahDoneAbs !== null) mikvahNights.add(p.mikvahDoneAbs);
   processed.flows.forEach((flow, i) => {
     const next = processed.flows[i + 1];
@@ -221,7 +225,7 @@ export function buildTimeline(input: EngineInput): Timeline {
   // Status as of now.
   let status: Status = { state: 'tehorah' };
   const open = periods[periods.length - 1];
-  if (open && open.mikvahDoneAbs === null) {
+  if (open && open.mikvahDoneAbs === null && !open.endedWithoutImmersion) {
     const today = nowOnah.abs; // the Hebrew date that `now` belongs to
     let phase: Extract<Status, { state: 'niddah' }>['phase'];
     if (open.hefsekAbs === null || !open.cleanDays || open.mikvahNightAbs === null) {

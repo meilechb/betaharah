@@ -358,7 +358,10 @@ export function confirmationText(result: Extract<RecordResult, { ok: true }>, re
     case 'stain': {
       let text = `Recorded: ${entryEnglish(entry)}.`;
       if (notes.includes('count_cancelled_by_flow')) text += ' The count is cancelled; a new hefsek is needed.';
-      else if (period && period.startId === entry.id) text += ` Hefsek from ${englishDate(period.earliestHefsekAbs)}.`;
+      else {
+        if (notes.includes('period_began_without_immersion')) text += ' No mikvah was recorded before it, so it counts as a new period.';
+        if (period && period.startId === entry.id) text += ` Hefsek from ${englishDate(period.earliestHefsekAbs)}.`;
+      }
       return text + undo + (resolved ? boundaryNote(resolved, tz) : '');
     }
     case 'broken':

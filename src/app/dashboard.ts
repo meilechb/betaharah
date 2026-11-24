@@ -97,7 +97,13 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
     const t = computed.timeline;
     const phase = t.status.state === 'tehorah' ? null : t.status.phase;
     status = { ...statusLines(t, tz, lang), phase: phase ? phase.kind : 'tehorah', day: phase && phase.kind === 'counting' ? phase.day : null };
-    for (const w of t.warnings) alerts.push({ level: 'warn', text: warningText(w.code, lang) });
+    // The note about a period that began with no immersion recorded before it is shown for the latest period only:
+    // it asks for something to be recorded, and an older one is history.
+    const latestStart = t.periods.length > 0 ? t.periods[t.periods.length - 1]!.startId : null;
+    for (const w of t.warnings) {
+      if (w.code === 'period_began_without_immersion' && w.entryId !== latestStart) continue;
+      alerts.push({ level: 'warn', text: warningText(w.code, lang) });
+    }
     for (const p of t.patterns) alerts.push({ level: 'warn', text: patternText(p, lang) });
     for (const n of t.vesatotNotes) alerts.push({ level: 'info', text: noteText(n, lang) });
     if (t.onot.some(o => o.onMikvahNight && o.end > now)) {

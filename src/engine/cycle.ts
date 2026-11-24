@@ -40,7 +40,14 @@ export type LogWarningCode =
   /** Immersion recorded on the night of Yom Kippur or Tisha B'Av. Recorded as entered. */
   | 'mikvah_on_fast_night'
   /** A flow or stain after the hefsek cancelled the count. */
-  | 'count_cancelled_by_flow';
+  | 'count_cancelled_by_flow'
+  /**
+   * A flow or stain came when the period before it was never closed in the
+   * record: its count was complete (or long overdue) and no immersion is
+   * recorded. It is taken as the start of a new period, with the days of
+   * waiting, which is the stricter reading of an incomplete record.
+   */
+  | 'period_began_without_immersion';
 
 export interface LogWarning {
   entryId: string;
@@ -70,10 +77,16 @@ export interface NiddahPeriod {
   /** Hebrew date on whose night she immersed, or null while the period is open. */
   mikvahDoneAbs: number | null;
   mikvahId: string | null;
+  /**
+   * True when the next period began with no immersion recorded for this one
+   * (see 'period_began_without_immersion'). The period is then not open any
+   * more, although `mikvahDoneAbs` is null.
+   */
+  endedWithoutImmersion: boolean;
 }
 
 export interface ProcessedLog {
-  /** In order; only the last can be open (mikvahDoneAbs === null). */
+  /** In order; only the last can be open (mikvahDoneAbs === null and not endedWithoutImmersion). */
   periods: NiddahPeriod[];
   /** Flows that count for vesatot, in order, with their entry ids. */
   flows: Array<FlowRecord & { id: string }>;
@@ -103,6 +116,21 @@ export function deriveCount(
     mikvahNightAbs++;
   }
   return { earliestHefsekAbs, hefsekEarly: hefsekAbs < earliestHefsekAbs, cleanDays, earliestMikvahAbs, mikvahNightAbs, postponedOver };
+}
+
+/**
+ * Whether a flow or stain in `onah` finds the open period `p` left unclosed
+ * in the record, so that it begins a new period rather than continuing `p`:
+ *   - `p` has a hefsek taharah and its seven clean days are over (the flow
+ *     is on the first night she could have immersed, or later); or
+ *   - `p` has no hefsek taharah at all, and the flow comes on or after the
+ *     night that would have been the earliest night of immersion had the
+ *     hefsek been done on the first day it could be.
+ * Before that, bleeding continues `p` (and voids a count in progress).
+ */
+function unclosed(p: NiddahPeriod, onah: Onah, minWaitDays: number): boolean {
+  if (p.earliestMikvahAbs !== null) return onah.abs >= p.earliestMikvahAbs;
+  return onah.abs >= p.start.abs + minWaitDays + 7;
 }
 
 /** Where an entry falls in time: an onah index, then an order within the onah. */
@@ -149,6 +177,13 @@ export function processLog(entries: readonly LogEntry[], settings: HalachicSetti
     switch (e.kind) {
       case 'flow':
       case 'stain': {
+        if (open && unclosed(open, e.onah, minWait)) {
+          // The record of the period before is incomplete: no immersion although its count was over.
+          // Nothing says that she had not immersed, so this is a new period and the wait begins again.
+          open.endedWithoutImmersion = true;
+          open = null;
+          warnings.push({ entryId: e.id, code: 'period_began_without_immersion' });
+        }
         if (!open) {
           open = {
             start: e.onah,
@@ -158,6 +193,7 @@ export function processLog(entries: readonly LogEntry[], settings: HalachicSetti
             hefsekId: null,
             mikvahDoneAbs: null,
             mikvahId: null,
+            endedWithoutImmersion: false,
             ...deriveCount(e.onah.abs, null, minWait),
           };
           periods.push(open);

@@ -223,6 +223,56 @@ describe('processing the log', () => {
     expect(r.warnings).toEqual([{ entryId: 'f2', code: 'count_cancelled_by_flow' }]);
   });
 
+  it('a flow on the seventh clean day still cancels the count: the period goes on and the wait does not start again', () => {
+    // hefsek Thursday; the clean days are Friday to the next Thursday (THU + 7)
+    const r = processLog([flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU }, flow('f2', THU + 7)], BASIC);
+    expect(r.periods).toHaveLength(1);
+    expect(r.periods[0]).toMatchObject({ hefsekAbs: null, earliestHefsekAbs: THU, endedWithoutImmersion: false });
+    expect(r.warnings).toEqual([{ entryId: 'f2', code: 'count_cancelled_by_flow' }]);
+  });
+
+  it('a flow after the count was over, with no immersion recorded, begins a new period with the days of waiting', () => {
+    // The owner's case: a period, its hefsek, no immersion recorded, and the next period a month later.
+    const next = SUN + 32;
+    const r = processLog([flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU }, flow('f2', next)], BASIC);
+    expect(r.periods).toHaveLength(2);
+    // the first period keeps its hefsek and its count, and is closed
+    expect(r.periods[0]).toMatchObject({ startId: 'f', hefsekAbs: THU, mikvahNightAbs: THU + 8, mikvahDoneAbs: null, endedWithoutImmersion: true });
+    // the second waits its own five days
+    expect(r.periods[1]).toMatchObject({ startId: 'f2', hefsekAbs: null, earliestHefsekAbs: next + 4, endedWithoutImmersion: false });
+    expect(r.warnings).toEqual([{ entryId: 'f2', code: 'period_began_without_immersion' }]);
+    expect(r.flows.map(x => x.id)).toEqual(['f', 'f2']);
+    // from the first night she could have immersed on, and not a day earlier
+    const onTheNight = processLog([flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU }, { id: 'f2', kind: 'flow', onah: { abs: THU + 8, part: 'night' }, veset: true }], BASIC);
+    expect(onTheNight.periods).toHaveLength(2);
+    expect(onTheNight.periods[1]!.earliestHefsekAbs).toBe(THU + 12);
+  });
+
+  it('recording the immersion afterwards closes the first period, and nothing is left to say', () => {
+    const next = SUN + 32;
+    const r = processLog([flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU }, flow('f2', next), { id: 'm', kind: 'mikvah', abs: THU + 8 }], BASIC);
+    expect(r.periods).toHaveLength(2);
+    expect(r.periods[0]).toMatchObject({ mikvahDoneAbs: THU + 8, endedWithoutImmersion: false });
+    expect(r.periods[1]).toMatchObject({ startId: 'f2', earliestHefsekAbs: next + 4 });
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('a period with nothing recorded after it: a flow before the earliest night of immersion continues it; one on or after it begins a new period', () => {
+    // five days of waiting and seven clean days: the earliest night of immersion would be SUN + 12
+    const during = processLog([flow('f', SUN), flow('f2', SUN + 11)], BASIC);
+    expect(during.periods).toHaveLength(1);
+    expect(during.periods[0]).toMatchObject({ startId: 'f', earliestHefsekAbs: THU });
+    expect(during.warnings).toEqual([]);
+    const after = processLog([flow('f', SUN), flow('f2', SUN + 12)], BASIC);
+    expect(after.periods).toHaveLength(2);
+    expect(after.periods[0]).toMatchObject({ hefsekAbs: null, endedWithoutImmersion: true });
+    expect(after.periods[1]).toMatchObject({ startId: 'f2', earliestHefsekAbs: SUN + 16 });
+    expect(after.warnings).toEqual([{ entryId: 'f2', code: 'period_began_without_immersion' }]);
+    // a hefsek and an immersion recorded after the second flow belong to the second period
+    const closed = processLog([flow('f', SUN), flow('f2', SUN + 12), { id: 'h', kind: 'hefsek', abs: SUN + 16 }, { id: 'm', kind: 'mikvah', abs: SUN + 24 }], BASIC);
+    expect(closed.periods[1]).toMatchObject({ hefsekAbs: SUN + 16, mikvahDoneAbs: SUN + 24 });
+  });
+
   it('a second hefsek replaces the first, which can only make immersion later', () => {
     const r = processLog([flow('f', SUN), { id: 'h1', kind: 'hefsek', abs: THU }, { id: 'h2', kind: 'hefsek', abs: FRI }], BASIC);
     expect(r.periods[0]!.hefsekAbs).toBe(FRI);

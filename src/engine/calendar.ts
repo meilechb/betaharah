@@ -172,6 +172,9 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
       timed: hefsekTimed,
       projected: false,
     });
+  } else if (p.endedWithoutImmersion) {
+    // The next period began with no hefsek taharah recorded for this one: nothing more is known of it.
+    return out;
   } else if (p.mikvahDoneAbs === null) {
     const deadline = clock12(p.hefsekSunset, tz, 'floor');
     const lines = [
@@ -221,6 +224,17 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
       timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 60 * MINUTE },
       projected: false,
     });
+  } else if (p.endedWithoutImmersion) {
+    // The count was over and the next period began with no immersion recorded.
+    const m = p.planMikvah;
+    out.push({
+      key: `mikvah:${p.startId}`,
+      kind: 'mikvah',
+      title: discreet ? 'M ?' : `${capital(term('mikvah_night', lang))}: no ${term('immersion', lang)} recorded`,
+      description: discreet ? '' : [capital(eveningLabel(m.nightAbs, lang)), fill('No {immersion} is recorded for this period. If she immersed, record it.', lang)].join('\n'),
+      timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 90 * MINUTE },
+      projected: false,
+    });
   } else {
     const m = p.planMikvah;
     const after = clock12(m.tzeit, tz, 'ceil');
@@ -251,7 +265,7 @@ export function buildCalendar(t: Timeline, opts: CalendarOptions): CalendarEvent
   const events: CalendarEvent[] = [];
   const clashNights = new Set(t.onot.filter(o => o.onMikvahNight).map(o => o.onah.abs));
   for (const p of t.periods) {
-    events.push(...periodEvents(p, p.mikvahDoneAbs === null && clashNights.has(p.planMikvah.nightAbs), opts));
+    events.push(...periodEvents(p, p.mikvahDoneAbs === null && !p.endedWithoutImmersion && clashNights.has(p.planMikvah.nightAbs), opts));
   }
   for (const o of t.onot) events.push(onahEvent(o, opts));
   const seen = new Set<string>();

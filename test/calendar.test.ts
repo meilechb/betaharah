@@ -223,7 +223,8 @@ describe('calendar events', () => {
     const a: LogEntry = { id: 'a', kind: 'flow', onah: { abs: SUN - 12, part: 'night' }, veset: true };
     const b: LogEntry = { id: 'b', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: true };
     const events = buildCalendar(timeline([a, b, hefsek], at(2026, 11, 30, 10)), EN);
-    expect(events.find(e => e.key === 'mikvah:a')!.description).toContain('The mikvah night falls on an onat perishah. Ask a rav.');
+    // the second flow comes twelve days after the first with nothing recorded between them, so it begins the period the hefsek belongs to
+    expect(events.find(e => e.key === 'mikvah:b')!.description).toContain('The mikvah night falls on an onat perishah. Ask a rav.');
     expect(events.find(e => e.kind === 'onah' && e.description.includes('This onah falls on the mikvah night. Ask a rav.'))).toBeDefined();
   });
 });

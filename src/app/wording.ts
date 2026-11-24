@@ -87,6 +87,8 @@ export function warningText(code: LogWarningCode, lang: TermLanguage): string {
       return f('An {immersion} is recorded on the night of {yom_kippur} or {tisha_bav}.');
     case 'count_cancelled_by_flow':
       return f('A {flow} after the {hefsek}: the count is void and a new {hefsek} is needed.');
+    case 'period_began_without_immersion':
+      return f('No {immersion} is recorded for the period before the latest one, so the calendar counts the latest {flow} as a new period, with the days of waiting. If she immersed, record the {immersion}. If she had not immersed, ask a {rav}.');
   }
 }
 

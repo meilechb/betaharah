@@ -255,6 +255,46 @@ describe('the same picture as an account', () => {
     });
   }
 
+  it('a new period after a count with no immersion recorded: its own days of waiting, the earlier hefsek kept, and a note', () => {
+    // The owner's dates: a period on Oct 23, the hefsek taharah on Oct 28, no immersion recorded, a new period on Nov 24.
+    const entries: Array<Record<string, unknown>> = [
+      { kind: 'flow', date: '2026-10-23', part: 'day' },
+      { kind: 'hefsek', date: '2026-10-28' },
+      { kind: 'flow', date: '2026-11-24', part: 'day' },
+    ];
+    const run = (list: Array<Record<string, unknown>>) => runSandbox({ place: { name: 'Lakewood, NJ' }, today: { date: '2026-11-24', part: 'day' }, entries: list }, ADMIN_SANDBOX_LIMITS);
+    const r = run(entries);
+    expect(r.outcomes.every(o => o.ok)).toBe(true);
+    expect(r.message).toBe('Recorded: flow Tue Nov 24 by day. No mikvah was recorded before it, so it counts as a new period. Hefsek from Sat Nov 28.');
+    expect(r.state.status!.headline).toBe('Niddah, before the hefsek taharah');
+    expect(r.state.status!.detail).toBe(
+      'Began: Tuesday, 14 Kislev 5787 (Nov 24, 2026), by day. The hefsek taharah can be done from Shabbat, 18 Kislev 5787 (Nov 28, 2026). Next possible day: Shabbat, Nov 28, 2026, before 4:32 PM.',
+    );
+    expect(r.state.alerts.map(a => a.text)).toEqual([
+      'No immersion is recorded for the period before the latest one, so the calendar counts the latest flow as a new period, with the days of waiting. If she immersed, record the immersion. If she had not immersed, ask a rav.',
+    ]);
+    const events = r.state.grid!.events;
+    const on = (date: string) => events.filter(e => e.startDate === date).map(e => e.title);
+    expect(on('2026-10-23')).toEqual(['Flow (day)']);
+    expect(on('2026-10-28')).toEqual(['Hefsek taharah ✓']); // the earlier hefsek is not lost
+    expect(on('2026-10-29')).toEqual(['Seven clean days: day 1']);
+    expect(on('2026-11-04')).toEqual(['Seven clean days: day 7', 'Mikvah night: no immersion recorded']);
+    expect(on('2026-11-24')).toEqual(['Flow (day)']); // and no hefsek is put on the day of the new period
+    expect(on('2026-11-28')).toEqual(['Hefsek taharah (by 4:32 PM)']);
+    expect(events.filter(e => e.kind === 'hefsek').map(e => [e.startDate, e.projected])).toEqual([
+      ['2026-10-28', false],
+      ['2026-11-28', true],
+    ]);
+    // the veset haflagah is counted from the first period to the second
+    expect(events.some(e => e.kind === 'onah' && /Veset haflagah \(33 days\)/.test(e.description))).toBe(true);
+    // with the immersion recorded, the picture is the same and nothing is left to say
+    const withMikvah = run([...entries, { kind: 'mikvah', date: '2026-11-04' }]);
+    expect(withMikvah.outcomes.every(o => o.ok)).toBe(true);
+    expect(withMikvah.state.alerts).toEqual([]);
+    expect(withMikvah.state.status!.detail).toBe(r.state.status!.detail);
+    expect(withMikvah.state.grid!.events.filter(e => e.startDate === '2026-11-04').map(e => e.title)).toEqual(['Seven clean days: day 7', 'Immersion ✓']);
+  });
+
   it('the histories show what they were made for', () => {
     const run = (s: Scenario) => runSandbox({ place: s.place, terms: s.terms, halachic: s.halachic, today: s.today, entries: s.entries }, ADMIN_SANDBOX_LIMITS);
     const [plain, broken, pattern, long, refusals, jerusalem] = SCENARIOS.map(run) as Array<ReturnType<typeof run>>;
