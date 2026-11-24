@@ -44,7 +44,7 @@ export function placeSet(name: string): string {
 }
 
 export const CUSTOMS_INTRO =
-  'Step 2 of 3: customs. Until you choose, the calendar uses the stricter option of each custom, ideally chosen with your rav. Any can be changed at any time. A: keep them for now. B: answer the 12 questions by text. C: do it later on the website. Reply A, B or C.';
+  'Step 2 of 3: customs. Until you choose, the calendar uses the stricter option of each. A: keep them for now. B: answer the 12 questions by text. C: later on the website. Reply A, B or C.';
 
 export const CUSTOMS_INTRO_SUGGEST: Suggestion[] = [
   { label: 'A: Keep for now', send: 'A' },
@@ -52,16 +52,16 @@ export const CUSTOMS_INTRO_SUGGEST: Suggestion[] = [
   { label: 'C: Later, website', send: 'C' },
 ];
 
-export const CUSTOMS_KEPT = 'The stricter option of each custom stays until you change it. CUSTOMS changes one at any time.';
-export const CUSTOMS_LATER = 'Customs can be reviewed on the website, under Customs. Until then the stricter option of each is used.';
+export const CUSTOMS_KEPT = 'The stricter option of each stays. CUSTOMS changes one.';
+export const CUSTOMS_LATER = 'Customs are on the website, under Customs. Until then the stricter option of each is used.';
 
 export const RECENT_ASK =
-  'Step 3 of 3: recent dates. Send the start of the most recent period: 1, the date, and day or night, e.g. 1 11/22 night (the night that begins that evening). Or reply SKIP.';
+  'Step 3 of 3: when did the last period begin? Send 1, the date, and day or night, e.g. 1 11/22 night. Or reply SKIP.';
 
-export const RECENT_NEXT = 'If they followed: send 2 and the hefsek date (2 11/26), and 4 and the evening of immersion (4 12/3). Reply DONE when finished.';
+export const RECENT_NEXT = 'If the hefsek was done, send 2 and its date, e.g. 2 11/26. Then DONE.';
 
 export const SETUP_DONE =
-  'Setup is finished. From now on text 1 when a flow begins, 2 after the hefsek, 4 after immersion, 9 for status. Reminders are off until you text REMINDERS ON. MENU lists everything.';
+  'Setup is finished. Text 1 when a flow begins, 2 after the hefsek, 9 for status. Reminders are off until REMINDERS ON. MENU lists everything.';
 
 export function joinedText(others: string): string {
   return `This phone is now on the account${others}. Text 9 for status, MENU for everything. Reminders are off for this phone until you text REMINDERS ON.`;
@@ -82,10 +82,10 @@ export const MENU_SUGGEST: Suggestion[] = [
 export const UNKNOWN =
   'Not understood; nothing was changed. Digits record: 1 flow, 2 hefsek, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. MENU lists the other words.';
 
-export const NOTHING_PENDING = 'There is no question waiting for an answer, so nothing was changed. MENU lists the words.';
+export const NOTHING_PENDING = 'No question is waiting; nothing was changed. MENU lists the words.';
 
 export function expired(again: string): string {
-  return `That question was sent more than 30 minutes ago, so it was closed and nothing was changed. ${again}`;
+  return `That question is over 30 minutes old and was closed; nothing was changed. ${again}`;
 }
 
 export const ALREADY_JOINED = 'This phone is already signed up. MENU lists the words.';
@@ -95,7 +95,7 @@ export const ALREADY_ON_ACCOUNT = 'This phone is already on a Betaharah account,
 
 export const NO_PLACE_STATUS = 'No location is set yet. Text LOCATION and your ZIP code, e.g. LOCATION 08701, or choose it on the website.';
 
-export const READ_ONLY = 'This phone may not record entries. That is changed on the website, under Settings.';
+export const READ_ONLY = 'This phone may not record entries (see Settings on the website).';
 
 export const ZIP_HINT = 'To change your location, send LOCATION and the ZIP code, e.g. LOCATION 08701. Nothing was changed.';
 
@@ -113,16 +113,16 @@ export const ADD_FORMAT = 'Not understood; nothing was changed. Send ADD on its 
 export const CUSTOMS_LIST =
   'Customs: reply a letter to see or change one. A wait before hefsek, B onah beinonit day, C onah beinonit length, D veset hachodesh length, E Or Zarua, F haflagah count, G longer haflagah, H flow on the 30th, I long cycles, J vesatot, K Yom Tov, L nightfall. CUSTOMS ALL goes through all 12.';
 
-export const CUSTOMS_ALL_DONE = 'All 12 customs are saved. The calendar follows what you selected. CUSTOMS changes one at any time.';
+export const CUSTOMS_ALL_DONE = 'All 12 customs are saved. CUSTOMS changes one.';
 
 export const KEPT_ONE = 'Kept as it was; nothing was changed.';
 
 export const VESATOT_ALREADY_PAUSED = 'Vesatot are already paused: no onot perishah are calculated. RESUME VESATOT turns them back on.';
 export const VESATOT_ALREADY_ON = 'Vesatot are already calculated. Nothing was changed.';
 export const PAUSE_ASK =
-  'Pause vesatot? The calendar will then show no onot perishah (for pregnancy, nursing, or on the instruction of a rav) until you send RESUME VESATOT. Reply YES to pause them, NO to keep them.';
-export const PAUSED = 'Changed: no vesatot are calculated for now, as you selected. RESUME VESATOT turns them back on.';
-export const RESUMED = 'Changed: vesatot are calculated again, as you selected.';
+  'Pause vesatot? No onot perishah are shown until you send RESUME VESATOT. Reply YES to pause them, NO to keep them.';
+export const PAUSED = 'Changed: vesatot are paused. RESUME VESATOT turns them back on.';
+export const RESUMED = 'Changed: vesatot are calculated again.';
 
 export const TERMS_HE = 'Changed: halachic terms in the calendar and on the website are now in Hebrew. Texts stay in English letters. TERMS ENGLISH changes it back.';
 export const TERMS_EN = 'Changed: halachic terms in the calendar and on the website are now in English letters. TERMS HEBREW changes it back.';
@@ -136,16 +136,16 @@ export function remindersOn(last4: string): string {
   return `Reminders are on for this phone (ending ${last4}). This phone agrees to receive reminder texts from Betaharah. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help.`;
 }
 export const REMINDERS_ALREADY_ON = 'Reminders are already on for this phone. REMINDERS OFF turns them off.';
-export const REMINDERS_OFF = 'Changed: reminders are off for this phone. Replies to your texts still come. REMINDERS ON turns them back on.';
+export const REMINDERS_OFF = 'Changed: reminders are off for this phone. REMINDERS ON turns them back on.';
 export const REMINDERS_ALREADY_OFF = 'Reminders are already off for this phone. REMINDERS ON turns them on.';
 export const OPTED_OUT = 'This phone replied STOP earlier. Reply START first, then REMINDERS ON.';
 
-export const KIND_NAMES = ['hefsek', 'morning bedikah', 'afternoon bedikah', 'mikvah night', 'immersion not recorded', 'onah'] as const;
+export const KIND_NAMES = ['hefsek', 'morning bedikah', 'afternoon bedikah', 'mikvah night', 'book the mikvah', 'onah'] as const;
 
 export function wordingChanged(style: 'plain' | 'discreet'): string {
   return style === 'discreet'
-    ? 'Changed: reminder wording is now discreet for every phone on the account: short letters, such as H for hefsek and M for mikvah, instead of the words.'
-    : 'Changed: reminder wording is now plain for every phone on the account: the full words.';
+    ? 'Changed: reminder wording is now discreet (letters such as H and M) for every phone.'
+    : 'Changed: reminder wording is now plain for every phone.';
 }
 export function wordingSame(style: 'plain' | 'discreet'): string {
   return `Reminder wording is already ${style}. Nothing was changed.`;

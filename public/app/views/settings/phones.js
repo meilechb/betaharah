@@ -5,7 +5,7 @@
  * two-step view (#settings/phones/add).
  */
 import { alert, api, button, confirmDialog, emptyState, h, icon, pretty, textField } from '../../lib.js';
-import { S, signOutLocally } from '../../store.js';
+import { S, signOutLocally, t } from '../../store.js';
 import { attempt, refresh, region } from '../shared.js';
 import { open, replace } from './route.js';
 import { andList, blockRow, group, infoRow, navRow, save, stTag, switchRow } from './ui.js';
@@ -30,8 +30,8 @@ function savePhone(p, change, message) {
 
 /** Why reminders cannot be turned on for this phone, in a sentence; null when they can. */
 function reasonOff(p) {
-  if (!S.sms.ready) return 'Text messaging is not available on this site yet, so nothing can be texted.';
-  if (!p.verified) return 'Verify this number first (below). Then reminders can be sent to it.';
+  if (!S.sms.ready) return 'Texting is not available yet.';
+  if (!p.verified) return 'Verify this number first.';
   if (p.optedOut) return 'This phone replied STOP. Text START from it first.';
   return null;
 }
@@ -57,7 +57,7 @@ function phoneSummary(p) {
 
 /** No phone on the account (an account that signs in with Google): what a phone is for, and adding one. */
 function emptyListView() {
-  const lead = 'A phone on this account can receive reminders by text, record dates by text, and sign in with a code texted to it.';
+  const lead = 'For reminders, recording by text and signing in.';
   return {
     title: 'Phones',
     parent: '',
@@ -69,7 +69,7 @@ function emptyListView() {
         emptyState({
           icon: 'phone',
           title: 'No phone yet.',
-          body: S.sms.ready ? lead + ' Up to ' + S.maxPhones + ' phones can share the account.' : lead + ' A phone can be added once text messaging is available on this site.',
+          body: S.sms.ready ? lead + ' Up to ' + S.maxPhones + ' phones can share the account.' : lead + ' Not available until texting is.',
           action: S.sms.ready ? button({ label: 'Add a phone', variant: 'primary', icon: 'plus', attrs: { id: 'phone-add-first' }, onclick: () => open('phones/add') }) : null,
         }),
       ),
@@ -81,14 +81,14 @@ function listView() {
   if (S.phones.length === 0) return emptyListView();
   const full = S.phones.length >= S.maxPhones;
   let addRow;
-  if (!S.sms.ready) addRow = infoRow({ icon: 'plus', title: 'Add a phone', summary: 'A second phone can be added once text messaging is available on this site.', className: 'muted-row' });
+  if (!S.sms.ready) addRow = infoRow({ icon: 'plus', title: 'Add a phone', summary: 'Not available until texting is.', className: 'muted-row' });
   else if (full) addRow = infoRow({ icon: 'plus', title: 'Add a phone', summary: 'This account has the most phones it can have (' + S.maxPhones + '). Remove one to add another.', className: 'muted-row' });
   else addRow = navRow({ path: 'phones/add', id: 'phone-add-row', icon: 'plus', leadKind: 'accent', title: 'Add a phone', summary: 'For husband and wife to share this account.' });
   return {
     title: 'Phones',
     parent: '',
     statusKey: 'phones',
-    lead: 'Up to ' + S.maxPhones + ' phones share this account. Each one chooses what it may do and which reminders it receives.',
+    lead: 'Up to ' + S.maxPhones + ' phones share this account.',
     body: [
       group(
         { title: S.phones.length === 1 ? 'The phone on this account' : 'The ' + S.phones.length + ' phones on this account', id: 'phones-list' },
@@ -148,7 +148,7 @@ function verifyPart(p) {
   if (busy && adding.step === 'code') return codeForm();
   return blockRow(
     h('p', { class: 'st-block-title' }, 'This number is not verified'),
-    h('p', { class: 'help' }, 'A 6-digit code is texted to it. Entering the code here shows the phone belongs to someone on this account; then reminders can be sent to it.'),
+    h('p', { class: 'help' }, 'A 6-digit code is texted to it.'),
     busy && adding.error ? alert({ kind: 'bad', role: 'alert' }, h('span', { id: 'phone-add-error', tabindex: '-1' }, adding.error)) : null,
     h('div', { class: 'actions' }, button({ label: 'Text a code to verify', variant: 'primary', icon: 'message', attrs: { id: 'verify-' + keyOf(p.number) }, onclick: e => requestCode(p.number, e.currentTarget, true) })),
   );
@@ -184,14 +184,14 @@ function detailView(key) {
           h('span', { class: 'st-hero-icon' }, icon('phone')),
           h('div', { class: 'st-hero-main' }, h('p', { class: 'st-hero-title' }, pretty(p.number)), h('p', { class: 'st-tags' }, tagsOf(p), p.verified && !p.optedOut ? stTag(getsReminders(p) ? 'reminders on' : 'reminders off', getsReminders(p) ? 'ok' : null) : null)),
         ),
-        p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP, so nothing is sent to it. Text START from it to receive texts again.') : null,
+        p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP. Text START to receive texts again.') : null,
         verify ? group({ title: 'Verification', id: 'phone-verify' }, verify) : null,
         group(
           { title: 'What this phone may do', id: 'phone-may' },
           switchRow({
             id: 'can-update-' + key,
             label: 'Record by text message',
-            help: S.sms.ready ? 'Texts from this phone, such as 1 or 2, are recorded.' : 'Text messaging is not available on this site yet; this applies once it is.',
+            help: S.sms.ready ? 'Texts from this phone, such as 1 or 2, are recorded.' : 'Texting is not available yet.',
             checked: p.canUpdate,
             onchange: e => {
               const on = e.target.checked;
@@ -201,7 +201,7 @@ function detailView(key) {
           switchRow({
             id: 'texts-' + key,
             label: 'Receive text reminders',
-            help: off || (p.texts ? 'The kinds chosen below are texted to this phone.' : 'Nothing is texted to this phone. Turning this on shows the terms first.'),
+            help: off || (p.texts ? null : 'The terms are shown first.'),
             checked: p.texts || showConsent,
             disabled: Boolean(off) && !p.texts,
             onchange: e => {
@@ -222,12 +222,13 @@ function detailView(key) {
               {
                 title: 'Reminders it receives',
                 id: 'phone-kinds',
-                footer: 'When each one is sent is set under Reminders, for every phone.',
+                footer: 'Their times are set under Reminders.',
               },
               kinds.map(k =>
                 switchRow({
                   id: 'rem-' + key + '-' + k,
                   label: S.labels.reminders[k] || k,
+                  help: k === 'mikvah_book' ? t('The morning after the {hefsek} is recorded.') : null,
                   checked: p.reminders.includes(k),
                   onchange: e => {
                     const on = e.target.checked;
@@ -266,7 +267,7 @@ function detailView(key) {
         group(
           { title: 'Test', id: 'phone-test' },
           blockRow(
-            h('p', { class: 'help' }, S.demo ? 'In the test account the text is simulated and shown in the list of messages; nothing is sent.' : 'Sends one short text to this phone, to check that texts arrive. It counts toward this month’s texts.'),
+            h('p', { class: 'help' }, S.demo ? 'Simulated in the test account.' : 'One short text, to check that texts arrive.'),
             h(
               'div',
               { class: 'actions' },
@@ -292,8 +293,8 @@ function detailView(key) {
                     p.me
                       ? 'This is the phone you are signed in with. Removing it signs you out here.'
                       : S.phones.length > 1
-                        ? 'It can no longer sign in, record by text, or receive reminders. The other phones keep everything.'
-                        : 'It can no longer sign in, record by text, or receive reminders. The account stays, and you sign in to it with Google.',
+                        ? 'It can no longer sign in or get texts.'
+                        : 'It can no longer sign in or get texts. You still sign in with Google.',
                   ),
                   h(
                     'div',
@@ -307,7 +308,7 @@ function detailView(key) {
                         const btn = e.currentTarget;
                         const ok = await confirmDialog({
                           title: 'Remove ' + pretty(p.number) + ' from this account?',
-                          body: p.me ? 'This is the phone you are signed in with. You will be signed out.' : 'It can no longer sign in to this account, record by text, or receive reminders.',
+                          body: p.me ? 'This is the phone you are signed in with. You will be signed out.' : 'It can no longer sign in or get texts.',
                           confirmLabel: 'Remove phone',
                           danger: true,
                         });
@@ -327,7 +328,7 @@ function detailView(key) {
                     }),
                   ),
                 ]
-              : h('p', { class: 'help' }, 'This is the only phone on the account, so it cannot be removed. To leave, delete the account under Your data.'),
+              : h('p', { class: 'help' }, 'The only phone cannot be removed.'),
           ),
         ),
       );
@@ -440,7 +441,7 @@ function addView() {
           'ol',
           { class: 'st-steps-intro' },
           h('li', {}, (S.phones.length ? 'Enter the other phone’s number.' : 'Enter the phone’s number.') + ' A 6-digit code is texted to it.'),
-          h('li', {}, 'Enter that code here. The phone is then on this account: it can sign in, record by text, and receive its own reminders.'),
+          h('li', {}, 'Enter that code here.'),
         ),
         h(
           'div',

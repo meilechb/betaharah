@@ -235,20 +235,20 @@ only here:
 
 ```
 > 1 11/1 night
-< Recorded: flow Sun Nov 1 night, 2026. Hefsek from Fri Nov 6. 0 to undo. If they followed: send 2 and the hefsek date (2 11/26), and 4 and the evening of immersion (4 12/3). Reply DONE when finished.
+< Recorded: flow Sun Nov 1 night, 2026. Hefsek from Fri Nov 6. 0 to undo. If the hefsek was done: send 2 and its date, e.g. 2 11/26. Reply DONE when finished.
   [buttons: Done]
 > 2 11/6
-< Recorded: hefsek Fri Nov 6, 2026. Clean days Sat Nov 7 - Fri Nov 13. Mikvah Fri Nov 13 after 5:25 PM. 0 to undo. The question before is still open: send 2 or 4 with a date, or DONE.
-  [buttons: Done]
-> 4 11/13
-< Recorded: mikvah Fri Nov 13 night, 2026. 0 to undo. The question before is still open: send 2 or 4 with a date, or DONE.
+< Recorded: hefsek Fri Nov 6, 2026. Clean days Sat Nov 7 - Fri Nov 13. Mikvah Fri Nov 13 after 5:25 PM. 0 to undo. The question before is still open: send 2 with a date, or DONE.
   [buttons: Done]
 > DONE
-< Setup is finished. From now on text 1 when a flow begins, 2 after the hefsek, 4 after immersion, 9 for status. Reminders are off until you text REMINDERS ON. MENU lists everything.
+< Setup is finished. From now on text 1 when a flow begins, 2 after the hefsek, 9 for status. Reminders are off until you text REMINDERS ON. MENU lists everything.
   [buttons: Status / History / Customs / Reminders]
 ```
 
-`SKIP` instead of a date finishes setup the same way.
+`SKIP` instead of a date finishes setup the same way. The immersion is not
+asked for: once the seven clean days are over, the calendar takes it that
+she immersed on the mikvah night (an immersion can still be recorded with
+`4` and its date, but nothing asks for it).
 
 `SETUP` when a location is already set:
 
@@ -304,8 +304,9 @@ Each word sent alone shows its own options (a second level of the menu).
 ### Recording: digits
 
 The existing commands are unchanged, with their existing replies:
-`1` flow began, `2` hefsek done, `3` count broken, `4` immersed, `5` stain,
-`9` status, `0` undo. After 1, 3 or 5: `day`, `night`, `yesterday day`,
+`1` flow began, `2` hefsek done, `3` count broken, `4` immersed (optional:
+nothing asks for it, and the calendar takes it that she immersed on the
+mikvah night), `5` stain, `9` status, `0` undo. After 1, 3 or 5: `day`, `night`, `yesterday day`,
 `yesterday night`, or a time (`9pm`, `9:30pm`, `21:30`). After 2 or 4:
 `yesterday`.
 
@@ -315,9 +316,9 @@ The existing commands are unchanged, with their existing replies:
 > 0
 < Removed: flow Tue Nov 24 night. Tehorah.
 > 1 tomorrow
-< Not understood; nothing was changed. 1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm).
+< Not understood; nothing was changed. 1 flow, 2 hefsek, 3 count broken, 4 mikvah (optional), 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm).
 > ?
-< 1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm). A date also works: 1 11/22 night, 2 11/26, 4 12/3. MENU lists the words.
+< 1 flow, 2 hefsek, 3 count broken, 4 mikvah (optional), 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm). A date also works: 1 11/22 night, 2 11/26, 4 12/3. MENU lists the words.
 ```
 
 Three replies are worded for both kinds of user, someone who only texts
@@ -340,7 +341,7 @@ For past dates (setup step 3, or anything forgotten):
 | `1 nov 22 9pm` | flow at 9 pm on Nov 22 (day or night is worked out from the time and sunset) |
 | `3 11/28 day`, `5 11/20 night` | count broken, stain: the same forms as 1 |
 | `2 11/26` | hefsek on Nov 26 |
-| `4 12/3` | immersion on the evening of Dec 3 |
+| `4 12/3` | immersion on the evening of Dec 3 (optional) |
 
 The date is month/day (`11/22`, `11/22/26`, `11/22/2026`) or a month name
 and day (`nov 22`, `november 22`, `nov 22 2025`). Without a year, it is the
@@ -470,7 +471,7 @@ Reminders are for each phone, and off until turned on.
 > REMINDERS OFF
 < Changed: reminders are off for this phone. Replies to your texts still come. REMINDERS ON turns them back on.
 > KINDS
-< Reminder kinds for this phone: A hefsek (on), B morning bedikah (on), C afternoon bedikah (on), D mikvah night (on), E immersion not recorded (on), F onah (on). Reply the letters of the kinds you want, e.g. A D F, or ALL or NONE. The others turn off.
+< Reminder kinds for this phone: A hefsek (on), B morning bedikah (on), C afternoon bedikah (on), D mikvah night (on), E book the mikvah (on), F onah (on). Reply the letters of the kinds you want, e.g. A D F, or ALL or NONE. The others turn off.
   [buttons: All / None]
 > A D F
 < Changed: this phone gets reminders for: hefsek, mikvah night, onah. They are sent once you text REMINDERS ON.
@@ -484,6 +485,14 @@ Reminders are for each phone, and off until turned on.
 time), and the reply carries the consent wording. A phone that replied STOP
 is told to reply START first. `WORDING` is one setting for the whole
 account, as on the website.
+
+Kind E, "book the mikvah", is sent at 9:00 AM (the time is set on the
+website) the morning after the hefsek taharah is recorded: `Book the mikvah:
+mikvah night is Thu Dec 3, after 5:16 PM.` (discreet: `Book M: Thu Dec 3
+after 5:16 PM.`). It replaced the question the morning after the mikvah
+night: no text asks whether she immersed. The mikvah night reminder ends at
+the time: `Mikvah night: Thu Dec 3, after 5:16 PM.` An account that had the
+old kind on gets this one.
 
 ### PHONES, ADD, REMOVE, LEAVE
 

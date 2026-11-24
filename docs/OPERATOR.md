@@ -109,14 +109,15 @@ How to use it:
 
 1. **Click a day** on the calendar. Beside the calendar (under it on a
    phone) the day opens with "What happened on this day?".
-2. **Press one button**: flow by day, flow at night, hefsek taharah, or
-   immersion that evening. "Other things to add" has stain, count broken, a
-   flow at a clock time, and the switch for a flow that does not count for
-   the vesatot. The date is added at once. A date an account would refuse is
+2. **Press one button**: flow by day, flow at night, or hefsek taharah.
+   "Other things to add" has stain, count broken, immersion that evening
+   (optional: once the seven clean days are over the calendar takes it that
+   she immersed on the mikvah night), a flow at a clock time, and the switch
+   for a flow that does not count for the vesatot. The date is added at once. A date an account would refuse is
    not kept, and the reason is shown where you added it.
 3. **Read the result**: the calendar marks the two months shown; "Where
    things stand" gives the status, warnings and pattern alerts; "What the
-   calendar works out" lists the steps until the immersion and each onah of
+   calendar works out" lists the steps until the mikvah night and each onah of
    separation with the reasons it is kept.
 
 What you entered and what the calendar works out are kept apart. A tick
@@ -151,7 +152,8 @@ lists label them "not entered" and "expected".
 The home page has a smaller version for visitors ("Try it",
 `POST /api/try`): a place from the list or a ZIP code, three customs
 (days before the hefsek, which day of onah beinonit, Or Zarua), up to 12
-dates of three kinds (flow, hefsek taharah, immersion), and a chosen
+dates (a flow, then its hefsek taharah; the walk then shows the clean days
+and the mikvah night and ends with the sign-up button), and a chosen
 "today". It saves nothing about the dates; the only thing stored is a
 counter per network address (a keyed fingerprint, as for sign-in), which
 allows 60 tries in 10 minutes.
@@ -282,7 +284,7 @@ proprietor"). Choose the closest option where the form has a list.
 | Terms | `https://betaharah.com/terms` |
 | Sample message 1 | `Betaharah code: 123456. It expires in 10 minutes. Do not share it.` |
 | Sample message 2 | `Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.` |
-| Sample message 3 | `Mikvah night: Thu Dec 3, after 5:16 PM. Reply 4 after immersing.` |
+| Sample message 3 | `Mikvah night: Thu Dec 3, after 5:16 PM.` |
 | Opt-in confirmation message | Sample message 2 |
 | HELP reply | `Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.` |
 

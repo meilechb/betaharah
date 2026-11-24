@@ -14,6 +14,7 @@ import { TABLES } from '../src/app/schema';
 import { codeText, HELP_REPLY, REMINDERS_ON_TEXT, START_REPLY, TEST_TEXT, tick } from '../src/app/service';
 import { DEFAULT_APP_SETTINGS, PLACES } from '../src/app/settings';
 import { loadHousehold } from '../src/app/store';
+import { encrypt } from '../src/app/crypto';
 import { civilToAbs, localToInstant } from '../src/engine/civil';
 import { clock12 } from '../src/engine/present';
 import { sunriseMs, sunsetMs } from '../src/engine/sun';
@@ -172,7 +173,7 @@ async function addPhone(owner: Client, number: string): Promise<void> {
   expect(r.status, JSON.stringify(r.json)).toBe(200);
 }
 
-async function textsOn(owner: Client, number: string, reminders = ['hefsek', 'bedikah_morning', 'bedikah_afternoon', 'mikvah', 'mikvah_confirm', 'onah']): Promise<void> {
+async function textsOn(owner: Client, number: string, reminders = ['hefsek', 'bedikah_morning', 'bedikah_afternoon', 'mikvah', 'mikvah_book', 'onah']): Promise<void> {
   const r = await owner.put('/api/phones', { number, name: '', canUpdate: true, reminders, texts: true });
   expect(r.status, JSON.stringify(r.json)).toBe(200);
 }
@@ -983,10 +984,11 @@ describe('one account never sees another', () => {
     expect(linkA).not.toBe(linkB);
     const feedA = (await new Client().get(new URL(linkA).pathname)).text.replace(/\r\n /g, '');
     const feedB = (await new Client().get(new URL(linkB).pathname)).text.replace(/\r\n /g, '');
-    expect(feedA).toContain('Nov 22\\, 2026');
-    expect(feedA).not.toContain('Nov 10\\, 2026');
-    expect(feedB).toContain('Tuesday evening\\, Nov 10\\, 2026');
-    expect(feedB).not.toContain('Nov 22\\, 2026');
+    // A's flow began at sunrise on Nov 22 (before noon in UTC), B's at sunset on the evening of Nov 10 (after 9 PM in UTC)
+    expect(feedA).toContain('DTSTART:20261122T11');
+    expect(feedA).not.toContain('DTSTART:20261110T21');
+    expect(feedB).toContain('DTSTART:20261110T21');
+    expect(feedB).not.toContain('DTSTART:20261122T11');
   });
 
   it('one account\'s stored data cannot be read in place of another\'s, even by someone who can write to the database', async () => {
@@ -1054,8 +1056,8 @@ describe('settings', () => {
     expect(en.words.hefsek).toBe('hefsek taharah');
     expect(en.status.headline).toBe('Niddah, before the hefsek taharah');
     expect(en.labels.kinds).toEqual({ flow: 'Flow', stain: 'Stain', hefsek: 'Hefsek taharah', broken: 'Count broken', mikvah: 'Immersion' });
-    expect(en.halachic.choices[0].title).toBe('Days to wait before the hefsek taharah');
-    expect(en.halachic.tzeitTitle).toBe('Nightfall, for the time of immersion');
+    expect(en.halachic.choices[0].title).toBe('Days before the hefsek taharah');
+    expect(en.halachic.tzeitTitle).toBe('Nightfall');
     expect(en.entries[0].text).toBe('Flow: Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
     expect(en.upcoming.map((e: any) => e.title)).toContain('Hefsek taharah (by 4:33 PM)');
     expect(JSON.stringify(en)).not.toMatch(/[֐-׿]/);
@@ -1066,7 +1068,7 @@ describe('settings', () => {
     expect(he.status.headline).toBe('נדה, before the הפסק טהרה');
     expect(he.labels.kinds).toEqual({ flow: 'ראייה', stain: 'כתם', hefsek: 'הפסק טהרה', broken: 'Count broken', mikvah: 'טבילה' });
     expect(he.labels.reminders.onah).toBe('עונת פרישה');
-    expect(he.halachic.choices[0].title).toBe('Days to wait before the הפסק טהרה');
+    expect(he.halachic.choices[0].title).toBe('Days before the הפסק טהרה');
     expect(he.entries[0].text).toBe('ראייה: Sunday, י״ב כסלו תשפ״ז (Nov 22, 2026), by day');
     expect(he.today.hebrew).toBe('Monday, י״ג כסלו תשפ״ז');
     expect(he.upcoming.map((e: any) => e.title)).toContain('הפסק טהרה (by 4:33 PM)');
@@ -1163,7 +1165,10 @@ describe('recording on the website', () => {
     world.clock.now = at(12, 3, 20);
     expect((await c.state()).status).toMatchObject({ phase: 'mikvah_tonight', day: null });
     world.clock.now = at(12, 4, 10);
-    expect((await c.state()).status).toMatchObject({ phase: 'mikvah_not_recorded', day: null });
+    // the next morning she is taken to have immersed: tehorah, with nothing to record
+    const after = await c.state();
+    expect(after.status).toMatchObject({ phase: 'tehorah', headline: 'Tehorah', detail: '', day: null });
+    expect(after.alerts).toEqual([]);
   });
 
   it('lists the text commands as rows, in the words the texts use', async () => {
@@ -1249,7 +1254,7 @@ describe('husband and wife on one account', () => {
     // a phone that may not record by text is told so, and nothing changes (it can still use the words that do not record)
     await text(WIFE, '1', 'ev-w');
     expect((await husband.state()).entries).toEqual([]);
-    expect(textsTo(WIFE).filter(t => !t.startsWith('Betaharah code'))).toEqual(['This phone may not record entries. That is changed on the website, under Settings.']);
+    expect(textsTo(WIFE).filter(t => !t.startsWith('Betaharah code'))).toEqual(['This phone may not record entries (see Settings on the website).']);
   });
 
   it('turning reminders on for a phone records the consent and sends one confirmation', async () => {
@@ -1433,7 +1438,7 @@ describe('text messages', () => {
     await text(HUSBAND, 'HELP', 'ev2', { autoresponseType: 'HELP' });
     expect(replies()).toEqual([HELP_REPLY, HELP_REPLY]);
     await text(HUSBAND, '?', 'ev3');
-    expect(replies().at(-1)).toMatch(/^1 flow began, 2 hefsek done/);
+    expect(replies().at(-1)).toMatch(/^1 flow, 2 hefsek, 3 count broken, 4 mikvah \(optional\)/);
   });
 
   it('HELP and START from a number with no account get the filed replies, and the number is not stored', async () => {
@@ -1522,6 +1527,64 @@ describe('reminders', () => {
     expect(reminders(WIFE)).toHaveLength(1);
     const s = await c.state();
     expect(s.sms.usedThisMonth).toBe(2); // the confirmation and the reminder
+  });
+
+  it('to book the mikvah: the morning after the hefsek is recorded, once, and never a question about the immersion', async () => {
+    await textsOn(c, WIFE);
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    // the hefsek of Thursday 26 November, recorded that evening by text
+    world.clock.now = at(11, 26, 16);
+    await text(WIFE, '2', 'ev-h');
+    world.clock.now = at(11, 27, 8, 59);
+    await run();
+    expect(reminders(WIFE).filter(t => t.startsWith('Book'))).toEqual([]);
+    world.clock.now = at(11, 27, 9, 1);
+    await run();
+    await run();
+    expect(reminders(WIFE).filter(t => t.startsWith('Book'))).toEqual([expect.stringMatching(/^Book the mikvah: mikvah night is Thu Dec 3, after 5:1\d PM\.$/)]);
+    // the mikvah night and the morning after: no question, no prompt
+    world.clock.now = at(12, 3, 16);
+    await run();
+    world.clock.now = at(12, 4, 9, 30);
+    await run();
+    const all = reminders(WIFE);
+    expect(all.find(t => t.startsWith('Mikvah night'))).toMatch(/^Mikvah night: Thu Dec 3, after 5:1\d PM\.$/);
+    for (const t of all) expect(t).not.toMatch(/Reply 4|immers|not recorded|no M recorded/i);
+    expect((await c.state()).status).toMatchObject({ phase: 'tehorah' });
+  });
+
+  it('an account saved before: the question about the immersion is read as the reminder to book the mikvah, with no migration', async () => {
+    const row = await testDb.db.prepare('SELECT id FROM households').first<{ id: string }>();
+    const stored = (await loadHousehold(env, row!.id))!.data;
+    // the document as it was saved before: the old kind in the phones' lists, the old setting's name
+    const old = JSON.parse(JSON.stringify(stored)) as Record<string, any>;
+    const { mikvahBook: _new, ...reminderSettings } = old.app.reminders;
+    old.app.reminders = { ...reminderSettings, mikvahConfirm: { on: true, hour: 8, minute: 15 } };
+    old.phones = old.phones.map((p: any) => ({ ...p, reminders: ['hefsek', 'mikvah', 'mikvah_confirm', 'onah'] }));
+    expect(JSON.stringify(old)).not.toContain('mikvah_book');
+    await testDb.db
+      .prepare('UPDATE households SET data = ? WHERE id = ?')
+      .bind(await encrypt(env.ENCRYPTION_KEY, JSON.stringify(old), `household:${row!.id}`), row!.id)
+      .run();
+    const data = (await loadHousehold(env, row!.id))!.data;
+    expect(data.app.reminders.mikvahBook).toEqual({ on: true, hour: 8, minute: 15 });
+    expect('mikvahConfirm' in data.app.reminders).toBe(false);
+    for (const p of data.phones) expect(p.reminders).toEqual(['hefsek', 'mikvah', 'mikvah_book', 'onah']);
+    // the page and the reminders work from it
+    const s = await c.state();
+    expect(s.app.reminders.mikvahBook.hour).toBe(8);
+    expect(s.phones.every((p: any) => p.reminders.includes('mikvah_book'))).toBe(true);
+    expect(s.labels.reminders.mikvah_book).toBe('Book the mikvah');
+    // a page that still sends the old kind is understood too
+    await textsOn(c, WIFE, ['mikvah_confirm']);
+    expect((await c.state()).phones.find((p: any) => p.number === WIFE).reminders).toEqual(['mikvah_book']);
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    world.clock.now = at(11, 26, 16);
+    await c.post('/api/entries', { kind: 'hefsek', date: '2026-11-26' });
+    const waitingKeys = (await queue()).filter(q => q.status === 'pending').map(q => q.key);
+    expect(waitingKeys).toEqual([expect.stringMatching(/^mikvah_book:/)]);
+    const q = (await queue()).find(x => x.key.startsWith('mikvah_book:'))!;
+    expect(new Date(q.at).toISOString()).toBe(new Date(at(11, 27, 8, 15)).toISOString());
   });
 
   it('what waits to be sent is unreadable in the database', async () => {
@@ -2232,7 +2295,7 @@ describe('the test account', () => {
       ['out', '0100', status, 'simulated'],
       ['in', '0100', '9', 'simulated'],
     ]);
-    expect(await demoText(c, '?')).toMatch(/^1 flow began, 2 hefsek done/);
+    expect(await demoText(c, '?')).toMatch(/^1 flow, 2 hefsek, 3 count broken, 4 mikvah \(optional\)/);
     expect(await demoText(c, 'HELP')).toBe(HELP_REPLY);
     expect(await demoText(c, 'what?')).toMatch(/^Not understood; nothing was changed\./);
 
@@ -2257,7 +2320,7 @@ describe('the test account', () => {
 
     // a phone that may not record by text is told so
     await c.put('/api/phones', { number: DEMO_NUMBER, name: 'Test phone', canUpdate: false, reminders: [], texts: true });
-    expect(await demoText(c, '1')).toBe('This phone may not record entries. That is changed on the website, under Settings.');
+    expect(await demoText(c, '1')).toBe('This phone may not record entries (see Settings on the website).');
     s = await c.state();
     expect(s.entryCount).toBe(14);
     expect(s.messages[1]).toMatchObject({ direction: 'in', body: '1', status: 'simulated' });
@@ -2538,7 +2601,7 @@ describe('the month calendar on the dashboard', () => {
     expect(flow).toMatchObject({ title: 'Flow (night)', allDay: false, projected: false, light: false, startDate: '2026-11-22', endDate: '2026-11-23' });
     expect(flow.start).toMatch(/^4:\d\d PM$/);
     expect(flow.end).toMatch(/^6:\d\d AM$/);
-    expect(flow.description).toContain('Sunday evening, Nov 22, 2026');
+    expect(flow.description).toBe(''); // its date and hours are not repeated
 
     // a clean day is all-day: it starts and ends on the same date, with no times
     const clean = grid.events.find((e: any) => e.kind === 'clean_day');
@@ -2574,10 +2637,9 @@ describe('the month calendar on the dashboard', () => {
     expect(s.grid.events.find((e: any) => e.kind === 'clean_day').title).toBe('Seven clean days: day 1 (projected)');
     const flow = s.grid.events.find((e: any) => e.kind === 'flow');
     expect(flow.title).toBe('Flow (night)');
-    expect(flow.description).not.toBe('');
     for (const e of s.grid.events) {
       expect(e.title).not.toMatch(/^[•◆◇]|^\d\/7|^[HM] /);
-      expect(e.description.length).toBeGreaterThan(0);
+      if (e.kind === 'clean_day' || e.kind === 'onah' || e.kind === 'hefsek') expect(e.description.length).toBeGreaterThan(0);
     }
     // in the household's form of the terms
     expect((await c.put('/api/app', appSettings({ terms: 'he', calendar: { ...DEFAULT_APP_SETTINGS.calendar, style: 'discreet' } }))).status).toBe(200);

@@ -136,7 +136,8 @@ describe('the setup conversation', () => {
     expect(p.say('hello')).toBe(T.NOT_A_ZIP);
     expect(p.chat?.q.kind).toBe('zip');
     const out = p.send('h3w 1a1');
-    expect(out.out[0]!.text).toBe('Location set: Cote-Saint-Luc, QC H3W. Sunset and nightfall are now worked out for it.');
+    // short enough now to go with the next question in one text
+    expect(out.out[0]!.text).toBe(`Location set: Cote-Saint-Luc, QC H3W. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`);
     expect(data.app.place?.timeZone).toBe('America/Toronto');
     expect(data.app.place?.name).toBe(PLACES.H3W!.name); // stored as found
     expect(out.changed).toBe(true);
@@ -152,7 +153,7 @@ describe('the setup conversation', () => {
     expect(p.send('', { location: { latitude: 10, longitude: 10 } }).out[0]!.text).toBe(T.NO_PLACE_NEAR);
     expect(data.app.place).toBeNull();
     const out = p.send('', { location: { latitude: 40.08, longitude: -74.2 } });
-    expect(out.out[0]!.text).toBe('Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it.');
+    expect(out.out[0]!.text).toBe(`Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`);
     expect(out.chat?.q.kind).toBe('customs_intro');
   });
 
@@ -215,7 +216,7 @@ describe('a pending question', () => {
       expect(JSON.stringify(data), name).toBe(before);
       expect(out.changed).toBe(false);
       expect(out.chat).toBeNull();
-      expect(texts(out)).toMatch(/^That question was sent more than 30 minutes ago, so it was closed and nothing was changed\. Send /);
+      expect(texts(out)).toMatch(/^That question is over 30 minutes old and was closed; nothing was changed\. Send /);
     });
 
     it(`${name}: still open at 29 minutes`, () => {
@@ -352,7 +353,7 @@ describe('the menu and the words', () => {
   });
 
   it('? is the digit help, with the dated forms and MENU', () => {
-    expect(new Phone(household()).say('?')).toMatch(/^1 flow began, .* A date also works: 1 11\/22 night, 2 11\/26, 4 12\/3\. MENU lists the words\.$/);
+    expect(new Phone(household()).say('?')).toMatch(/^1 flow, 2 hefsek, .* A date also works: 1 11\/22 night, 2 11\/26, 4 12\/3\. MENU lists the words\.$/);
   });
 
   it('the existing digit commands give exactly their existing replies', () => {

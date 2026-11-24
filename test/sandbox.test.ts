@@ -255,30 +255,32 @@ describe('the same picture as an account', () => {
     });
   }
 
-  it('a new period after a count with no immersion recorded: its own days of waiting, the earlier hefsek kept, and a note', () => {
-    // The owner's dates: a period on Oct 23, the hefsek taharah on Oct 28, no immersion recorded, a new period on Nov 24.
+  it('a new period after a count with no immersion recorded: its own days of waiting, the earlier hefsek kept, and no alert', () => {
+    // The owner's dates: a period on Oct 23, the hefsek taharah on Oct 28, no immersion recorded (she is taken to have
+    // immersed on the mikvah night), a new period on Nov 24.
     const entries: Array<Record<string, unknown>> = [
       { kind: 'flow', date: '2026-10-23', part: 'day' },
       { kind: 'hefsek', date: '2026-10-28' },
       { kind: 'flow', date: '2026-11-24', part: 'day' },
     ];
     const run = (list: Array<Record<string, unknown>>) => runSandbox({ place: { name: 'Lakewood, NJ' }, today: { date: '2026-11-24', part: 'day' }, entries: list }, ADMIN_SANDBOX_LIMITS);
+    // before the new flow, with the count long over, she is tehorah
+    const before = run(entries.slice(0, 2));
+    expect(before.state.status!.phase).toBe('tehorah');
+    expect(before.state.alerts).toEqual([]);
     const r = run(entries);
     expect(r.outcomes.every(o => o.ok)).toBe(true);
-    expect(r.message).toBe('Recorded: flow Tue Nov 24 by day. No mikvah was recorded before it, so it counts as a new period. Hefsek from Sat Nov 28.');
+    expect(r.message).toBe('Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.');
     expect(r.state.status!.headline).toBe('Niddah, before the hefsek taharah');
-    expect(r.state.status!.detail).toBe(
-      'Began: Tuesday, 14 Kislev 5787 (Nov 24, 2026), by day. The hefsek taharah can be done from Shabbat, 18 Kislev 5787 (Nov 28, 2026). Next possible day: Shabbat, Nov 28, 2026, before 4:32 PM.',
-    );
-    expect(r.state.alerts.map(a => a.text)).toEqual([
-      'No immersion is recorded for the period before the latest one, so the calendar counts the latest flow as a new period, with the days of waiting. If she immersed, record the immersion. If she had not immersed, ask a rav.',
-    ]);
+    expect(r.state.status!.detail).toBe('Hefsek taharah from Sat, Nov 28, before 4:32 PM.');
+    expect(r.state.alerts).toEqual([]);
     const events = r.state.grid!.events;
     const on = (date: string) => events.filter(e => e.startDate === date).map(e => e.title);
     expect(on('2026-10-23')).toEqual(['Flow (day)']);
     expect(on('2026-10-28')).toEqual(['Hefsek taharah ✓']); // the earlier hefsek is not lost
     expect(on('2026-10-29')).toEqual(['Seven clean days: day 1']);
-    expect(on('2026-11-04')).toEqual(['Seven clean days: day 7', 'Mikvah night: no immersion recorded']);
+    expect(on('2026-11-04')).toEqual(['Seven clean days: day 7', 'Mikvah night (after 5:33 PM)']); // an ordinary mikvah night
+    expect(events.find(e => e.startDate === '2026-11-04' && e.kind === 'mikvah')!.description).toBe('');
     expect(on('2026-11-24')).toEqual(['Flow (day)']); // and no hefsek is put on the day of the new period
     expect(on('2026-11-28')).toEqual(['Hefsek taharah (by 4:32 PM)']);
     expect(events.filter(e => e.kind === 'hefsek').map(e => [e.startDate, e.projected])).toEqual([
@@ -293,6 +295,23 @@ describe('the same picture as an account', () => {
     expect(withMikvah.state.alerts).toEqual([]);
     expect(withMikvah.state.status!.detail).toBe(r.state.status!.detail);
     expect(withMikvah.state.grid!.events.filter(e => e.startDate === '2026-11-04').map(e => e.title)).toEqual(['Seven clean days: day 7', 'Immersion ✓']);
+    // nothing anywhere asks about the immersion
+    for (const x of [before, r]) {
+      const words = JSON.stringify([x.message, x.state.status, x.state.alerts, x.state.grid!.events.map(e => [e.title, e.description])]);
+      expect(words).not.toMatch(/no immersion|not recorded|If she immersed|Reply 4/i);
+    }
+  });
+
+  it('a new period after one with no hefsek recorded: a new period, and one short note', () => {
+    const run = (list: Array<Record<string, unknown>>) => runSandbox({ place: { name: 'Lakewood, NJ' }, today: { date: '2026-11-24', part: 'day' }, entries: list }, ADMIN_SANDBOX_LIMITS);
+    const r = run([
+      { kind: 'flow', date: '2026-10-23', part: 'day' },
+      { kind: 'flow', date: '2026-11-24', part: 'day' },
+    ]);
+    expect(r.outcomes.every(o => o.ok)).toBe(true);
+    expect(r.message).toBe('Recorded: flow Tue Nov 24 by day. No hefsek was recorded before it, so it is a new period. Hefsek from Sat Nov 28.');
+    expect(r.state.alerts.map(a => a.text)).toEqual(['No hefsek taharah was recorded for the period before; this is counted as a new period.']);
+    expect(r.state.status!.detail).toBe('Hefsek taharah from Sat, Nov 28, before 4:32 PM.');
   });
 
   it('the histories show what they were made for', () => {
@@ -303,7 +322,7 @@ describe('the same picture as an account', () => {
     expect(broken!.outcomes.every(o => o.ok)).toBe(true);
     expect(pattern!.outcomes.every(o => o.ok)).toBe(true);
     expect(pattern!.state.alerts.some(a => /Three intervals in a row of 29 days/.test(a.text))).toBe(true);
-    expect(long!.state.alerts.some(a => /after day 31/.test(a.text))).toBe(true);
+    expect(long!.state.alerts.some(a => /past day 31/.test(a.text))).toBe(true);
     expect(refusals!.outcomes.map(o => (o.ok ? 'ok' : o.error))).toEqual([
       'Not recorded: no period is open. Record when the period began first.',
       'ok',
@@ -316,7 +335,7 @@ describe('the same picture as an account', () => {
       'ok',
     ]);
     // the early hefsek is kept, with the warning the dashboard shows
-    expect(refusals!.state.alerts.some(a => /before the days of waiting were over/.test(a.text))).toBe(true);
+    expect(refusals!.state.alerts.some(a => /before the days of waiting ended/.test(a.text))).toBe(true);
     expect(jerusalem!.outcomes.every(o => o.ok)).toBe(true);
     expect(jerusalem!.state.terms).toBe('he');
   });

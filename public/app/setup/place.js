@@ -96,7 +96,7 @@ function useDevice(e) {
   const btn = e.currentTarget;
   st.geoError = '';
   if (!navigator.geolocation) {
-    st.geoError = 'This browser cannot give its location. Choose from the list or type a ZIP code instead.';
+    st.geoError = 'This browser cannot give its location.';
     render();
     return;
   }
@@ -131,8 +131,8 @@ function useDevice(e) {
             resolve();
             st.geoError =
               err && err.code === 1
-                ? 'The browser was not allowed to share the location. Choose from the list or type a ZIP code instead.'
-                : 'The location could not be read. Choose from the list or type a ZIP code instead.';
+                ? 'The location was not shared.'
+                : 'The location could not be read.';
             flow.focus = 'setup-geo';
             render();
           },
@@ -169,7 +169,7 @@ function useCoords() {
 function save(e) {
   const btn = e.currentTarget;
   if (!st.cand) {
-    st.saveError = 'Choose a place first: type a ZIP code, pick one from the list, or use this device’s location.';
+    st.saveError = 'Choose a place first.';
     flow.focus = st.zipUnavailable ? 'setup-place-list' : 'setup-zip';
     render();
     return;
@@ -217,7 +217,7 @@ export function placeView() {
   const listIndex = st.candFrom === 'list' ? S.places.findIndex(p => p.name === st.cand.name) : -1;
 
   const zipPart = st.zipUnavailable
-    ? alert({ kind: 'info' }, 'Looking up a ZIP code is not available yet. Choose your place from the list below, or use this device’s location.')
+    ? alert({ kind: 'info' }, 'ZIP codes are not available yet. Choose from the list.')
     : h(
         'form',
         { class: 'setup-zip', novalidate: true, onsubmit: lookUpZip },
@@ -247,7 +247,7 @@ export function placeView() {
 
   return screen({
     title: 'Where do you live?',
-    intro: t('The times of {sunset} and {nightfall} depend on the place, so the calendar needs to know where you are.'),
+    intro: t('The times of {sunset} and {nightfall} are worked out for it.'),
     body: [
       zipPart,
       h('h3', { class: 'setup-or' }, st.zipUnavailable ? 'Choose from the list' : 'Or choose from the list'),
@@ -270,7 +270,7 @@ export function placeView() {
         'div',
         { class: 'field', id: 'setup-geo', tabindex: '-1' },
         button({ label: 'Use this device’s location', icon: 'map', onclick: useDevice, attrs: { id: 'setup-geo-button' } }),
-        h('div', { class: 'help' }, 'The browser asks for permission first. The location is used only to work out the times.'),
+        h('div', { class: 'help' }, 'Used only to work out the times.'),
         st.geoError ? h('div', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, st.geoError)) : null,
       ),
       h(
@@ -281,7 +281,7 @@ export function placeView() {
           ontoggle: e => (st.coordsOpen = e.target.open),
         },
         h('summary', {}, icon('chevron-right', { size: 'sm' }), 'Enter coordinates instead'),
-        h('p', { class: 'help' }, 'For a place not on the list. Decimal degrees, as a map app shows them.'),
+        h('p', { class: 'help' }, 'Decimal degrees, as a map app shows them.'),
         h(
           'div',
           { class: 'coords-grid' },

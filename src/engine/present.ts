@@ -68,7 +68,7 @@ export function reasonsEnglish(reasons: readonly VesetReason[], maxItems = 4): s
 
 // ---------- reminders ----------
 
-export type ReminderKind = 'hefsek' | 'bedikah_morning' | 'bedikah_afternoon' | 'mikvah' | 'mikvah_confirm' | 'onah';
+export type ReminderKind = 'hefsek' | 'bedikah_morning' | 'bedikah_afternoon' | 'mikvah' | 'mikvah_book' | 'onah';
 
 export interface Reminder {
   /** Stable identity: a reminder is sent once per key. */
@@ -92,8 +92,8 @@ export interface ReminderOptions {
   hefsek: { on: boolean; minutesBeforeSunset: number };
   bedikot: { on: boolean; morningHour: number; morningMinute: number; minutesBeforeSunset: number };
   mikvah: { on: boolean; minutesBeforeSunset: number };
-  /** The morning after the planned night, if no immersion is recorded. */
-  mikvahConfirm: { on: boolean; hour: number; minute: number };
+  /** To book the mikvah: the morning after the day the hefsek taharah was recorded. */
+  mikvahBook: { on: boolean; hour: number; minute: number };
   onah: { on: boolean; minutesBefore: number };
   /** Send before Shabbat or Yom Tov what would otherwise be sent during it. */
   beforeRestDays: boolean;
@@ -106,7 +106,7 @@ export const DEFAULT_REMINDER_OPTIONS: ReminderOptions = {
   hefsek: { on: true, minutesBeforeSunset: 120 },
   bedikot: { on: true, morningHour: 8, morningMinute: 0, minutesBeforeSunset: 90 },
   mikvah: { on: true, minutesBeforeSunset: 180 },
-  mikvahConfirm: { on: true, hour: 9, minute: 0 },
+  mikvahBook: { on: true, hour: 9, minute: 0 },
   onah: { on: true, minutesBefore: 120 },
   beforeRestDays: true,
   hefsekMaxDays: 10,
@@ -116,6 +116,12 @@ export interface ReminderContext {
   place: GeoPoint;
   zopts: ZmanimOptions;
   yomTov: 'diaspora' | 'israel';
+  /**
+   * When a log entry was recorded (epoch ms), if known. The reminder to book
+   * the mikvah goes the morning after the hefsek taharah was recorded; without
+   * this, the morning after the day of the hefsek.
+   */
+  recordedAt?: (entryId: string) => number | undefined;
 }
 
 const CANDLE_LIGHTING_MINUTES = 18;
@@ -281,33 +287,37 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
       }
       const m = open.planMikvah;
       const after = clock12(m.tzeit, tz, 'ceil');
+      if (opts.mikvahBook.on && open.hefsekId !== null) {
+        // The morning after the day the hefsek was recorded: a hefsek recorded days late still gets it, unless
+        // that morning is already the day of the mikvah night (the mikvah reminder comes that day).
+        const recorded = ctx.recordedAt?.(open.hefsekId);
+        const day = (recorded === undefined ? open.hefsekAbs : localAbs(recorded, tz)) + 1;
+        if (day < m.eveningAbs) {
+          push(
+            `mikvah_book:${open.startId}:${open.hefsekAbs}`,
+            'mikvah_book',
+            localTime(day, opts.mikvahBook.hour, opts.mikvahBook.minute),
+            discreet ? `Book M: ${englishDate(m.eveningAbs)} after ${after}.` : `Book the mikvah: mikvah night is ${englishDate(m.eveningAbs)}, after ${after}.`,
+            'after',
+          );
+        }
+      }
       if (opts.mikvah.on) {
         const notes: string[] = [];
         if (m.postponedOver.length > 0) notes.push('moved past the fast');
         if (m.restNight) notes.push('Shabbat or Yom Tov night, prepare before');
         else if (m.afterRestDay) notes.push('after Shabbat or Yom Tov');
         const clash = t.onot.some(o => o.onMikvahNight && o.onah.abs === m.nightAbs);
-        if (clash) notes.push('it is also an onah, ask a rav');
+        if (clash) notes.push('also an onah');
         const tail = notes.length ? ` (${notes.join('; ')})` : '';
         push(
           `mikvah:${open.startId}:${open.hefsekAbs}:${m.nightAbs}`,
           'mikvah',
           m.sunset - opts.mikvah.minutesBeforeSunset * MINUTE,
           discreet
-            ? `M night: ${englishDate(m.eveningAbs)} after ${after}${tail}. Reply 4 after.`
-            : `Mikvah night: ${englishDate(m.eveningAbs)}, after ${after}${tail}. Reply 4 after immersing.`,
+            ? `M night: ${englishDate(m.eveningAbs)} after ${after}${tail}.`
+            : `Mikvah night: ${englishDate(m.eveningAbs)}, after ${after}${tail}.`,
           'before',
-        );
-      }
-      if (opts.mikvahConfirm.on) {
-        push(
-          `mikvah_confirm:${open.startId}:${open.hefsekAbs}:${m.nightAbs}`,
-          'mikvah_confirm',
-          localTime(m.nightAbs, opts.mikvahConfirm.hour, opts.mikvahConfirm.minute),
-          discreet
-            ? `No M recorded for ${englishDate(m.eveningAbs)} night. Reply 4 if done.`
-            : `No immersion is recorded for ${englishDate(m.eveningAbs)} night. Reply 4 if she immersed.`,
-          'after',
         );
       }
     }
@@ -321,7 +331,7 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
       const to = `${clock12(b.end, tz, 'ceil')} ${toDay}`;
       const why = reasonsEnglish(b.reasons);
       const orZaruaOnly = b.reasons.every(r => r.kind === 'or_zarua') ? 'Or Zarua of ' : '';
-      const clash = b.onMikvahNight ? ' Mikvah night too, ask a rav.' : '';
+      const clash = b.onMikvahNight ? ' Mikvah night too.' : '';
       push(
         `onah:${b.firstIndex}:${Math.round((b.end - b.start) / MINUTE)}`,
         'onah',
@@ -349,8 +359,12 @@ export function statusText(t: Timeline, timeZone: string): string {
   const p = t.status.period;
   const phase = t.status.phase;
   switch (phase.kind) {
-    case 'before_hefsek':
-      return `Niddah since ${englishDate(p.start.abs)}. Hefsek from ${englishDate(p.earliestHefsekAbs)}; next possible ${englishDate(p.planHefsekAbs)} before ${clock12(p.hefsekSunset, timeZone, 'floor')}.`;
+    case 'before_hefsek': {
+      const day = `${englishDate(p.planHefsekAbs)} before ${clock12(p.hefsekSunset, timeZone, 'floor')}`;
+      return p.planHefsekAbs === p.earliestHefsekAbs
+        ? `Niddah since ${englishDate(p.start.abs)}. Hefsek from ${day}.`
+        : `Niddah since ${englishDate(p.start.abs)}. Hefsek from ${englishDate(p.earliestHefsekAbs)}; next possible ${day}.`;
+    }
     case 'before_first_day':
       return `Hefsek done ${englishDate(p.planHefsekAbs)}. Clean day 1 is ${englishDate(p.planCleanDays[0]!.abs)}. Mikvah ${englishDate(p.planMikvah.eveningAbs)} after ${clock12(p.planMikvah.tzeit, timeZone, 'ceil')}.`;
     case 'counting':
@@ -359,7 +373,5 @@ export function statusText(t: Timeline, timeZone: string): string {
       return `Count complete; no immersion tonight. Mikvah ${englishDate(p.planMikvah.eveningAbs)} after ${clock12(p.planMikvah.tzeit, timeZone, 'ceil')}.`;
     case 'mikvah_tonight':
       return `Mikvah tonight after ${clock12(p.planMikvah.tzeit, timeZone, 'ceil')}.`;
-    case 'mikvah_not_recorded':
-      return `Count complete since ${englishDate(p.planMikvah.eveningAbs)}; no immersion recorded. Reply 4 after immersing.`;
   }
 }

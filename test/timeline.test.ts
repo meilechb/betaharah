@@ -112,9 +112,16 @@ describe('status through one period', () => {
     expect(gap).toBeLessThan(50);
   });
 
-  it('the next day with no immersion recorded', () => {
+  it('from sunrise after the night of immersion she is tehorah, with no immersion recorded', () => {
+    // the night of immersion goes on until sunrise
+    const before = run([flow, hefsek], at(2026, 12, 4, 6));
+    expect(before.status.state === 'niddah' && before.status.phase).toEqual({ kind: 'mikvah_tonight' });
     const t = run([flow, hefsek], at(2026, 12, 4, 10));
-    expect(t.status.state === 'niddah' && t.status.phase).toEqual({ kind: 'mikvah_not_recorded' });
+    expect(t.status).toEqual({ state: 'tehorah' });
+    expect(t.periods[0]!.mikvahDoneAbs).toBeNull();
+    expect(t.warnings).toEqual([]);
+    // and weeks later, still
+    expect(run([flow, hefsek], at(2026, 12, 20, 10)).status).toEqual({ state: 'tehorah' });
   });
 
   it('after immersion she is tehorah', () => {

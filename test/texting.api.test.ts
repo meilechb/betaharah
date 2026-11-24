@@ -234,7 +234,7 @@ describe('the whole life of an account, by text message alone', () => {
 
     // Step 1: the ZIP code.
     expect(await sms(WIFE, '99999')).toEqual([T.unknownZip('99999')]);
-    expect(await sms(WIFE, '08701')).toEqual(['Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it.', T.CUSTOMS_INTRO]);
+    expect(await sms(WIFE, '08701')).toEqual([`Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`]);
     h = (await householdOf(WIFE))!;
     expect(h.data.app.place).toMatchObject({ name: 'Lakewood, NJ 08701', timeZone: TZ });
 
@@ -361,8 +361,8 @@ describe('the same conversation over RCS', () => {
     // A shared location answers the ZIP question with the nearest ZIP code.
     const near = nearestPostal(40.0821, -74.2097)!;
     const located = await rcs(WIFE, { location: { latitude: 40.0821, longitude: -74.2097 } });
-    expect(located.map(m => m.text)).toEqual([`Location set: ${near.name}. Sunset and nightfall are now worked out for it.`, T.CUSTOMS_INTRO]);
-    expect(located[1]!.suggestions).toEqual(['A: Keep for now=A', 'B: Answer by text=B', 'C: Later, website=C']);
+    expect(located.map(m => m.text)).toEqual([`Location set: ${near.name}. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`]);
+    expect(located[0]!.suggestions).toEqual(['A: Keep for now=A', 'B: Answer by text=B', 'C: Later, website=C']);
     expect((await householdOf(WIFE))!.data.app.place).toMatchObject({ name: near.name, latitude: near.latitude });
 
     const kept = await rcs(WIFE, tap('A', 'A: Keep for now'));
@@ -750,7 +750,7 @@ describe('what can be read in the database', () => {
     await createInvitationWord(env, { word, now: START });
     await sms(HUSBAND, 'hello'); // a stranger: counters only
     expect(await sms(WIFE, `JOIN ${word}`)).toEqual([T.SETUP_START]);
-    expect(await sms(WIFE, '08701')).toHaveLength(2);
+    expect(await sms(WIFE, '08701')).toHaveLength(1); // the location and the next question in one text
     expect((await sms(WIFE, 'B'))[0]).toMatch(/^Custom 1 of 12/); // a pending custom question
     const code = codeIn((await sms(WIFE, 'ADD'))[0]!);
     const web = (await sms(WIFE, 'WEB'))[0]!;
@@ -809,7 +809,7 @@ describe('the operator\'s simulator', () => {
     const h = (await householdOf(FICTIONAL))!;
     expect(h.id).toBe(joined.householdId);
     expect(h.data.demo).toBe(true);
-    expect((await say('08701')).replies.map(r => r.text)).toEqual(['Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it.', T.CUSTOMS_INTRO]);
+    expect((await say('08701')).replies.map(r => r.text)).toEqual([`Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`]);
     expect((await say('A')).outcome).toBe('conversed');
     expect((await say('1 11/19 day')).replies[0]!.text).toMatch(/^Recorded: flow Thu Nov 19 by day, 2026\./);
     expect((await say('DONE')).replies).toEqual([{ text: T.SETUP_DONE, suggestions: T.MENU_SUGGEST }]);

@@ -3,8 +3,9 @@
  * a weekday header, each day with its civil and Hebrew day, marks for what
  * falls on it, Shabbat and Yom Tov shaded, today outlined; the legend, always
  * shown, in two groups (what she recorded, what the calendar works out); and
- * the chosen day: its date, sunrise and sunset, for today or an earlier day
- * one-click buttons for what happened on it, and what is marked on it.
+ * the chosen day: its date, Hebrew date, sunrise and sunset on one line, for
+ * today or an earlier day one-click buttons for what happened on it, and what
+ * is marked on it.
  * Arrow keys move between days.
  */
 import { button, card, checkRow, h, icon, selectField, textField } from '../lib.js';
@@ -222,8 +223,8 @@ function nightOf(date) {
 function eventRow(e, continuing) {
   const n = e.kind === 'clean_day' ? cleanDayNumber(e) : null;
   const night = !continuing && !e.allDay && isNight(e) && e.kind !== 'flow';
-  const state = stateTag(e, S.grid.today);
-  const desc = continuing ? '' : describe(e, { dated: true });
+  const state = stateTag(e);
+  const desc = continuing ? '' : describe(e);
   return h(
     'li',
     { class: 'ev ' + e.kind + (e.projected ? ' projected' : '') },
@@ -262,7 +263,7 @@ function addButton(id, body, label) {
   );
 }
 
-/** "What happened on this day?": four buttons, and the rest under "Other things to add". */
+/** "What happened on this day?": three buttons, and the rest under "Other things to add". */
 function dayActions(date) {
   const kinds = S.labels.kinds;
   return [
@@ -273,9 +274,8 @@ function dayActions(date) {
       addButton('dp-add-flow-day', { kind: 'flow', date, part: 'day' }, kinds.flow + ', by day'),
       addButton('dp-add-flow-night', { kind: 'flow', date, part: 'night' }, kinds.flow + ', at night'),
       addButton('dp-add-hefsek', { kind: 'hefsek', date }, kinds.hefsek),
-      addButton('dp-add-mikvah', { kind: 'mikvah', date }, kinds.mikvah + ', that evening'),
     ),
-    h('p', { class: 'small muted day-night-note' }, t('"At night" is the night that begins on the evening of this date, after {sunset}.')),
+    h('p', { class: 'small muted day-night-note' }, t('At night: after {sunset} on this date.')),
     h('div', { class: 'day-result', id: 'day-result' }, notice('day')),
     h(
       'details',
@@ -288,8 +288,8 @@ function dayActions(date) {
         addButton('dp-add-stain-night', { kind: 'stain', date, part: 'night' }, kinds.stain + ', at night'),
         addButton('dp-add-broken-day', { kind: 'broken', date, part: 'day' }, kinds.broken + ', by day'),
         addButton('dp-add-broken-night', { kind: 'broken', date, part: 'night' }, kinds.broken + ', at night'),
+        addButton('dp-add-mikvah', { kind: 'mikvah', date }, kinds.mikvah + ', that evening'),
       ),
-      h('p', { class: 'small muted' }, t('A {stain} is recorded only when a {rav} has said that it makes her {niddah}. "' + kinds.broken + '" is for when the {clean_days} must start again.')),
       h(
         'form',
         {
@@ -311,8 +311,7 @@ function dayActions(date) {
         textField({ id: 'dp-time', label: 'Time', type: 'time', wide: false, value: dayUi.time, oninput: e => (dayUi.time = e.target.value) }),
         button({ label: 'Record at this time', type: 'submit', size: 'sm', attrs: { id: 'dp-add-time' } }),
       ),
-      h('p', { class: 'small muted' }, 'With a time, the calendar works out whether it was day or night.'),
-      checkRow({ id: 'dp-veset', label: t('A {flow} recorded here counts for the {vesatot}'), help: t('Leave this on unless a {rav} said it does not count.'), checked: dayUi.veset, onchange: e => (dayUi.veset = e.target.checked) }),
+      checkRow({ id: 'dp-veset', label: t('Counts for the {vesatot}'), checked: dayUi.veset, onchange: e => (dayUi.veset = e.target.checked) }),
     ),
   ];
 }
@@ -327,19 +326,19 @@ function dayDetail(i) {
   return h(
     'div',
     { class: 'day-detail', id: 'day-panel', 'aria-labelledby': 'detail-title', role: 'region' },
+    // one line: the date, the Hebrew date, sunrise and sunset
     h(
       'div',
       { class: 'detail-head' },
-      h('h3', { id: 'detail-title' }, longDate(date) + ', ' + date.slice(0, 4), date === S.grid.today ? h('span', { class: 'tag info' }, 'Today') : null),
-      h('p', { class: 'hebrew-date', lang: S.terms === 'he' ? 'he' : null }, day.hebrewDay + ' ' + day.hebrewMonth),
-    ),
-    nextDay(i, date, day),
-    h(
-      'p',
-      { class: 'sun-times' },
-      h('span', {}, icon('sun', { size: 'sm' }), 'Sunrise ' + (day.sunrise || '—')),
-      h('span', {}, icon('moon', { size: 'sm' }), cap(t('{sunset} ')) + (day.sunset || '—')),
-      day.rest ? h('span', { class: 'tag' }, t('{shabbat} or {yom_tov}')) : null,
+      h('h3', { id: 'detail-title' }, longDate(date), date === S.grid.today ? h('span', { class: 'tag info' }, 'Today') : null),
+      h(
+        'p',
+        { class: 'sun-times' },
+        h('span', { class: 'hebrew-date', lang: S.terms === 'he' ? 'he' : null }, day.hebrewDay + ' ' + day.hebrewMonth),
+        h('span', {}, icon('sun', { size: 'sm' }), h('span', { class: 'visually-hidden' }, 'Sunrise '), day.sunrise || '—'),
+        h('span', {}, icon('moon', { size: 'sm' }), h('span', { class: 'visually-hidden' }, t('{sunset} ')), day.sunset || '—'),
+        day.rest ? h('span', { class: 'tag' }, t('{shabbat} or {yom_tov}')) : null,
+      ),
     ),
     past ? dayActions(date) : null,
     h('h4', { class: 'day-q', id: 'day-events-title' }, 'On this day'),
@@ -349,18 +348,6 @@ function dayDetail(i) {
   );
 }
 
-const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-
-/** The Hebrew date changes at sunset: says until when this day's Hebrew date lasts, and which one follows. */
-function nextDay(i, date, day) {
-  const next = i.days.get(addDays(date, 1));
-  if (!next || !day.sunset) return null;
-  return h(
-    'p',
-    { class: 'small muted date-change' },
-    t(day.hebrewDay + ' ' + day.hebrewMonth + ' until {sunset} (' + day.sunset + '). The night after it belongs to ' + next.hebrewDay + ' ' + next.hebrewMonth + '.'),
-  );
-}
 
 /** The calendar card. Call only when S.grid is set. */
 export function calendarCard() {
@@ -375,7 +362,6 @@ export function calendarCard() {
       return h(
         'div',
         {},
-        h('p', { class: 'cal-how', id: 'cal-how' }, 'Choose a day to see what is marked on it, or to record what happened on it.'),
         h(
           'div',
           { class: 'month-nav' },

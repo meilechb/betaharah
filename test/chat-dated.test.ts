@@ -186,7 +186,7 @@ describe('recording dated commands', () => {
     const after = new Date(sunset + 10 * 60_000).toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true });
     const typed = after.replace(' ', '').toLowerCase();
     const text = p.say(`1 11/22 ${typed}`);
-    expect(text).toMatch(/^Recorded: flow Sun Nov 22 night, 2026\..* Counted as night \(sunset was \d+:\d\d PM\)\. If it began before sunset send 0, then the same with: day\. If unsure ask a rav\.$/);
+    expect(text).toMatch(/^Recorded: flow Sun Nov 22 night, 2026\..* Counted as night \(sunset was \d+:\d\d PM\)\. If it began before sunset send 0, then the same with: day\.$/);
   });
 
   it('0 undoes a dated entry like any other', () => {
@@ -208,7 +208,7 @@ describe('recording dated commands', () => {
     const data = household();
     data.phones[0]!.canUpdate = false;
     const p = new Phone(data);
-    for (const t of ['1 11/22 night', '1', '2', '0', 'UNDO']) expect(p.say(t), t).toBe('This phone may not record entries. That is changed on the website, under Settings.');
+    for (const t of ['1 11/22 night', '1', '2', '0', 'UNDO']) expect(p.say(t), t).toBe('This phone may not record entries (see Settings on the website).');
     expect(data.entries).toHaveLength(0);
     expect(p.say('9')).toMatch(/^Tehorah\./);
   });

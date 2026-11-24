@@ -126,7 +126,7 @@ const COMMANDS: Array<[string, string]> = [
   ['1', 'A flow began now'],
   ['2', 'Hefsek taharah done today'],
   ['3', 'The count of clean days was broken now'],
-  ['4', 'Immersed tonight'],
+  ['4', 'Immersed tonight (optional)'],
   ['5', 'A stain that makes her niddah was found now'],
   ['9', 'Where things stand'],
   ['0', 'Undo the last entry (within 48 hours)'],
@@ -151,8 +151,8 @@ export function helpPage(site: Site): string {
         body: `<ol class="steps">
   ${googleReady(site) ? '<li><strong>Sign in with Google, or with your phone number.</strong> With Google, nothing else is asked. With a phone, you get a six-digit code by text and type it in. If you like, you can also set a password for a phone under Settings.</li>' : '<li><strong>Sign in with your phone number.</strong> You get a six-digit code by text message and type it in. There is nothing else to fill in. If you like, you can also set a password under Settings, and sign in with that.</li>'}
   <li><strong>Choose your location.</strong> Sunrise, sunset and nightfall are calculated for it.</li>
-  <li><strong>Review your customs.</strong> Every point on which customs differ is a setting. Until you save them, the calendar uses the stricter option for each. Go over them with your rav.</li>
-  <li><strong>Record the most recent dates</strong>: when the last period began, and the hefsek taharah and immersion that followed.</li>
+  <li><strong>Choose your customs.</strong> Until you save them, the calendar uses the stricter option of each.</li>
+  <li><strong>Record the most recent dates</strong>: when the last period began, and its hefsek taharah. Once the seven clean days are over, the calendar takes it that she immersed on the mikvah night.</li>
   <li><strong>Optional: put it in your calendar and turn on text reminders</strong>, both under Settings.</li>
 </ol>`,
       },
@@ -221,9 +221,9 @@ ${
         body: `<p>The site is in English. Under Settings you can choose whether halachic terms are written in English letters (hefsek taharah) or in Hebrew (<span lang="he">הפסק טהרה</span>). The choice also applies to the calendar events.</p>`,
       },
       {
-        id: 'not-a-rav',
+        id: 'what-it-is-not',
         title: 'What this is not',
-        body: `<p class="callout">The calendar does arithmetic on the dates you record, by the customs you select. It does not rule on halachic questions. For stains, for anything unclear, when a veset kavua may have been established (the calendar points this out but does not apply it), and for every doubt, ask your rav.</p>`,
+        body: `<p class="callout">The calendar calculates dates from what you record and the customs you choose. It does not give halachic rulings. Where a veset kavua may have been established, it says so but does not apply it.</p>`,
       },
       {
         id: 'contact',
@@ -388,7 +388,7 @@ export function termsPage(site: Site): string {
         title: 'What it does, and what it does not',
         body: `<ul>
   <li>It calculates dates from what you record, by the customs you select, for the location you choose. If something is recorded wrongly or a setting does not match your custom, the result will be wrong.</li>
-  <li><strong>It is not a rav and does not give halachic rulings.</strong> It is an aid for keeping track. Questions about stains, examinations, a veset kavua, or any doubt belong to your rav. Review your settings with your rav.</li>
+  <li><strong>It does not give halachic rulings.</strong> It calculates dates from what you record and the customs you choose.</li>
   <li>Times are astronomical calculations for your location. They can differ by a minute or two from a printed calendar. Do not rely on the last minutes before a time.</li>
   <li>It is not medical advice.</li>
   <li>You are responsible for checking what it shows. Text messages and calendar updates can be late or fail to arrive.</li>

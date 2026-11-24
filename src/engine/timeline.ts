@@ -85,7 +85,7 @@ export interface PeriodView extends NiddahPeriod {
   hefsekMinchaKetana: number;
   planCleanDays: CleanDayView[];
   planMikvah: MikvahView;
-  /** The night on which immersion was recorded, with its times; null while the period is open */
+  /** The night on which an immersion was recorded, with its times; null if none was recorded */
   doneMikvah: MikvahView | null;
 }
 
@@ -104,9 +104,7 @@ export type Status =
         /** The count is complete but immersion is passed over tonight (Yom Kippur / Tisha B'Av). */
         | { kind: 'postponed' }
         /** Tonight is the night of immersion. */
-        | { kind: 'mikvah_tonight' }
-        /** The night of immersion has passed and no immersion is recorded. */
-        | { kind: 'mikvah_not_recorded' };
+        | { kind: 'mikvah_tonight' };
     };
 
 export interface Timeline {
@@ -157,8 +155,8 @@ export function buildTimeline(input: EngineInput): Timeline {
   const since = input.since ?? Number.NEGATIVE_INFINITY;
   const shownPeriods = processed.periods.filter(p => {
     if (p.mikvahDoneAbs !== null) return p.mikvahDoneAbs >= since;
-    // a period the next one superseded with no immersion recorded: by the night she could have immersed
-    return !p.endedWithoutImmersion || p.mikvahNightAbs === null || p.mikvahNightAbs >= since;
+    // a period the next one closed with no recorded immersion: by the night she could have immersed
+    return !p.closedByNextPeriod || p.mikvahNightAbs === null || p.mikvahNightAbs >= since;
   });
   const periods: PeriodView[] = shownPeriods.map(p => {
     const projected = p.hefsekAbs === null;
@@ -195,7 +193,9 @@ export function buildTimeline(input: EngineInput): Timeline {
   const onot: OnahView[] = [];
   let vesatotNotes: VesatotNote[] = [];
   let latestIntervalDays: number | null = null;
-  const mikvahNights = new Set(periods.filter(p => p.mikvahDoneAbs === null && !p.endedWithoutImmersion).map(p => p.planMikvah.nightAbs));
+  // The night of immersion of each period: the one recorded, or else the one worked out (for a period that was
+  // closed by the next one, only with a hefsek taharah: she is then taken to have immersed on it).
+  const mikvahNights = new Set(periods.filter(p => p.mikvahDoneAbs === null && !(p.closedByNextPeriod && p.hefsekAbs === null)).map(p => p.planMikvah.nightAbs));
   for (const p of periods) if (p.mikvahDoneAbs !== null) mikvahNights.add(p.mikvahDoneAbs);
   processed.flows.forEach((flow, i) => {
     const next = processed.flows[i + 1];
@@ -222,12 +222,13 @@ export function buildTimeline(input: EngineInput): Timeline {
   });
   onot.sort((a, b) => onahIndex(a.onah) - onahIndex(b.onah));
 
-  // Status as of now.
+  // Status as of now. Once the night of immersion is over (from the next sunrise) she is taken to have
+  // immersed on it, whether or not an immersion is recorded.
   let status: Status = { state: 'tehorah' };
   const open = periods[periods.length - 1];
-  if (open && open.mikvahDoneAbs === null && !open.endedWithoutImmersion) {
+  if (open && open.mikvahDoneAbs === null && !open.closedByNextPeriod) {
     const today = nowOnah.abs; // the Hebrew date that `now` belongs to
-    let phase: Extract<Status, { state: 'niddah' }>['phase'];
+    let phase: Extract<Status, { state: 'niddah' }>['phase'] | null;
     if (open.hefsekAbs === null || !open.cleanDays || open.mikvahNightAbs === null) {
       phase = { kind: 'before_hefsek', canBeDoneFrom: open.earliestHefsekAbs };
     } else {
@@ -237,9 +238,9 @@ export function buildTimeline(input: EngineInput): Timeline {
       else if (today <= seventh) phase = { kind: 'counting', day: today - first + 1 };
       else if (today < open.mikvahNightAbs) phase = { kind: 'postponed' };
       else if (today === open.mikvahNightAbs && nowOnah.part === 'night') phase = { kind: 'mikvah_tonight' };
-      else phase = { kind: 'mikvah_not_recorded' };
+      else phase = null;
     }
-    status = { state: 'niddah', period: open, phase };
+    if (phase) status = { state: 'niddah', period: open, phase };
   }
 
   return {

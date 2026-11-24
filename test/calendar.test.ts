@@ -70,8 +70,8 @@ describe('terms', () => {
       for (const text of texts) expect(text).not.toMatch(/[{}]/);
       expect(texts.some(text => HEBREW.test(text))).toBe(lang === 'he');
     }
-    expect(choicesFor('en')[0]!.title).toBe('Days to wait before the hefsek taharah');
-    expect(choicesFor('he')[0]!.title).toBe('Days to wait before the הפסק טהרה');
+    expect(choicesFor('en')[0]!.title).toBe('Days before the hefsek taharah');
+    expect(choicesFor('he')[0]!.title).toBe('Days before the הפסק טהרה');
     // the values the engine reads are never touched by the wording
     expect(choicesFor('he').map(c => c.options.map(o => o.value))).toEqual(HALACHIC_CHOICES.map(c => c.options.map(o => o.value)));
   });
@@ -111,28 +111,26 @@ describe('calendar events', () => {
     const events = buildCalendar(timeline([flow], at(2026, 11, 23, 10)), EN);
     const byKind = (k: string) => events.filter(e => e.kind === k);
     expect(byKind('flow').map(e => e.title)).toEqual(['Flow (day)']);
-    expect(byKind('flow')[0]!.description).toBe('Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
+    // descriptions do not repeat the event's own date or hours
+    expect(byKind('flow')[0]!.description).toBe('');
     const h = byKind('hefsek')[0]!;
     expect(h.title).toBe('Hefsek taharah (by 4:33 PM)');
     expect(h.projected).toBe(true);
-    expect(h.description).toBe('Thursday, 16 Kislev 5787 (Nov 26, 2026)\nBefore sunset: 4:33 PM\nPreferably after minchah ketanah: 2:33 PM');
+    expect(h.description).toBe('Before sunset; preferably after minchah ketanah.');
+    expect(localDateTime(h.timed!.start, TZ)).toMatchObject({ d: 26, hh: 14, mi: 33 });
     expect(h.timed!.end).toBeLessThanOrEqual(dayTimes(SUN + 4, LAKEWOOD, ZOPTS).sunset);
     expect(byKind('clean_day').map(e => e.title)).toEqual([1, 2, 3, 4, 5, 6, 7].map(n => `Seven clean days: day ${n} (projected)`));
     expect(byKind('clean_day').map(e => e.allDay!.startAbs)).toEqual([5, 6, 7, 8, 9, 10, 11].map(n => SUN + n));
     const m = byKind('mikvah')[0]!;
     expect(m.title).toBe('Mikvah night (after 5:16 PM) (projected)');
-    expect(m.description).toContain('Thursday evening, Dec 3, 2026 (the night of 24 Kislev 5787)');
-    expect(m.description).toContain('Immersion after nightfall: 5:16 PM');
+    expect(m.description).toBe('Projected: if the hefsek taharah is done on the first day it can be.');
     expect(localDateTime(m.timed!.start, TZ)).toMatchObject({ y: 2026, m: 12, d: 3 });
     expect(m.timed!.start).toBeGreaterThanOrEqual(dayTimes(SUN + 11, LAKEWOOD, ZOPTS).tzeit);
     // 22 November 2026 is 12 Kislev, and Kislev has 30 days this year:
     // day 30 is 21 December (11 Tevet) and veset hachodesh is 22 December (12 Tevet).
     expect(byKind('onah').map(e => e.title)).toEqual(['Veset onah (day)', 'Veset onah (day)']);
-    expect(byKind('onah')[0]!.description).toBe(
-      'Monday, 11 Tevet 5787 (Dec 21, 2026), by day\nFrom 7:15 AM until 4:35 PM\n\nOnah beinonit (day 30)\n\nSeparation, and a bedikah.',
-    );
-    expect(byKind('onah')[1]!.description).toContain('Veset hachodesh (day 12 of the month)');
-    expect(byKind('onah')[1]!.description).toContain('Tuesday, 12 Tevet 5787 (Dec 22, 2026), by day');
+    expect(byKind('onah')[0]!.description).toBe('Onah beinonit (day 30)\nSeparation, and a bedikah.');
+    expect(byKind('onah')[1]!.description).toBe('Veset hachodesh (day 12 of the month)\nSeparation, and a bedikah.');
   });
 
   it('the same events with Hebrew terms: the sentences stay English, the terms and Hebrew dates change', () => {
@@ -146,7 +144,7 @@ describe('calendar events', () => {
     expect(title('clean_day')).toBe('שבעה נקיים: day 1 (projected)');
     expect(title('mikvah')).toBe('ליל טבילה (after 5:16 PM) (projected)');
     expect(title('onah')).toBe('עונת הוסת (day)');
-    expect(he.find(e => e.kind === 'hefsek')!.description).toBe('Thursday, ט״ז כסלו תשפ״ז (Nov 26, 2026)\nBefore שקיעה: 4:33 PM\nPreferably after מנחה קטנה: 2:33 PM');
+    expect(he.find(e => e.kind === 'hefsek')!.description).toBe('Before שקיעה; preferably after מנחה קטנה.');
     for (const e of en) expect(e.title + e.description).not.toMatch(HEBREW);
     for (const e of [...en, ...he]) expect(e.title + e.description).not.toMatch(/[{}]/);
   });
@@ -165,7 +163,7 @@ describe('calendar events', () => {
     const events = buildCalendar(timeline(entries, at(2026, 12, 6, 10)), EN);
     const m = events.find(e => e.kind === 'mikvah')!;
     expect(m.title).toBe('Immersion ✓');
-    expect(m.description).toBe('Friday evening, Dec 4, 2026 (the night of 25 Kislev 5787)');
+    expect(m.description).toBe('');
     expect(localDateTime(m.timed!.start, TZ)).toMatchObject({ m: 12, d: 4 });
   });
 
@@ -173,9 +171,8 @@ describe('calendar events', () => {
     const events = buildCalendar(timeline([flow], at(2026, 11, 23, 10), { orZarua: 'yes' }), EN);
     const onot = events.filter(e => e.kind === 'onah');
     expect(onot.map(e => e.title)).toEqual(['Or Zarua (night)', 'Veset onah (day)', 'Or Zarua (night)', 'Veset onah (day)']);
-    expect(onot[0]!.description).toBe(
-      'Sunday evening, Dec 20, 2026 (the night of 11 Tevet 5787)\nFrom 4:34 PM until 7:16 AM\n\nOr Zarua of onah beinonit (day 30)\n\nSeparation.',
-    );
+    expect(onot[0]!.description).toBe('Or Zarua of onah beinonit (day 30)\nSeparation.');
+    expect(localDateTime(onot[0]!.timed!.start, TZ)).toMatchObject({ m: 12, d: 20 }); // the evening it begins
     expect(onot.map(e => e.light)).toEqual([true, false, true, false]);
   });
 
@@ -224,8 +221,8 @@ describe('calendar events', () => {
     const b: LogEntry = { id: 'b', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: true };
     const events = buildCalendar(timeline([a, b, hefsek], at(2026, 11, 30, 10)), EN);
     // the second flow comes twelve days after the first with nothing recorded between them, so it begins the period the hefsek belongs to
-    expect(events.find(e => e.key === 'mikvah:b')!.description).toContain('The mikvah night falls on an onat perishah. Ask a rav.');
-    expect(events.find(e => e.kind === 'onah' && e.description.includes('This onah falls on the mikvah night. Ask a rav.'))).toBeDefined();
+    expect(events.find(e => e.key === 'mikvah:b')!.description).toContain('It falls on an onat perishah.');
+    expect(events.find(e => e.kind === 'onah' && e.description.includes('It falls on the mikvah night.'))).toBeDefined();
   });
 });
 
@@ -234,28 +231,24 @@ describe('wording for the dashboard', () => {
     const lines = (entries: LogEntry[], now: number, lang: 'en' | 'he' = 'en') => statusLines(timeline(entries, now), TZ, lang);
     expect(lines([], at(2026, 11, 23, 10))).toEqual({ headline: 'Tehorah', detail: '' });
     expect(lines([], at(2026, 11, 23, 10), 'he')).toEqual({ headline: 'טהורה', detail: '' });
-    expect(lines([flow], at(2026, 11, 23, 10))).toEqual({
-      headline: 'Niddah, before the hefsek taharah',
-      detail:
-        'Began: Sunday, 12 Kislev 5787 (Nov 22, 2026), by day. The hefsek taharah can be done from Thursday, 16 Kislev 5787 (Nov 26, 2026). Next possible day: Thursday, Nov 26, 2026, before 4:33 PM.',
-    });
-    // a flow at night is named by the evening it began
-    expect(lines([{ id: 'n', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: true }], at(2026, 11, 23, 10)).detail).toMatch(
-      /^Began: Saturday evening, Nov 21, 2026 \(the night of 12 Kislev 5787\)\. /,
-    );
+    expect(lines([flow], at(2026, 11, 23, 10))).toEqual({ headline: 'Niddah, before the hefsek taharah', detail: 'Hefsek taharah from Thu, Nov 26, before 4:33 PM.' });
+    // once the first day has passed, the next day it can be done
+    expect(lines([flow], at(2026, 11, 27, 10)).detail).toBe('Hefsek taharah from Fri, Nov 27, before 4:33 PM.');
     // on the afternoon of the hefsek, before sunset; from sunset on it is the first clean day
     expect(lines([flow, hefsek], at(2026, 11, 26, 16))).toEqual({
       headline: 'Niddah, after the hefsek taharah',
-      detail: 'The first of the seven clean days is Friday, Nov 27, 2026. Mikvah night: Thursday, Dec 3, 2026, after 5:16 PM.',
+      detail: 'The seven clean days begin Fri, Nov 27. Mikvah night: Thu, Dec 3, after 5:16 PM.',
     });
-    expect(lines([flow, hefsek], at(2026, 11, 26, 20))).toEqual({ headline: 'Seven clean days: day 1', detail: 'Mikvah night: Thursday, Dec 3, 2026, after 5:16 PM.' });
-    expect(lines([flow, hefsek], at(2026, 11, 29, 10))).toEqual({ headline: 'Seven clean days: day 3', detail: 'Mikvah night: Thursday, Dec 3, 2026, after 5:16 PM.' });
-    expect(lines([flow, hefsek], at(2026, 11, 29, 10), 'he')).toEqual({ headline: 'שבעה נקיים: day 3', detail: 'ליל טבילה: Thursday, Dec 3, 2026, after 5:16 PM.' });
-    expect(lines([flow, hefsek], at(2026, 12, 3, 19))).toEqual({ headline: 'Mikvah night', detail: 'Immersion after nightfall: 5:16 PM.' });
-    expect(lines([flow, hefsek], at(2026, 12, 5, 10))).toEqual({
-      headline: 'The count is complete; no immersion is recorded',
-      detail: 'The mikvah night was Thursday, Dec 3, 2026.',
-    });
+    expect(lines([flow, hefsek], at(2026, 11, 26, 20))).toEqual({ headline: 'Seven clean days: day 1', detail: 'Mikvah night: Thu, Dec 3, after 5:16 PM.' });
+    expect(lines([flow, hefsek], at(2026, 11, 29, 10))).toEqual({ headline: 'Seven clean days: day 3', detail: 'Mikvah night: Thu, Dec 3, after 5:16 PM.' });
+    expect(lines([flow, hefsek], at(2026, 11, 29, 10), 'he')).toEqual({ headline: 'שבעה נקיים: day 3', detail: 'ליל טבילה: Thu, Dec 3, after 5:16 PM.' });
+    expect(lines([flow, hefsek], at(2026, 12, 3, 19))).toEqual({ headline: 'Mikvah night', detail: 'Immersion after 5:16 PM.' });
+    expect(lines([flow, hefsek], at(2026, 12, 3, 19), 'he')).toEqual({ headline: 'ליל טבילה', detail: 'טבילה after 5:16 PM.' });
+    // the morning after the mikvah night, with no immersion recorded: tehorah
+    expect(lines([flow, hefsek], at(2026, 12, 4, 10))).toEqual({ headline: 'Tehorah', detail: '' });
+    for (const now of [at(2026, 11, 23, 10), at(2026, 11, 26, 16), at(2026, 11, 29, 10), at(2026, 12, 3, 19)]) {
+      for (const entries of [[flow], [flow, hefsek]]) expect(lines(entries, now).detail.length).toBeLessThanOrEqual(90);
+    }
   });
 
   it('describes each kind of entry', () => {
@@ -281,6 +274,7 @@ describe('wording for the dashboard', () => {
       'mikvah_too_early',
       'mikvah_on_fast_night',
       'count_cancelled_by_flow',
+      'period_began_without_hefsek',
     ] as const;
     const notes = ['paused', 'long_cycle_exempt', 'haflagah_previous_hefsek_missing', 'haflagah_awaits_hefsek'] as const;
     for (const lang of ['en', 'he'] as const) {
@@ -293,12 +287,13 @@ describe('wording for the dashboard', () => {
         patternText({ kind: 'dilug_chodesh', step: -2, part: 'night' }, lang),
       ];
       for (const text of texts) {
-        expect(text.length).toBeGreaterThan(20);
+        expect(text.length).toBeGreaterThan(15);
+        expect(text).not.toMatch(/Ask a|רב\b/);
         expect(text).not.toMatch(/[{}]|undefined/);
       }
     }
     expect(patternText({ kind: 'kavua_chodesh', dayOfMonth: 12, part: 'day' }, 'en')).toBe(
-      'Three times in a row the flow began on day 12 of the month, by day. A veset kavua for the date may have been established. Ask a rav.',
+      'Three times in a row the flow began on day 12 of the month, by day. A veset kavua for the date may have been established.',
     );
     expect(patternText({ kind: 'dilug_chodesh', step: -2, part: 'night' }, 'en')).toContain('moved by the same step (2 days)');
     expect(patternText({ kind: 'dilug_haflagah', step: 1, part: 'day' }, 'en')).toContain('(1 day)');
@@ -332,7 +327,10 @@ describe('the calendar feed', () => {
     // unfolding gives back the text exactly
     const unfolded = ics.replace(/\r\n /g, '');
     expect(unfolded).toContain('SUMMARY:הפסק טהרה (by 4:33 PM)');
-    expect(unfolded).toContain('DESCRIPTION:Thursday\\, ט״ז כסלו תשפ״ז (Nov 26\\, 2026)\\nBefore שקיעה: 4:33 PM\\nPreferably after מנחה קטנה: 2:33 PM');
+    expect(unfolded).toContain('DESCRIPTION:Before שקיעה\\; preferably after מנחה קטנה.');
+    // a long line with Hebrew letters, folded and unfolded
+    expect(unfolded).toMatch(/DESCRIPTION:בדיקה in the morning and before שקיעה \(4:3\d PM\)\.\\nבדיקה on this day is required\.|DESCRIPTION:בדיקה in the morning and before שקיעה \(4:3\d PM\)\.\\nA בדיקה on this day is required\.\\nProjected: if the הפסק טהרה is done on the first day it can be\./);
+    expect(lines.some(l => l.startsWith(' ') && /[\u0590-\u05FF]/.test(l))).toBe(true);
     expect(unfolded).not.toContain('�');
   });
 

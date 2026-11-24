@@ -250,7 +250,7 @@ function hint(q: Question): string {
     case 'customs_list':
       return 'reply a letter from A to L';
     case 'recent':
-      return q.recorded ? 'send 2 or 4 with a date, or DONE' : 'send 1 with a date, or SKIP';
+      return q.recorded ? 'send 2 with a date, or DONE' : 'send 1 with a date, or SKIP';
     case 'history':
       return 'reply ERASE and a letter';
     case 'phones':

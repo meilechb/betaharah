@@ -23,7 +23,7 @@ import {
   type SiteSecrets,
 } from './model';
 import { nextWake } from './queue';
-import { parseAppSettings, ValidationError } from './settings';
+import { currentPhones, parseAppSettings, ValidationError } from './settings';
 
 // ---------- the site's settings ----------
 
@@ -209,7 +209,7 @@ function parseHousehold(raw: unknown): HouseholdData {
     halachic: parseHalachicSettings(d.halachic),
     halachicConfirmedAt: d.halachicConfirmedAt ?? null,
     app: parseAppSettings(d.app),
-    phones: Array.isArray(d.phones) ? d.phones : [],
+    phones: currentPhones(d.phones),
     entries: Array.isArray(d.entries) ? d.entries : [],
     removed: Array.isArray(d.removed) ? d.removed : [],
     google: d.google ?? null,

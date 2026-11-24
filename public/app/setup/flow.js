@@ -182,7 +182,7 @@ export async function leave(e) {
   const btn = e && e.currentTarget;
   const ok = await confirmDialog({
     title: 'Leave the setup?',
-    body: 'Everything you entered so far is saved. You can open the setup again from Settings, and the Today tab lists what is still to do.',
+    body: 'What you entered is saved.',
     confirmLabel: 'Leave the setup',
     cancelLabel: 'Stay',
   });

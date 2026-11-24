@@ -16,7 +16,7 @@ import { calendarCard, showDate } from './calendar.js';
 import { tryTextCard } from './demo.js';
 import { assumption, cleanDayNumber, describe, isDone, isNight, mark, plainTitle, stateTag, wasRecorded } from './marks.js';
 import { notice, openRecord, recordNow, recordPanel } from './record.js';
-import { addDays, alertsBlock, longDate, refresh, region, shortDate, today } from './shared.js';
+import { addDays, alertsBlock, refresh, region, shortDate, today } from './shared.js';
 
 export function viewToday() {
   if (!S.status) {
@@ -27,7 +27,6 @@ export function viewToday() {
       card(
         { title: 'Choose your location first', icon: 'map', className: 'status-card empty-status' },
         h('p', { id: 'no-location' }, 'Nothing can be calculated until a location is chosen.'),
-        h('p', { class: 'muted' }, t('Sunrise, {sunset} and {nightfall} are worked out for that place. Change it when you travel.')),
         linkButton({ href: '#settings/location', label: 'Choose your location', variant: 'primary', icon: 'map', attrs: { id: 'choose-location' } }),
       ),
       alertsBlock(),
@@ -49,7 +48,7 @@ const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 // ---------- texting ----------
 
 /** The digits shown on Today; the rest are under Settings → Texting. */
-const TODAY_DIGITS = ['1', '2', '4', '9'];
+const TODAY_DIGITS = ['1', '2', '9'];
 
 /**
  * "Text this number": the site's number and the most used digits, when texting
@@ -70,7 +69,7 @@ function textCard() {
       { class: 'text-number' },
       h('a', { href: 'sms:' + sms.number, id: 'text-number', 'aria-label': 'Text ' + number }, number),
     ),
-    h('p', { class: 'help' }, S.phones.length === 1 ? 'From the phone on this account.' : 'From a phone on this account.', ' Send one of these:'),
+    h('p', { class: 'help' }, S.phones.length === 1 ? 'From the phone on this account:' : 'From a phone on this account:'),
     h(
       'table',
       { class: 'text-digits' },
@@ -82,15 +81,15 @@ function textCard() {
         rows.map(([code, meaning]) => h('tr', {}, h('th', { scope: 'row' }, h('kbd', {}, code)), h('td', {}, cap(t(meaning))))),
       ),
     ),
-    h('p', { class: 'help' }, h('a', { href: '#settings/texting', id: 'text-all' }, 'All the commands are in Settings, under Texting'), '.'),
+    h('p', { class: 'help' }, h('a', { href: '#settings/texting', id: 'text-all' }, 'All commands'), '.'),
   );
 }
 
 // ---------- where things stand ----------
 
-/** The lines of an event's description after its date line, without blanks. */
+/** The lines of an event's description, without blanks. */
 function detailLines(e) {
-  return describe(e, { dated: true })
+  return describe(e)
     .split('\n')
     .filter(x => x.trim() !== '');
 }
@@ -119,17 +118,9 @@ function eventWhen(e) {
   return e.start + ' to ' + e.end + (e.startDate !== e.endDate ? ' the next morning' : '');
 }
 
-/** A sentence that says what has begun, at night only. */
-function nightLine() {
-  const phase = S.status.phase;
-  if (phase === 'counting') return t('Day ' + S.status.day + ' of the {clean_days} has begun.');
-  if (phase === 'mikvah_tonight') return t('Tonight is the {mikvah_night}.');
-  return null;
-}
-
 /** A title with its label ("recorded", "not recorded", "expected"). */
 function titled(e, cls) {
-  const state = stateTag(e, S.today && S.today.civilDate);
+  const state = stateTag(e);
   return h('div', { class: cls }, plainTitle(e), state ? ' ' : null, state);
 }
 
@@ -138,8 +129,6 @@ function nowBox() {
   const night = S.today.part === 'night';
   const items = nowEvents();
   if (!night && items.length === 0) return null;
-  const sunsetDay = S.grid.days.find(d => d.date === S.today.civilDate);
-  const evening = night && S.today.civilDate !== S.today.date;
   return h(
     'div',
     { class: 'today-box' + (night ? ' night' : '') },
@@ -149,16 +138,6 @@ function nowBox() {
       night ? icon('moon', { size: 'sm' }) : null,
       night ? 'Tonight: the night of ' + S.today.hebrew.replace(/ \d{4}$/, '') : 'Today, ' + shortDate(S.today.civilDate),
     ),
-    night
-      ? h(
-          'p',
-          { class: 'night-note' },
-          evening
-            ? t('The Hebrew date changed at {sunset}' + (sunsetDay && sunsetDay.sunset ? ' (' + sunsetDay.sunset + ')' : '') + '. The civil date is still ' + longDate(S.today.civilDate) + '.')
-            : t('This night began at {sunset} yesterday evening. It belongs to the Hebrew date of ' + longDate(S.today.date) + '.'),
-          nightLine() ? ' ' + nightLine() : '',
-        )
-      : null,
     items.length
       ? h(
           'ul',
@@ -190,20 +169,12 @@ function hefsekDay() {
   return list.length ? list[list.length - 1] : null;
 }
 
-/** The mikvah night of the count that is complete, with no immersion recorded (it has not been followed by a period). */
-function pastMikvahNight() {
-  if (!S.grid) return null;
-  const list = S.grid.events.filter(e => e.kind === 'mikvah' && !isDone(e) && !e.projected && !noImmersionEvent(e) && e.startDate <= S.today.civilDate);
-  return list.length ? list[list.length - 1] : null;
-}
-
-/** The night shown on the calendar as "Mikvah night: no immersion recorded" (the count before a later period). */
-const noImmersionEvent = e => e.kind === 'mikvah' && !isDone(e) && !e.projected && /: no .+ recorded$/.test(e.title || '');
-
 /**
- * The one thing to record next, as one button, for the phase the server gives;
- * links to the full form for anything else. A refusal is shown beside the
- * button, the server's confirmation (with Undo) above it.
+ * The one thing to record next, as one button, for the phase the server gives
+ * (a period began; the hefsek taharah); links to the full form for anything
+ * else. Nothing asks about the immersion: once the mikvah night is over, she
+ * is taken to have immersed. A refusal is shown beside the button, the
+ * server's confirmation (with Undo) above it.
  */
 function nextStep() {
   const phase = S.status.phase;
@@ -219,43 +190,18 @@ function nextStep() {
   } else if (phase === 'before_hefsek') {
     const hefsek = hefsekDay();
     if (S.today.part === 'day' && hefsek && hefsek.startDate <= civil) main = primary(cap(t('The {hefsek} was done today')), { kind: 'hefsek', when: 'now' });
-  } else if (phase === 'mikvah_tonight') {
-    main = primary('She immersed tonight', { kind: 'mikvah', when: 'now' });
-  } else if (phase === 'mikvah_not_recorded') {
-    const m = pastMikvahNight();
-    if (m) main = primary('She immersed on the evening of ' + longDate(m.startDate), { kind: 'mikvah', date: m.startDate });
-    links.push(link('On another night', 'next-other-night', { kind: 'mikvah', mode: 'other', date: m ? m.startDate : today() }));
   }
   links.push(link('Record something else', 'next-else', {}));
   return h('div', { class: 'next' + (main ? ' has-main' : '') }, notice('status'), main, h('div', { class: 'next-links' }, links));
 }
 
-/** The server's alerts; under the note about a period with no immersion recorded before it, a button to record that immersion. */
+/** The server's alerts. */
 function alertsPart() {
   if (!S.alerts.length) return null;
-  const missing = t('No {immersion} is recorded for the period before the latest one');
-  const night = S.grid ? S.grid.events.filter(noImmersionEvent).pop() : null;
   return h(
     'div',
     { class: 'alerts', id: 'status-alerts' },
-    S.alerts.map(a =>
-      alert(
-        { kind: a.level === 'info' ? 'info' : 'warn' },
-        h('span', {}, a.text),
-        a.text.startsWith(missing)
-          ? h(
-              'span',
-              { class: 'alert-action' },
-              button({
-                label: cap(t('Record that {immersion}')),
-                size: 'sm',
-                attrs: { id: 'record-missing-immersion' },
-                onclick: () => openRecord({ kind: 'mikvah', mode: 'other', date: night ? night.startDate : today() }, 'record-missing-immersion'),
-              }),
-            )
-          : null,
-      ),
-    ),
+    S.alerts.map(a => alert({ kind: a.level === 'info' ? 'info' : 'warn' }, h('span', {}, a.text))),
   );
 }
 
@@ -263,7 +209,6 @@ function statusCard() {
   // The next onat perishah is shown here only while she is tehorah; during a niddah period it is
   // in "Coming up", so that it does not stand next to the task of the day.
   const nextOnah = S.status.phase === 'tehorah' ? S.upcoming.find(x => x.kind === 'onah') : null;
-  const sunToday = S.grid ? S.grid.days.find(d => d.date === today()) : null;
   return h(
     'section',
     { class: 'card status status-card', 'aria-labelledby': 'status-headline' },
@@ -280,7 +225,6 @@ function statusCard() {
           h('span', {}, h('strong', {}, cap(t('Next {onat_perishah}: '))), plainTitle(nextOnah) + ', ' + nextOnah.when + '.'),
         )
       : null,
-    sunToday && sunToday.sunset ? h('p', { class: 'sun-line' }, icon('moon', { size: 'sm' }), cap(t('{sunset} today: ')) + sunToday.sunset + '.') : null,
     alertsPart(),
   );
 }
@@ -300,7 +244,7 @@ let showAll = false;
 /** A row of "Coming up": the mark, the title with its label, when, and the server's lines (its reasons, for an onah). */
 function itemRow(it, extra) {
   const e = withGrid(it);
-  const desc = describe(it, { dated: true, noAssumption: true });
+  const desc = describe(it, { noAssumption: true });
   return h(
     'li',
     { class: 'up-row up-' + it.kind },
@@ -334,7 +278,7 @@ function cleanRow(items) {
         h(
           'ul',
           { class: 'sub-days' },
-          items.map(x => h('li', {}, h('strong', {}, 'Day ' + cleanDayNumber(x) + ', ' + x.when + '. '), h('span', { class: 'ev-desc' }, describe(x, { dated: true, noAssumption: true }).replace(/\n+/g, ' ')))),
+          items.map(x => h('li', {}, h('strong', {}, 'Day ' + cleanDayNumber(x) + ', ' + x.when + '. '), h('span', { class: 'ev-desc' }, describe(x, { noAssumption: true }).replace(/\n+/g, ' ')))),
         ),
       ),
     ),
@@ -363,7 +307,7 @@ function upcomingCard() {
           ? h(
               'section',
               { class: 'up-group', id: 'up-steps', 'aria-labelledby': 'up-steps-title' },
-              h('h3', { id: 'up-steps-title' }, cap(t('until the {immersion}'))),
+              h('h3', { id: 'up-steps-title' }, cap(t('until the {mikvah_night}'))),
               note ? h('p', { class: 'up-assume small', id: 'up-assume' }, note) : null,
               h('ul', { class: 'up-list' }, hefsek.map(x => itemRow(x)), clean.length ? cleanRow(clean) : null, mikvah.map(x => itemRow(x))),
             )

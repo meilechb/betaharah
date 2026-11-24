@@ -118,9 +118,9 @@ const problems = [];
   });
 
   for (const [path, title, phrases] of [
-    ['/help', 'Help', ['Recording by text message', 'Using it by text only', 'MENU', 'LOCATION 08701', 'ADD', 'JOIN NRMAAABZ', 'WEB', 'DELETE ACCOUNT', 'does not text a number that has not texted it', 'GeoNames', 'CC BY 4.0', 'ask your rav']],
+    ['/help', 'Help', ['Recording by text message', 'Using it by text only', 'MENU', 'LOCATION 08701', 'ADD', 'JOIN NRMAAABZ', 'WEB', 'DELETE ACCOUNT', 'does not text a number that has not texted it', 'GeoNames', 'CC BY 4.0', 'It does not give halachic rulings']],
     ['/privacy', 'Privacy', ['What encryption does not do', 'Signing up by text', 'texting ADD', 'No mobile information is shared with third parties or affiliates for marketing or promotional purposes.']],
-    ['/terms', 'Terms', ['It is not a rav', 'Message frequency varies', 'Message and data rates may apply', 'STOP', 'START', 'HELP', 'REMINDERS ON']],
+    ['/terms', 'Terms', ['It does not give halachic rulings', 'Message frequency varies', 'Message and data rates may apply', 'STOP', 'START', 'HELP', 'REMINDERS ON']],
   ]) {
     await step('page ' + path + ': the text-only use as built, at 360 px', async () => {
       await page.setViewportSize({ width: 360, height: 800 });
@@ -214,17 +214,19 @@ const problems = [];
 
   await step('setup: the terms switch, then the customs, all four parts, confirmed on saving', async () => {
     await page.click('#setup-terms-he');
-    await has('.setup-card', 'הפסק טהרה');
+    for (let i = 0; i < 20 && (await state()).app.terms !== 'he'; i += 1) await page.waitForTimeout(200);
+    if ((await state()).app.terms !== 'he') throw new Error('the terms did not change');
     if ((await page.evaluate(() => getComputedStyle(document.body).direction)) !== 'ltr') throw new Error('the page turned right-to-left');
     await page.click('#setup-terms-en');
-    await has('.setup-card', 'hefsek taharah');
+    for (let i = 0; i < 20 && (await state()).app.terms !== 'en'; i += 1) await page.waitForTimeout(200);
+    if ((await state()).app.terms !== 'en') throw new Error('the terms did not change back');
     await page.click('#setup-main');
     for (let part = 1; part <= 4; part += 1) {
       await has('.setup-count', 'Customs, part ' + part + ' of 4');
       if (part < 4) await page.click('#setup-customs-next');
     }
     await page.click('#setup-confirm-customs');
-    await heading('When did the most recent flow begin?');
+    await heading('When did the last period begin?');
     if (!(await state()).halachic.confirmedAt) throw new Error('not confirmed');
   });
 
@@ -235,22 +237,21 @@ const problems = [];
     await page.fill('#sd-date', FLOW);
     await page.check('#r-sd-part-day');
     await page.click('#sd-record');
-    await heading('Has the hefsek taharah been done since then?');
+    await heading('Was the hefsek taharah done?');
     await has('#sd-recorded', 'Recorded');
     await page.fill('#sd-date', HEFSEK);
     await page.click('#sd-record');
-    await heading('Has the immersion taken place since then?');
+    // the immersion is not asked for
+    await heading('Your recent dates');
     await page.click('#sd-undo');
-    await heading('Has the hefsek taharah been done since then?');
-    await has('#sd-note', 'That date was removed.');
+    await heading('Was the hefsek taharah done?');
+    await has('#sd-note', 'Removed.');
     if ((await state()).entryCount !== 1) throw new Error('Undo did not remove the hefsek');
     await page.fill('#sd-date', HEFSEK);
     await page.click('#sd-record');
-    await heading('Has the immersion taken place since then?');
-    await page.fill('#sd-date', MIKVAH);
-    await page.click('#sd-record');
     await heading('Your recent dates');
-    if ((await state()).entryCount !== 3) throw new Error('entries');
+    if (/immersion/i.test(await page.textContent('.setup-card'))) throw new Error('the setup mentions the immersion');
+    if ((await state()).entryCount !== 2) throw new Error('entries');
     await page.click('#setup-main');
   });
 
@@ -260,7 +261,7 @@ const problems = [];
     await has('code.copy', '/cal/');
     await page.click('#setup-main');
     await heading('Text reminders');
-    await has('.setup-card', 'not available on this site yet');
+    await has('.setup-card', 'not available yet');
     await page.click('#setup-main');
     await heading('Your spouse’s phone');
     await page.click('#setup-main');
@@ -320,8 +321,10 @@ const problems = [];
     if (!label.includes('Today')) throw new Error('today is not labelled');
   });
 
-  await step('today: the day detail says when its Hebrew date ends; a mikvah night is "after" nightfall', async () => {
-    await has('.day-detail .date-change', 'The night after it belongs to');
+  await step('today: the day detail has its date, Hebrew date, sunrise and sunset on one line; a mikvah night is "after" nightfall', async () => {
+    if (await page.locator('.day-detail .date-change').count()) throw new Error('the sentence about when the Hebrew date ends is still there');
+    await has('.day-detail .detail-head .sun-times', 'Sunrise');
+    if ((await page.locator('.day-detail .detail-head .sun-times .hebrew-date').count()) !== 1) throw new Error('no Hebrew date in the line');
     await has('#day-panel h4', 'What happened on this day?');
     const st = await state();
     const m = st.upcoming.find(u => u.kind === 'mikvah');
@@ -337,7 +340,7 @@ const problems = [];
     await page.waitForSelector('#next-step[aria-busy="true"]', { timeout: 1200 });
     await has('.status-card .rec-error', 'could not be reached');
     await page.unroute('**/api/entries');
-    if ((await state()).entryCount !== 3) throw new Error('something was recorded');
+    if ((await state()).entryCount !== 2) throw new Error('something was recorded');
     await shot('21-record-failed');
   });
 
@@ -345,13 +348,13 @@ const problems = [];
     await page.click('#next-step');
     await has('.status-card .rec-done', 'Recorded: flow');
     const st = await state();
-    if (st.entryCount !== 4 || st.status.phase !== 'before_hefsek') throw new Error('not recorded: ' + st.status.phase);
+    if (st.entryCount !== 3 || st.status.phase !== 'before_hefsek') throw new Error('not recorded: ' + st.status.phase);
     // During a niddah period the next onat perishah is not next to the task of the day.
     if ((await page.locator('.status-card .next-line').count()) !== 0) throw new Error('next onat perishah shown during niddah');
     await page.click('#rec-undo');
     await has('.rec-done', 'Removed');
     const after = await state();
-    if (after.entryCount !== 3 || after.status.phase !== 'tehorah') throw new Error('Undo: ' + after.entryCount);
+    if (after.entryCount !== 2 || after.status.phase !== 'tehorah') throw new Error('Undo: ' + after.entryCount);
   });
 
   await step('two tabs: the second, still showing the old state, is told that the entry exists already', async () => {
@@ -403,7 +406,7 @@ const problems = [];
 
   await step('log: the entries, newest period first; removing asks in a dialog that keeps the focus; Escape keeps the entry', async () => {
     await page.waitForSelector('li.entry');
-    if ((await page.locator('li.entry').count()) !== 3) throw new Error('entries ' + (await page.locator('li.entry').count()));
+    if ((await page.locator('li.entry').count()) !== 2) throw new Error('entries ' + (await page.locator('li.entry').count()));
     const first = page.locator('li.entry').first();
     await first.locator('button[aria-label^="Options for"]').click();
     await first.locator('button:has-text("Remove this entry")').click();
@@ -412,7 +415,7 @@ const problems = [];
     if (!(await page.evaluate(() => Boolean(document.activeElement && document.activeElement.closest('dialog[open]'))))) throw new Error('the focus left the dialog');
     await page.keyboard.press('Escape');
     await page.waitForSelector('dialog[open]', { state: 'detached' });
-    if ((await page.locator('li.entry').count()) !== 3) throw new Error('an entry went');
+    if ((await page.locator('li.entry').count()) !== 2) throw new Error('an entry went');
     await shot('22-log-390');
   });
 
@@ -451,7 +454,7 @@ const problems = [];
     const [download] = await Promise.all([page.waitForEvent('download'), page.click('a:has-text("Download my data")')]);
     const file = await download.path();
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (!Array.isArray(data.entries) || data.entries.length !== 3) throw new Error('entries in the file');
+    if (!Array.isArray(data.entries) || data.entries.length !== 2) throw new Error('entries in the file');
   });
 
   await step('sign out: nothing of the account is left on screen, in the title or in the browser; then in again', async () => {
@@ -536,7 +539,7 @@ const problems = [];
     await page.waitForSelector('#up-steps .up-hefsek .tag:text-is("not recorded")');
     await page.waitForSelector('#up-steps .up-clean_day .tag:text-is("expected")');
     await page.waitForSelector('#up-steps .up-mikvah .tag:text-is("expected")');
-    await has('#up-assume', 'This assumes the hefsek taharah is done on the first day it can be.');
+    await has('#up-assume', 'If the hefsek taharah is done on the first day it can be.');
     await noProjected();
     // The next step: the hefsek taharah, only while it can be done today.
     const canToday = st.today.part === 'day' && walkHefsek <= st.today.civilDate;
@@ -557,7 +560,7 @@ const problems = [];
     await has('#day-panel .rec-done', 'Removed');
   });
 
-  await step('walk: a hefsek taharah a week ago: the seventh clean day by day, then "She immersed tonight" once it is the mikvah night', async () => {
+  await step('walk: a hefsek taharah a week ago: the seventh clean day by day, then the mikvah night with its time and no button', async () => {
     try {
       const st = await dayButton(isoDaysAgo(7), 'dp-add-hefsek');
       if (st.status.phase === 'counting') {
@@ -567,15 +570,9 @@ const problems = [];
         return;
       }
       if (st.status.phase !== 'mikvah_tonight') throw new Error('phase ' + st.status.phase);
-      if ((await page.textContent('#next-step')).trim() !== 'She immersed tonight') throw new Error('next step: ' + (await page.textContent('#next-step')));
-      await page.click('#next-step');
-      // Before nightfall the server refuses it, with its sentence beside the button; after nightfall it is recorded.
-      await page.waitForSelector('.status-card .rec-done, .status-card .rec-error');
-      if (await page.locator('.status-card .rec-done').count()) {
-        if ((await state()).status.phase !== 'tehorah') throw new Error('recorded, but not tehorah');
-        await page.click('#rec-undo');
-        await has('.status-card .rec-done', 'Removed');
-      }
+      await has('#status-headline', 'Mikvah night');
+      await has('#status-detail', 'Immersion after ');
+      if (await page.locator('#next-step').count()) throw new Error('a button on the mikvah night');
     } finally {
       for (const e of (await state()).entries.filter(x => x.kind !== 'flow')) await api('DELETE', '/api/entries/' + encodeURIComponent(e.id));
     }
@@ -583,39 +580,25 @@ const problems = [];
 
   const WALK_HEFSEK = addDays(WALK_FLOW, 5);
   const WALK_MIKVAH = addDays(WALK_HEFSEK, 7);
-  await step('walk: the mikvah night passed with no immersion recorded: "She immersed on the evening of ..."; "On another night" opens the form', async () => {
+  await step('walk: the mikvah night passed with no immersion recorded: tehorah, and nothing asks about it', async () => {
     const st = await dayButton(WALK_HEFSEK, 'dp-add-hefsek');
-    if (st.status.phase !== 'mikvah_not_recorded') throw new Error('phase ' + st.status.phase);
-    if ((await page.textContent('#next-step')).trim() !== 'She immersed on the evening of ' + longDate(WALK_MIKVAH)) throw new Error('next step: ' + (await page.textContent('#next-step')));
+    if (st.status.phase !== 'tehorah') throw new Error('phase ' + st.status.phase);
+    if ((await page.textContent('#next-step')).trim() !== 'A period began') throw new Error('next step: ' + (await page.textContent('#next-step')));
     await pickDay(WALK_MIKVAH);
     if ((await page.textContent(`#day-${WALK_MIKVAH} .mk.mikvah.plan`)) !== 'M') throw new Error('the mikvah night is not an outlined M');
-    await walkShot('53-walk-mikvah-not-recorded');
-    await page.click('#next-other-night');
-    await page.waitForSelector('#record-panel #rec-kind-mikvah[aria-pressed="true"]');
-    if ((await page.inputValue('#rec-date')) !== WALK_MIKVAH) throw new Error('the form is not on the mikvah night');
-    await page.click('#rec-cancel');
-    await page.waitForSelector('#record-panel', { state: 'detached' });
-    await page.click('#next-step');
-    await has('.status-card .rec-done', 'Recorded');
-    const after = await state();
-    if (after.status.phase !== 'tehorah') throw new Error('phase after the immersion ' + after.status.phase);
-    if ((await page.textContent(`#day-${WALK_MIKVAH} .mk.mikvah.done`)) !== 'M✓') throw new Error('the immersion is not M✓');
-    await page.click('#rec-undo');
-    await has('.status-card .rec-done', 'Removed');
+    if (await page.locator('#day-events .ev.mikvah .tag').count()) throw new Error('a label on the past mikvah night');
+    const words = await page.textContent('#root');
+    if (/immersed|not recorded: |no immersion/i.test(words)) throw new Error('something asks about the immersion');
+    await walkShot('53-walk-after-mikvah-night');
   });
 
-  await step('walk: a period with no immersion recorded before it: "Record that immersion" opens the form on that night, and records it', async () => {
+  await step('walk: a new period after the count: no note, and the earlier mikvah night is an ordinary one', async () => {
     const st = await dayButton(isoDaysAgo(1), 'dp-add-flow-day');
-    if (!st.alerts.some(a => a.text.startsWith('No immersion is recorded for the period before the latest one'))) throw new Error('no note: ' + JSON.stringify(st.alerts));
-    const night = st.grid.events.find(e => e.kind === 'mikvah' && /no immersion recorded/.test(e.title));
-    if (!night || night.startDate !== WALK_MIKVAH) throw new Error('the night with no immersion: ' + JSON.stringify(night));
-    await page.click('#record-missing-immersion');
-    await page.waitForSelector('#record-panel #rec-kind-mikvah[aria-pressed="true"]');
-    if ((await page.inputValue('#rec-date')) !== WALK_MIKVAH) throw new Error('the form is not on that night: ' + (await page.inputValue('#rec-date')));
-    await page.click('#rec-submit');
-    await has('.status-card .rec-done', 'Recorded');
-    if ((await state()).alerts.some(a => a.text.startsWith('No immersion is recorded'))) throw new Error('the note is still there');
-    if (await page.locator('#record-missing-immersion').count()) throw new Error('the button is still there');
+    if (st.status.phase !== 'before_hefsek') throw new Error('phase ' + st.status.phase);
+    if (st.alerts.length) throw new Error('an alert: ' + JSON.stringify(st.alerts));
+    const night = st.grid.events.find(e => e.kind === 'mikvah' && e.startDate === WALK_MIKVAH);
+    if (!night || !/^Mikvah night \(after /.test(night.title)) throw new Error('the earlier night: ' + JSON.stringify(night));
+    if (await page.locator('#record-missing-immersion').count()) throw new Error('a button to record the immersion');
     await removeAll();
   });
 
@@ -679,20 +662,19 @@ const problems = [];
     await shot('30-demo-day');
   });
 
-  for (const [hour, label, note] of [
-    [21.5, 'in the evening', 'The civil date is still'],
-    [2.5, 'after midnight', 'This night began at'],
+  for (const [hour, label] of [
+    [21.5, 'in the evening'],
+    [2.5, 'after midnight'],
   ]) {
     await step('test account: Today at night, ' + label + ': the box describes the night that has begun, as the headline does', async () => {
       const st = await atPlace(placeAt(hour));
       if (st.today.part !== 'night') throw new Error('expected night: ' + JSON.stringify(st.today));
       await has('.today-box.night h3', 'Tonight: the night of');
-      await has('.today-box.night .night-note', note);
+      if (await page.locator('.today-box .night-note').count()) throw new Error('the sentence about the Hebrew date is still there');
       await has('.date-line .hebrew', 'The night of');
       if (st.status.phase === 'counting') {
         const n = st.status.day;
         if (!(await page.textContent('#status-headline')).includes('day ' + n)) throw new Error('headline');
-        await has('.today-box.night', 'Day ' + n + ' of the seven clean days has begun.');
         const titles = await page.$$eval('.today-box .ti-title', els => els.map(e => e.textContent));
         if (titles.some(x => /clean days: day/.test(x) && !x.includes('day ' + n))) throw new Error('the box shows another day: ' + titles.join(' | '));
       }

@@ -83,7 +83,8 @@ export function compute(data: HouseholdData, now: number): Computed | null {
     since: localAbs(now, place.timeZone) - data.app.calendar.historyDays - WINDOW_MARGIN_DAYS,
   });
   const events = buildCalendar(timeline, { style: data.app.calendar.style, lang: data.app.terms, timeZone: place.timeZone });
-  const ctx: ReminderContext = { place, zopts, yomTov: data.halachic.yomTov };
+  const recorded = new Map(data.entries.map(e => [e.entry.id, e.createdAt]));
+  const ctx: ReminderContext = { place, zopts, yomTov: data.halachic.yomTov, recordedAt: id => recorded.get(id) };
   const reminders = buildReminders(timeline, data.app.reminders, ctx);
   return { timeline, events, reminders, place, zopts };
 }
@@ -299,8 +300,8 @@ function boundaryNote(resolved: ResolvedOnah, timeZone: string): string {
   if (resolved.nearBoundary.boundary !== resolved.window.start) return '';
   const t = clock12(resolved.nearBoundary.boundary, timeZone, 'floor');
   return resolved.onah.part === 'night'
-    ? ` Counted as night (sunset was ${t}). If it began before sunset send 0, then the same with: day. If unsure ask a rav.`
-    : ` Counted as day (sunrise was ${t}). If it began before sunrise send 0, then the same with: night. If unsure ask a rav.`;
+    ? ` Counted as night (sunset was ${t}). If it began before sunset send 0, then the same with: day.`
+    : ` Counted as day (sunrise was ${t}). If it began before sunrise send 0, then the same with: night.`;
 }
 
 /**
@@ -335,9 +336,10 @@ export function rejectionText(reason: RejectReason, computed: Computed | null, b
     case 'mikvah_without_hefsek':
       return by === 'page' ? 'Not recorded: no hefsek taharah is recorded. Record the hefsek taharah first.' : 'Not recorded: no hefsek is recorded. Send 2 first.';
     case 'mikvah_too_early': {
-      const s = computed?.timeline.status;
-      if (computed && s?.state === 'niddah') {
-        const m = s.period.planMikvah;
+      // the period the immersion was refused for: the latest, which has a hefsek and no recorded immersion
+      const last = computed?.timeline.periods.at(-1);
+      if (computed && last && last.mikvahDoneAbs === null && !last.closedByNextPeriod) {
+        const m = last.planMikvah;
         return `Not recorded: the count is not complete. Mikvah night is ${englishDate(m.eveningAbs)} after ${clock12(m.tzeit, computed.place.timeZone, 'ceil')}.`;
       }
       return 'Not recorded: the count is not complete.';
@@ -359,7 +361,7 @@ export function confirmationText(result: Extract<RecordResult, { ok: true }>, re
       let text = `Recorded: ${entryEnglish(entry)}.`;
       if (notes.includes('count_cancelled_by_flow')) text += ' The count is cancelled; a new hefsek is needed.';
       else {
-        if (notes.includes('period_began_without_immersion')) text += ' No mikvah was recorded before it, so it counts as a new period.';
+        if (notes.includes('period_began_without_hefsek')) text += ' No hefsek was recorded before it, so it is a new period.';
         if (period && period.startId === entry.id) text += ` Hefsek from ${englishDate(period.earliestHefsekAbs)}.`;
       }
       return text + undo + (resolved ? boundaryNote(resolved, tz) : '');
@@ -368,11 +370,13 @@ export function confirmationText(result: Extract<RecordResult, { ok: true }>, re
       return `Recorded: ${entryEnglish(entry)}. A new hefsek is needed.${undo}${resolved ? boundaryNote(resolved, tz) : ''}`;
     case 'hefsek': {
       let text = `Recorded: ${entryEnglish(entry)}.`;
-      if (period && period.cleanDays) {
-        const m = period.planMikvah;
-        text += ` Clean days ${englishDate(period.cleanDays[0] as number)} - ${englishDate(period.cleanDays[6] as number)}. Mikvah ${englishDate(m.eveningAbs)} after ${clock12(m.tzeit, tz, 'ceil')}.`;
+      // its period, also when its mikvah night has already passed
+      const own = computed.timeline.periods.find(p => p.hefsekId === entry.id);
+      if (own && own.cleanDays) {
+        const m = own.planMikvah;
+        text += ` Clean days ${englishDate(own.cleanDays[0] as number)} - ${englishDate(own.cleanDays[6] as number)}. Mikvah ${englishDate(m.eveningAbs)} after ${clock12(m.tzeit, tz, 'ceil')}.`;
       }
-      if (notes.includes('hefsek_early')) text += ' It was before the wait ended; ask a rav.';
+      if (notes.includes('hefsek_early')) text += ' It was before the wait ended.';
       return text + undo;
     }
     case 'mikvah': {

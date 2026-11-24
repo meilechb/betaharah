@@ -124,7 +124,7 @@ describe('reminders', () => {
     expect(late).toEqual([]);
   });
 
-  it('during the count: bedikah reminders for each day, the immersion night, and a check the next morning', () => {
+  it('during the count: bedikah reminders for each day, booking the mikvah, and the immersion night', () => {
     const r = reminders([flow, hefsek], at(2026, 11, 26, 18));
     expect(r.filter(x => x.kind === 'hefsek')).toEqual([]);
     const mornings = r.filter(x => x.kind === 'bedikah_morning');
@@ -134,11 +134,59 @@ describe('reminders', () => {
     expect(mornings[6]!.text).toContain('Required on this day.');
     const mikvah = r.filter(x => x.kind === 'mikvah');
     expect(mikvah).toHaveLength(1);
-    expect(mikvah[0]!.text).toMatch(/^Mikvah night: Thu Dec 3, after 5:\d\d PM\. Reply 4 after immersing\.$/);
+    expect(mikvah[0]!.text).toMatch(/^Mikvah night: Thu Dec 3, after 5:\d\d PM\.$/);
     expect(mikvah[0]!.at).toBe(dayTimes(SUN + 11, LAKEWOOD, ZOPTS).sunset - 180 * 60_000);
-    const confirm = r.filter(x => x.kind === 'mikvah_confirm');
-    expect(confirm).toHaveLength(1);
-    expect(localDateTime(confirm[0]!.at, TZ)).toMatchObject({ m: 12, d: 4, hh: 9, mi: 0 });
+    // the morning after the hefsek (recorded on its day): Friday 27 November at 9:00
+    const book = r.filter(x => x.kind === 'mikvah_book');
+    expect(book).toHaveLength(1);
+    expect(book[0]!.key).toBe(`mikvah_book:f:${SUN + 4}`);
+    expect(book[0]!.text).toMatch(/^Book the mikvah: mikvah night is Thu Dec 3, after 5:\d\d PM\.$/);
+    expect(localDateTime(book[0]!.at, TZ)).toMatchObject({ m: 11, d: 27, hh: 9, mi: 0 });
+    // nothing asks whether she immersed
+    for (const x of r) expect(x.text).not.toMatch(/Reply 4|immersed|recorded/);
+  });
+
+  it('booking the mikvah: the morning after the day the hefsek was recorded, at the chosen time, in both wordings', () => {
+    const tl = timeline([flow, hefsek], at(2026, 11, 26, 18));
+    // recorded two days late, on Saturday night: the reminder is on Sunday morning
+    const late: ReminderContext = { ...CTX, recordedAt: id => (id === 'h' ? at(2026, 11, 28, 20) : undefined) };
+    const opts = { ...DEFAULT_REMINDER_OPTIONS, mikvahBook: { on: true, hour: 10, minute: 30 } };
+    const plain = buildReminders(tl, opts, late).filter(x => x.kind === 'mikvah_book');
+    expect(plain).toHaveLength(1);
+    expect(localDateTime(plain[0]!.at, TZ)).toMatchObject({ m: 11, d: 29, hh: 10, mi: 30 });
+    const discreet = buildReminders(tl, { ...opts, style: 'discreet' }, late).find(x => x.kind === 'mikvah_book')!;
+    expect(discreet.text).toMatch(/^Book M: Thu Dec 3 after 5:\d\d PM\.$/);
+    expect(discreet.key).toBe(plain[0]!.key);
+    for (const text of [plain[0]!.text, discreet.text]) {
+      expect(text).toMatch(/^[A-Za-z0-9 .,:]+$/);
+      expect(text.length).toBeLessThan(70);
+    }
+  });
+
+  it('booking the mikvah: nothing when the hefsek is recorded so late that the mikvah night is that day or past', () => {
+    // the mikvah night is the evening of Thursday 3 December
+    const onTheDay = (recorded: number) => {
+      const ctx: ReminderContext = { ...CTX, recordedAt: () => recorded };
+      return buildReminders(timeline([flow, hefsek], recorded), DEFAULT_REMINDER_OPTIONS, ctx).filter(x => x.kind === 'mikvah_book');
+    };
+    expect(onTheDay(at(2026, 12, 1, 20))).toHaveLength(1); // the next morning is Wednesday 2 December
+    expect(onTheDay(at(2026, 12, 2, 20))).toEqual([]); // the next morning would be the day of the mikvah night
+    expect(onTheDay(at(2026, 12, 3, 12))).toEqual([]);
+  });
+
+  it('booking the mikvah: removed when the count is cancelled, and not without a hefsek', () => {
+    expect(reminders([flow], at(2026, 11, 23, 10)).filter(x => x.kind === 'mikvah_book')).toEqual([]);
+    const cancelled = reminders([flow, hefsek, { id: 'f2', kind: 'flow', onah: { abs: SUN + 6, part: 'day' }, veset: true }], at(2026, 11, 28, 18));
+    expect(cancelled.filter(x => x.kind === 'mikvah_book')).toEqual([]);
+  });
+
+  it('booking the mikvah: a morning on Shabbat waits until after it', () => {
+    // hefsek on Friday 27 November, recorded that day: Shabbat morning is held until Saturday night
+    const r = reminders([flow, { id: 'h', kind: 'hefsek', abs: SUN + 5 }], at(2026, 11, 27, 17));
+    const book = r.find(x => x.kind === 'mikvah_book')!;
+    expect(book.at).toBeGreaterThan(dayTimes(SAT, LAKEWOOD, ZOPTS).tzeit);
+    expect(localDateTime(book.at, TZ)).toMatchObject({ m: 11, d: 28 });
+    expect(restDayAt(book.at, CTX)).toBeNull();
   });
 
   it('the clean day that falls on Shabbat is announced on Friday, and its afternoon reminder is left out', () => {
@@ -159,23 +207,19 @@ describe('reminders', () => {
     expect(r.filter(x => x.kind === 'bedikah_afternoon')).toHaveLength(7);
   });
 
-  it('a Saturday-night immersion is announced on Friday and confirmed on Sunday morning', () => {
+  it('a Saturday-night immersion is announced on Friday', () => {
     const r = reminders([flow, { id: 'h', kind: 'hefsek', abs: SUN + 6 }], at(2026, 11, 30, 10));
     const m = r.find(x => x.kind === 'mikvah')!;
     expect(m.text).toContain('Mikvah night: Sat Dec 5');
     expect(m.text).toContain('after Shabbat or Yom Tov');
     expect(localDateTime(m.at, TZ)).toMatchObject({ m: 12, d: 4 });
-    expect(localDateTime(r.find(x => x.kind === 'mikvah_confirm')!.at, TZ)).toMatchObject({ m: 12, d: 6, hh: 9 });
   });
 
-  it('a Friday-night immersion: the check the next morning waits until after Shabbat', () => {
+  it('a Friday-night immersion is announced before Shabbat, with a note to prepare', () => {
     const r = reminders([flow, { id: 'h', kind: 'hefsek', abs: SUN + 5 }], at(2026, 11, 30, 10));
     const m = r.find(x => x.kind === 'mikvah')!;
     expect(m.text).toContain('Shabbat or Yom Tov night, prepare before');
     expect(localDateTime(m.at, TZ)).toMatchObject({ m: 12, d: 4 });
-    const confirm = r.find(x => x.kind === 'mikvah_confirm')!;
-    expect(confirm.at).toBeGreaterThan(dayTimes(SUN + 13, LAKEWOOD, ZOPTS).tzeit);
-    expect(localDateTime(confirm.at, TZ)).toMatchObject({ m: 12, d: 5 });
   });
 
   it('consecutive onot are announced once, with the whole stretch', () => {
@@ -201,7 +245,7 @@ describe('reminders', () => {
       hefsek: { ...DEFAULT_REMINDER_OPTIONS.hefsek, on: false },
       bedikot: { ...DEFAULT_REMINDER_OPTIONS.bedikot, on: false },
       mikvah: { ...DEFAULT_REMINDER_OPTIONS.mikvah, on: false },
-      mikvahConfirm: { ...DEFAULT_REMINDER_OPTIONS.mikvahConfirm, on: false },
+      mikvahBook: { ...DEFAULT_REMINDER_OPTIONS.mikvahBook, on: false },
       onah: { ...DEFAULT_REMINDER_OPTIONS.onah, on: false },
     };
     expect(reminders([flow], at(2026, 11, 23, 10), off)).toEqual([]);
@@ -267,11 +311,13 @@ describe('reminders', () => {
 describe('status line', () => {
   it('reads sensibly at each stage', () => {
     expect(statusText(timeline([], at(2026, 11, 23, 10)), TZ)).toBe('Tehorah.');
-    expect(statusText(timeline([flow], at(2026, 11, 23, 10)), TZ)).toMatch(
-      /^Niddah since Sun Nov 22\. Hefsek from Thu Nov 26; next possible Thu Nov 26 before 4:3\d PM\.$/,
-    );
+    expect(statusText(timeline([flow], at(2026, 11, 23, 10)), TZ)).toMatch(/^Niddah since Sun Nov 22\. Hefsek from Thu Nov 26 before 4:3\d PM\.$/);
+    // once the first day has passed, it says so
+    expect(statusText(timeline([flow], at(2026, 11, 27, 10)), TZ)).toMatch(/^Niddah since Sun Nov 22\. Hefsek from Thu Nov 26; next possible Fri Nov 27 before 4:3\d PM\.$/);
     expect(statusText(timeline([flow, hefsek], at(2026, 11, 29, 10)), TZ)).toMatch(/^Clean day 3 of 7\. Mikvah Thu Dec 3 after 5:\d\d PM\.$/);
     expect(statusText(timeline([flow, hefsek], at(2026, 12, 3, 19)), TZ)).toMatch(/^Mikvah tonight after 5:\d\d PM\.$/);
+    // the next morning, with no immersion recorded
+    expect(statusText(timeline([flow, hefsek], at(2026, 12, 4, 10)), TZ)).toMatch(/^Tehorah\./);
     expect(statusText(timeline([flow, hefsek, { id: 'm', kind: 'mikvah', abs: SUN + 12 }], at(2026, 12, 4, 10)), TZ)).toMatch(
       /^Tehorah\. Next onah: \d+:\d\d [AP]M \w{3} Dec \d+\.$/,
     );

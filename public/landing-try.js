@@ -1,6 +1,8 @@
 // "Try it" on the home page: a visitor picks the day a period began and sees
 // the month worked out, as an account would show it, then adds the hefsek
-// taharah and the immersion. The calculation is POST /api/try; nothing is
+// taharah: the calendar then shows the clean days and the mikvah night, and
+// the walk ends with the sign-up button (the immersion is not asked for: an
+// account takes it that she immersed). The calculation is POST /api/try; nothing is
 // saved. Without JavaScript, or when the request fails, the section keeps
 // its plain sentence with a link to sign up.
 
@@ -180,8 +182,7 @@ async function calculate(added) {
 /** The date offered for the next step: the day the calendar shows for it. */
 function nextDefault(r) {
   const phase = r.state.status ? r.state.status.phase : 'tehorah';
-  const want = phase === 'before_hefsek' ? 'hefsek' : phase === 'tehorah' ? null : 'mikvah';
-  const item = want ? r.state.upcoming.find(u => u.kind === want) : null;
+  const item = phase === 'before_hefsek' ? r.state.upcoming.find(u => u.kind === 'hefsek') : null;
   return { date: item ? item.date : T.today, part: 'day' };
 }
 
@@ -272,7 +273,7 @@ function moreChoices() {
     el(
       'div',
       { class: 'try-more-body' },
-      el('p', { class: 'try-small' }, 'Three of the twelve customs an account has. The rest are as a new account starts.'),
+      el('p', { class: 'try-small' }, 'Three of the twelve customs.'),
       info.customs.map(c =>
         el(
           'div',
@@ -384,7 +385,7 @@ function resultView() {
     el(
       'div',
       { class: 'try-cta' },
-      el('p', {}, 'Your account does this with your own dates, sends a text before each time, and fills your own calendar app. Nothing you entered here was saved.'),
+      el('p', {}, 'Nothing here was saved.'),
       el(
         'div',
         { class: 'try-actions' },
@@ -413,16 +414,14 @@ function resultView() {
   );
 }
 
+/** The one step after the period: the hefsek taharah. Once it is added, the walk ends. */
 function nextStep(s) {
   const phase = s.status ? s.status.phase : 'tehorah';
-  const kind = phase === 'before_hefsek' ? 'hefsek' : phase === 'tehorah' ? 'flow' : 'mikvah';
+  if (phase !== 'before_hefsek' || T.entries.some(e => e.kind === 'hefsek')) return null;
+  const kind = 'hefsek';
   const full = T.entries.length >= (T.info ? T.info.maxEntries : 12);
-  const title = kind === 'hefsek' ? 'Next: the hefsek taharah' : kind === 'mikvah' ? 'Next: the immersion' : 'Next: the following period';
-  const label = kind === 'hefsek' ? 'The day it was done' : kind === 'mikvah' ? 'The evening she immersed' : 'The day it began';
-  const button = kind === 'hefsek' ? 'Add the hefsek taharah' : kind === 'mikvah' ? 'Add the immersion' : 'Add the period';
-  // An immersion is recorded once its evening has come; anything else once its day has.
-  const ahead = T.next.date > T.today || (kind === 'mikvah' && T.next.date === T.today && T.part === 'day');
-  if (full) return el('div', { class: 'try-card try-next' }, el('p', { class: 'try-small' }, 'That is as many dates as can be tried here. Start again, or sign up to keep going.'));
+  const ahead = T.next.date > T.today;
+  if (full) return el('div', { class: 'try-card try-next' }, el('p', { class: 'try-small' }, 'That is as many dates as can be tried here.'));
   return el(
     'form',
     {
@@ -435,16 +434,15 @@ function nextStep(s) {
           draw();
           return;
         }
-        const entry = kind === 'flow' ? { kind, date: T.next.date, part: T.next.part } : { kind, date: T.next.date };
-        T.entries.push(entry);
+        T.entries.push({ kind, date: T.next.date });
         calculate(true);
       },
     },
-    el('p', { class: 'try-next-title' }, mark({ kind: kind === 'hefsek' ? 'hefsek' : kind === 'mikvah' ? 'mikvah' : 'flow' }), el('b', {}, title)),
+    el('p', { class: 'try-next-title' }, mark({ kind }), el('b', {}, 'Next: the hefsek taharah')),
     el(
       'div',
       { class: 'try-field' },
-      el('label', { for: 'try-next-date' }, label),
+      el('label', { for: 'try-next-date' }, 'The day it was done'),
       el('input', {
         id: 'try-next-date',
         type: 'date',
@@ -456,12 +454,11 @@ function nextStep(s) {
         },
       }),
     ),
-    kind === 'flow' ? partChoice('try-next-part', T.next.part, v => (T.next.part = v)) : null,
     formError(),
     el(
       'div',
       { class: 'try-actions' },
-      el('button', { type: 'submit', class: 'btn btn-primary', id: 'try-add', disabled: T.busy }, button),
+      el('button', { type: 'submit', class: 'btn btn-primary', id: 'try-add', disabled: T.busy }, 'Add the hefsek taharah'),
       ahead
         ? el(
             'button',
@@ -471,17 +468,17 @@ function nextStep(s) {
               id: 'try-jump',
               onclick: () => {
                 T.today = T.next.date;
-                T.part = kind === 'mikvah' ? 'night' : 'day';
+                T.part = 'day';
                 T.follow = true; // the calendar moves to the new today
                 T.formError = '';
                 calculate();
               },
             },
-            (kind === 'mikvah' ? 'Go to the evening of ' : 'Make today ') + fmt(T.next.date, { month: 'short', day: 'numeric' }),
+            'Make today ' + fmt(T.next.date, { month: 'short', day: 'numeric' }),
           )
         : null,
     ),
-    ahead ? el('p', { class: 'try-small' }, kind === 'mikvah' ? 'That evening has not come yet. Go to it first, to add it.' : 'That day is after today. Make it today first, to add it.') : null,
+    ahead ? el('p', { class: 'try-small' }, 'That day is after today.') : null,
   );
 }
 

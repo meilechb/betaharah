@@ -30,15 +30,15 @@ const smooth = () => (window.matchMedia('(prefers-reduced-motion: reduce)').matc
 function kindHelp(kind) {
   switch (kind) {
     case 'flow':
-      return t('The start of a period.');
+      return t('A period began.');
     case 'stain':
-      return t('Only when a {rav} has said that it makes her {niddah}.');
+      return t('One that makes her {niddah}.');
     case 'hefsek':
-      return t('Done before {sunset}. The {clean_days} begin the night after it.');
+      return t('Before {sunset}.');
     case 'broken':
-      return t('When your {rav} says the {clean_days} must start again. A new {hefsek} is then needed.');
+      return t('The {clean_days} start again. A new {hefsek} is needed.');
     case 'mikvah':
-      return t('After she has immersed, on the {mikvah_night}.');
+      return t('Optional: assumed on the {mikvah_night}.');
     default:
       return '';
   }
@@ -217,7 +217,7 @@ function submit(e) {
 
 function nowText(kind) {
   if (kind === 'hefsek') return longDate(today()) + '.';
-  if (kind === 'mikvah') return 'The night that begins at this evening’s nightfall, or the night now.';
+  if (kind === 'mikvah') return 'This evening, or the night now.';
   return S.today ? 'It is now ' + (S.today.part === 'night' ? t('night (after {sunset})') : 'day (after sunrise)') + ': ' + S.today.hebrew + '.' : null;
 }
 
@@ -269,9 +269,9 @@ function whenPart() {
                 'fieldset',
                 { class: 'plain how' + (rec.fieldError === 'how' ? ' invalid' : '') },
                 h('legend', { class: 'small-legend' }, 'Time of day'),
-                radio('how', 'day', 'By day', t('Between sunrise and {sunset}.')),
-                radio('how', 'night', 'At night', t('The night that begins on the evening of this date, after {sunset}. For example, at 9 PM on Monday: choose Monday, at night.')),
-                radio('how', 'time', 'At a time I know', 'The calendar works out whether it was day or night.'),
+                radio('how', 'day', 'By day', t('Sunrise to {sunset}.')),
+                radio('how', 'night', 'At night', t('After {sunset} on this date.')),
+                radio('how', 'time', 'At a time I know'),
                 rec.how === 'time'
                   ? h('div', { class: 'indent' }, textField({ id: 'rec-time', label: 'Time', type: 'time', wide: false, value: rec.time, error: rec.fieldError === 'time' ? rec.error : '', oninput: e => (rec.time = e.target.value) }))
                   : null,
@@ -290,10 +290,9 @@ function form() {
     'form',
     { class: 'record-form', onsubmit: submit, novalidate: true },
     h('h3', { class: 'form-title' }, entryMark(kind), h('span', {}, label)),
-    kind === 'broken' ? h('p', { class: 'help' }, t('A {flow} or {stain} recorded after the {hefsek} cancels the count by itself; this entry is for any other reason your {rav} gives.')) : null,
     whenPart(),
     kind === 'flow'
-      ? checkRow({ id: 'rec-veset', label: t('This {flow} counts for the {vesatot}'), help: t('Leave this on unless a {rav} said it does not count.'), checked: rec.veset, onchange: e => (rec.veset = e.target.checked) })
+      ? checkRow({ id: 'rec-veset', label: t('Counts for the {vesatot}'), checked: rec.veset, onchange: e => (rec.veset = e.target.checked) })
       : null,
     textField({ id: 'rec-note', label: 'Note (optional)', help: 'Only you see it, in the Log.', maxlength: 200, value: rec.note, oninput: e => (rec.note = e.target.value) }),
     rec.error && !rec.fieldError ? alert({ kind: 'bad', role: 'alert', className: 'rec-error' }, h('span', { id: 'rec-error', tabindex: '-1' }, rec.error)) : null,
@@ -328,7 +327,7 @@ function formBody() {
   return h(
     'div',
     {},
-    forDate ? h('p', { class: 'for-date' }, icon('calendar', { size: 'sm' }), h('span', {}, 'For ' + longDate(rec.date) + '. Choose what to record.')) : null,
+    forDate ? h('p', { class: 'for-date' }, icon('calendar', { size: 'sm' }), h('span', {}, 'For ' + longDate(rec.date) + '.')) : null,
     h('p', { class: 'kinds-title' }, 'What to record'),
     kindPicker(),
     rec.kind ? form() : null,
@@ -360,7 +359,7 @@ export function recordCard() {
           'div',
           {},
           notice('log'),
-          h('p', { class: 'help' }, 'For something that happened before you started using this calendar, or that was not recorded at the time.'),
+          h('p', { class: 'help' }, 'For something not recorded at the time.'),
           button({
             label: 'Choose what to add',
             attrs: { id: 'rec-open' },
