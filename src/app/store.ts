@@ -36,6 +36,12 @@ export function parseSiteConfig(input: unknown): SiteConfig {
   };
   if (o.signup !== 'open' && o.signup !== 'invite' && o.signup !== 'closed') throw new ValidationError('signup: open, invite or closed');
   if (typeof o.smsEnabled !== 'boolean') throw new ValidationError('smsEnabled: true or false');
+  // Settings added after the first release take their default when a saved configuration does not have them yet.
+  const flag = (v: unknown, what: string, fallback: boolean): boolean => {
+    if (v === undefined) return fallback;
+    if (typeof v !== 'boolean') throw new ValidationError(`${what}: true or false`);
+    return v;
+  };
   if (!Array.isArray(o.allowedPrefixes) || o.allowedPrefixes.length === 0 || o.allowedPrefixes.length > 20) {
     throw new ValidationError('allowedPrefixes: between 1 and 20 prefixes');
   }
@@ -48,6 +54,8 @@ export function parseSiteConfig(input: unknown): SiteConfig {
   return {
     signup: o.signup,
     smsEnabled: o.smsEnabled,
+    textSignup: flag(o.textSignup, 'textSignup', DEFAULT_SITE_CONFIG.textSignup),
+    rcsEnabled: flag(o.rcsEnabled, 'rcsEnabled', DEFAULT_SITE_CONFIG.rcsEnabled),
     allowedPrefixes: [...new Set(allowedPrefixes)],
     dailyCodeLimit: int(o.dailyCodeLimit, 'dailyCodeLimit', 0, 100_000),
     monthlyMessageLimit: int(o.monthlyMessageLimit, 'monthlyMessageLimit', 0, 1_000_000),

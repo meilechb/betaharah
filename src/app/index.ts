@@ -253,6 +253,8 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       signedIn: session !== null,
       signup: site.config.signup,
       sms: smsReady(site),
+      // The number to text, shown publicly only when a person can sign up by texting it.
+      textingNumber: smsReady(site) && site.config.textSignup && site.config.signup !== 'closed' ? (site.secrets.telnyxNumber ?? null) : null,
       prefixes: site.config.allowedPrefixes,
       contactName: site.config.contactName,
       contactEmail: site.config.contactEmail,

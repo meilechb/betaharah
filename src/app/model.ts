@@ -128,6 +128,10 @@ export interface SiteConfig {
   signup: 'open' | 'invite' | 'closed';
   /** Master switch for sending text messages. */
   smsEnabled: boolean;
+  /** Whether a person may create an account by texting JOIN to the site's number (subject to `signup`). */
+  textSignup: boolean;
+  /** Whether to send through the RCS agent (with SMS as the fallback) once its keys are saved. */
+  rcsEnabled: boolean;
   /** Numbers must begin with one of these to sign up or be added, e.g. "+1". */
   allowedPrefixes: string[];
   /** Most sign-in codes sent in one day, across everyone. */
@@ -144,6 +148,8 @@ export interface SiteConfig {
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   signup: 'open',
   smsEnabled: true,
+  textSignup: true,
+  rcsEnabled: false,
   allowedPrefixes: ['+1'],
   dailyCodeLimit: 150,
   monthlyMessageLimit: 3000,
@@ -159,9 +165,21 @@ export interface SiteSecrets {
   telnyxPublicKey?: string;
   /** The number messages are sent from and received on, E.164. */
   telnyxNumber?: string;
+  /** The Telnyx messaging profile the number and the RCS agent belong to (needed to send by RCS). */
+  telnyxMessagingProfileId?: string;
+  /** The id of the approved RCS agent. */
+  rcsAgentId?: string;
 }
 
-export const SITE_SECRET_KEYS = ['googleClientId', 'googleClientSecret', 'telnyxApiKey', 'telnyxPublicKey', 'telnyxNumber'] as const;
+export const SITE_SECRET_KEYS = [
+  'googleClientId',
+  'googleClientSecret',
+  'telnyxApiKey',
+  'telnyxPublicKey',
+  'telnyxNumber',
+  'telnyxMessagingProfileId',
+  'rcsAgentId',
+] as const;
 
 export interface Site {
   config: SiteConfig;
@@ -170,6 +188,11 @@ export interface Site {
 
 export function smsReady(site: Site): boolean {
   return site.config.smsEnabled && Boolean(site.secrets.telnyxApiKey && site.secrets.telnyxPublicKey && site.secrets.telnyxNumber);
+}
+
+/** RCS is used when it is switched on, texting works, and the agent and its messaging profile are saved. */
+export function rcsReady(site: Site): boolean {
+  return smsReady(site) && site.config.rcsEnabled && Boolean(site.secrets.rcsAgentId && site.secrets.telnyxMessagingProfileId);
 }
 
 export function googleReady(site: Site): boolean {

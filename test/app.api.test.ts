@@ -287,12 +287,24 @@ describe('pages and request rules', () => {
       signedIn: false,
       signup: 'invite',
       sms: true,
+      textingNumber: OUR_NUMBER,
       prefixes: ['+1'],
       contactName: 'M',
       contactEmail: '',
       codeMinutes: 10,
       resendSeconds: 60,
     });
+    // the number to text is not shown when people cannot sign up by texting it
+    const op = await operator();
+    await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, textSignup: false });
+    expect((await new Client().get('/api/public')).json.textingNumber).toBeNull();
+    await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, signup: 'closed' });
+    expect((await new Client().get('/api/public')).json.textingNumber).toBeNull();
+    // a configuration saved before these settings existed still loads, with their defaults
+    const { textSignup: _a, rcsEnabled: _b, ...older } = DEFAULT_SITE_CONFIG;
+    const saved = await op.put('/api/admin/config', older);
+    expect(saved.status).toBe(200);
+    expect(saved.json.config).toMatchObject({ textSignup: true, rcsEnabled: false });
   });
 });
 
@@ -1822,7 +1834,15 @@ describe('the operator\'s console', () => {
     expect(r.json.totals).toEqual({ households: 1, phones: 2, waiting: 0 });
     expect(r.json.usage).toEqual({ textsThisMonth: 3, codesToday: 2 });
     expect(r.json.households).toEqual([{ id: expect.any(String), created_at: START, updated_at: expect.any(Number), phones: 2 }]);
-    expect(r.json.secretsSet).toEqual({ googleClientId: true, googleClientSecret: true, telnyxApiKey: true, telnyxPublicKey: true, telnyxNumber: true });
+    expect(r.json.secretsSet).toEqual({
+      googleClientId: true,
+      googleClientSecret: true,
+      telnyxApiKey: true,
+      telnyxPublicKey: true,
+      telnyxNumber: true,
+      telnyxMessagingProfileId: false,
+      rcsAgentId: false,
+    });
     expect(r.json.urls).toEqual({
       webhook: 'https://cal.example/webhooks/telnyx',
       redirect: 'https://cal.example/api/google/callback',
