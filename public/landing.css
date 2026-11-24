@@ -1357,8 +1357,9 @@ body.lp {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  min-width: 30px;
   height: 32px;
+  padding: 0 8px;
   border-radius: 8px;
   border: 1px solid var(--line-strong);
   border-bottom-width: 3px;
