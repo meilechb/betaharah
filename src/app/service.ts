@@ -10,7 +10,7 @@ import type { Deps, Env } from './env';
 import { GoogleCalendar, GoogleError, refreshAccessToken } from './google';
 import { compute, runCommand, type Computed } from './household';
 import { addMessage, lastFour, MAX_SEEN_TEXTS, smsReady, type HouseholdData, type Site, type SyncState } from './model';
-import { allowText, rebuildQueue, refundText, settle, takeDue, type Settlement } from './queue';
+import { allowText, postponeDue, rebuildQueue, refundText, settle, takeDue, type Settlement } from './queue';
 import { sendTelnyx, type InboundMessage } from './sms';
 import {
   bump,
@@ -60,15 +60,6 @@ const UPSERT_COUNTER = `INSERT INTO counters (key, value, expires_at) VALUES (?1
     value = CASE WHEN counters.expires_at <= ?3 THEN 1 ELSE counters.value + 1 END,
     expires_at = CASE WHEN counters.expires_at <= ?3 THEN ?2 ELSE counters.expires_at END
   RETURNING value`;
-
-/**
- * Adds one to each counter in a single database call and returns the new
- * values. Each counter starts again from zero `ttlMs` after its first count.
- */
-async function bumpMany(db: D1Database, counters: ReadonlyArray<readonly [key: string, ttlMs: number]>, now: number): Promise<number[]> {
-  const results = await db.batch<{ value: number }>(counters.map(([key, ttlMs]) => db.prepare(UPSERT_COUNTER).bind(key, now + ttlMs, now)));
-  return results.map(r => r.results[0]?.value ?? 0);
-}
 
 /** The counter of every text the site sent in the (UTC) month of `now`. */
 export function textsThisMonthKey(now: number): string {
@@ -140,10 +131,13 @@ const codeHash = (env: Env, hash: string, code: string): Promise<string> => fing
  * per number, eight an hour per network address, and a daily total for the
  * whole site, so that nobody can run up the text-message bill.
  *
- * With `send: false` everything happens except the sending: the limits
- * apply and the answer is the same. That is used for a number that may not
- * sign up, so that the answer does not reveal whether a number has an
- * account.
+ * With `send: false` everything happens except the sending: the limits per
+ * number and per address apply and the answer is the same. That is used for
+ * a number that may not sign up, so that the answer does not reveal whether
+ * a number has an account. Such a request does not count toward the site's
+ * daily total (only codes that are sent do, so that strangers cannot pause
+ * sign-in for everyone), but once the total is reached it gets the same
+ * "paused" answer as everyone else.
  *
  * The text itself is sent by the returned `delivery`, which the caller may
  * leave running after it has answered.
@@ -179,16 +173,20 @@ export async function requestCode(
   }
   if (!simulate) {
     const addressKey = `code-ip:${(await fingerprint(env.ENCRYPTION_KEY, 'ip', args.address)).slice(0, 24)}`;
-    const [fromAddress, today] = await bumpMany(
-      env.DB,
-      [
-        [addressKey, HOUR],
-        [codesTodayKey(now), 2 * DAY],
-      ],
-      now,
-    );
-    if ((fromAddress ?? 0) > CODES_PER_ADDRESS_PER_HOUR) return { ok: false, reason: 'too_many', message: 'Too many codes were requested. Try again in an hour.' };
-    if ((today ?? 0) > site.config.dailyCodeLimit) {
+    const todayKey = codesTodayKey(now);
+    // One database call: count the request against the address, and either
+    // count it in the day's total (a code that is sent) or only read that
+    // total (nothing is sent). Either way the value is the total including
+    // this request if it were counted, so both are judged alike.
+    const [fromAddress, todayRow] = await env.DB.batch<{ value: number }>([
+      env.DB.prepare(UPSERT_COUNTER).bind(addressKey, now + HOUR, now),
+      args.send
+        ? env.DB.prepare(UPSERT_COUNTER).bind(todayKey, now + 2 * DAY, now)
+        : env.DB.prepare('SELECT value + 1 AS value FROM counters WHERE key = ? AND expires_at > ?').bind(todayKey, now),
+    ]);
+    const today = todayRow?.results[0]?.value ?? 1;
+    if ((fromAddress?.results[0]?.value ?? 0) > CODES_PER_ADDRESS_PER_HOUR) return { ok: false, reason: 'too_many', message: 'Too many codes were requested. Try again in an hour.' };
+    if (today > site.config.dailyCodeLimit) {
       return { ok: false, reason: 'busy', message: 'Sign-in by text message is paused for today. Try again tomorrow, or sign in with your password.' };
     }
   }
@@ -213,8 +211,19 @@ export async function requestCode(
 
 export type CodeCheck = { ok: true; householdId: string | null } | { ok: false; message: string };
 
-/** Checks a code that was entered. A correct code can be used once. */
-export async function checkCode(env: Env, args: { number: string; code: unknown; purpose: 'login' | 'add'; now: number }): Promise<CodeCheck> {
+/**
+ * Checks a code that was entered. A correct code can be used once.
+ *
+ * A code for adding a phone belongs to the household that asked for it:
+ * `householdId` is the household of the session entering it. From any other
+ * household even the correct code is refused, and it is not used up, so
+ * that the household that asked for it can still enter it. A wrong code
+ * counts as a guess whoever enters it.
+ */
+export async function checkCode(
+  env: Env,
+  args: { number: string; code: unknown; purpose: 'login' | 'add'; householdId?: string | null; now: number },
+): Promise<CodeCheck> {
   const wrong = { ok: false as const, message: 'That code is not right, or it has expired.' };
   if (typeof args.code !== 'string' || !/^\d{6}$/.test(args.code.trim())) return wrong;
   const hash = await phoneHash(env, args.number);
@@ -225,6 +234,7 @@ export async function checkCode(env: Env, args: { number: string; code: unknown;
     await countAttempt(env.DB, hash);
     return wrong;
   }
+  if (args.purpose === 'add' && row.household_id !== (args.householdId ?? null)) return wrong;
   if (!(await spendCode(env.DB, hash, row.code_hash))) return wrong;
   return { ok: true, householdId: row.household_id };
 }
@@ -443,26 +453,33 @@ const HOUSEHOLDS_PER_RUN = 5;
  * its due reminders are first marked as being sent and saved, so that two
  * runs at once cannot both send them; then they are sent; then the result
  * is recorded.
+ *
+ * While texting is not ready, an ordinary household's due reminders are
+ * put off a few minutes at a time until their time is over, and then
+ * dropped (see postponeDue); the test account's are simulated as always.
  */
 export async function sendDueReminders(env: Env, deps: Deps, site: Site, now: number): Promise<number> {
   const ready = smsReady(site);
-  let ids: string[];
-  if (ready) {
-    ids = await householdsToWake(env.DB, now, HOUSEHOLDS_PER_RUN);
-  } else {
-    // While texting is not set up, only the test account's reminders, which are simulated, are dealt with.
+  let ids = await householdsToWake(env.DB, now, HOUSEHOLDS_PER_RUN);
+  if (!ready) {
+    // While texting is not set up, the test account's reminders, which are
+    // simulated, are still sent; it goes first so that other accounts' due
+    // reminders cannot hold it up. Those are only put off (see postponeDue).
     const row = await getPhone(env.DB, await phoneHash(env, DEMO_NUMBER));
-    ids = row && (await isDueToWake(env.DB, row.household_id, now)) ? [row.household_id] : [];
+    if (row && !ids.includes(row.household_id) && (await isDueToWake(env.DB, row.household_id, now))) ids = [row.household_id, ...ids];
   }
   let sent = 0;
   let budget = REMINDERS_PER_RUN;
   for (const id of ids) {
     if (budget <= 0) break;
     try {
-      const taken = await changeHousehold(env, id, now, data => ({
-        demo: data.demo,
-        due: ready || data.demo ? takeDue(data, now, budget, site.config.householdMonthlyLimit) : [],
-      }));
+      const taken = await changeHousehold(env, id, now, data => {
+        if (!ready && !data.demo) {
+          postponeDue(data, now);
+          return { demo: false, due: [] };
+        }
+        return { demo: data.demo, due: takeDue(data, now, budget, site.config.householdMonthlyLimit) };
+      });
       if (!taken || taken.result.due.length === 0) continue;
       const { demo, due } = taken.result;
       budget -= due.length;

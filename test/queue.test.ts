@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newHousehold, type HouseholdData } from '../src/app/model';
-import { allowText, nextWake, rebuildQueue, refundText, RETRY_MS, SENDING_TIMEOUT_MS, settle, takeDue, textsThisMonth } from '../src/app/queue';
+import { allowText, nextWake, postponeDue, rebuildQueue, refundText, RETRY_MS, SENDING_TIMEOUT_MS, settle, takeDue, textsThisMonth } from '../src/app/queue';
 import type { Reminder } from '../src/engine/present';
 
 const A = '+17325550101';
@@ -148,6 +148,53 @@ describe('taking the reminders that are due', () => {
     rebuildQueue(data, [reminder('mikvah:1', 'mikvah', NOW), reminder('mikvah:2', 'mikvah', NOW)], NOW);
     expect(takeDue(data, NOW, 8, 3)).toHaveLength(3);
     expect(data.queue.map(q => q.status).sort()).toEqual(['dropped', 'sending', 'sending', 'sending']);
+  });
+});
+
+describe('while the site cannot send texts', () => {
+  it('a due reminder is put off ten minutes at a time, and the next wake time moves forward', () => {
+    const data = household();
+    rebuildQueue(data, LIST, NOW);
+    expect(postponeDue(data, NOW)).toBe(0); // nothing is due yet
+    expect(postponeDue(data, NOW + HOUR)).toBe(1);
+    expect(data.queue[0]).toMatchObject({ key: 'hefsek:1', status: 'pending', notBefore: NOW + HOUR + RETRY_MS, text: 'text of hefsek:1' });
+    expect(nextWake(data)).toBe(NOW + HOUR + RETRY_MS);
+    // not again before then
+    expect(postponeDue(data, NOW + HOUR + 5 * MINUTE)).toBe(0);
+    expect(postponeDue(data, NOW + HOUR + RETRY_MS)).toBe(1);
+    expect(nextWake(data)).toBe(NOW + HOUR + 2 * RETRY_MS);
+    // nothing was counted against the monthly limit, and the reminders not yet due are untouched
+    expect(textsThisMonth(data, NOW)).toBe(0);
+    expect(data.queue.filter(q => q.key === 'mikvah:1').every(q => q.notBefore === 0)).toBe(true);
+  });
+
+  it('it is still sent if texting comes back within its time', () => {
+    const data = household();
+    rebuildQueue(data, [LIST[0]!], NOW);
+    postponeDue(data, NOW + HOUR);
+    expect(takeDue(data, NOW + HOUR + 5 * MINUTE, 8, 100)).toEqual([]);
+    expect(takeDue(data, NOW + HOUR + RETRY_MS, 8, 100).map(q => q.key)).toEqual(['hefsek:1']);
+  });
+
+  it('it is dropped once its time is over, and then nothing waits', () => {
+    const data = household();
+    rebuildQueue(data, [LIST[0]!], NOW);
+    for (let t = NOW + HOUR; t < NOW + 4 * HOUR; t += RETRY_MS) postponeDue(data, t);
+    expect(data.queue[0]!.status).toBe('pending');
+    expect(postponeDue(data, NOW + 4 * HOUR + RETRY_MS)).toBe(1);
+    expect(data.queue[0]).toMatchObject({ status: 'dropped', text: '' });
+    expect(nextWake(data)).toBeNull();
+  });
+
+  it('drops a due reminder whose phone no longer receives texts, and gives back what a stopped run had taken', () => {
+    const data = household();
+    rebuildQueue(data, [reminder('mikvah:1', 'mikvah', NOW)], NOW);
+    takeDue(data, NOW, 8, 100); // both taken by a run that then stopped
+    data.phones[1]!.optedOut = true;
+    expect(postponeDue(data, NOW + 5 * MINUTE)).toBe(0);
+    expect(postponeDue(data, NOW + SENDING_TIMEOUT_MS)).toBe(2);
+    expect(data.queue.map(q => `${q.to.slice(-1)}:${q.status}`)).toEqual(['1:pending', '2:dropped']);
+    expect(nextWake(data)).toBe(NOW + SENDING_TIMEOUT_MS + RETRY_MS);
   });
 });
 

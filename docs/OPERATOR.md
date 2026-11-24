@@ -152,7 +152,16 @@ and privacy policy above and proof that you own the domain.
 ## Keeping the bill and the site safe
 
 - The limits in the console: sign-in codes per day, texts per month for the
-  site, texts per month per account. Past a limit nothing is sent.
+  site, texts per month per account. Past a limit nothing is sent. Only
+  codes that are really sent count toward the daily total; a number that may
+  not sign up (in invitation-only or closed mode) gets the same answer
+  without using it up.
+- "Send text messages" switched off: reminders that come due meanwhile wait,
+  and are sent if texting is back on within their time (a few hours at
+  most); after that they are dropped.
+- The console's sign-in locks a network address for 15 minutes after eight
+  wrong passwords from it, and locks for everyone after 300 wrong passwords
+  in 15 minutes from all addresses together.
 - "Phone numbers must begin with" keeps texts to the countries you choose.
   Texts to other countries cost more.
 - "Send text messages" is a single switch that stops all sending at once.

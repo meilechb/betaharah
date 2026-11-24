@@ -4,6 +4,7 @@
  */
 import type { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ADMIN_MAX_FAILURES_ALL } from '../src/app/auth';
 import type { Env } from '../src/app/env';
 import { createApp } from '../src/app/index';
 import { DEMO_NUMBER, DEMO_SPOUSE } from '../src/app/demo';
@@ -13,7 +14,9 @@ import { TABLES } from '../src/app/schema';
 import { codeText, HELP_REPLY, REMINDERS_ON_TEXT, TEST_TEXT, tick } from '../src/app/service';
 import { DEFAULT_APP_SETTINGS, PLACES } from '../src/app/settings';
 import { loadHousehold } from '../src/app/store';
-import { localToInstant } from '../src/engine/civil';
+import { civilToAbs, localToInstant } from '../src/engine/civil';
+import { clock12 } from '../src/engine/present';
+import { sunriseMs, sunsetMs } from '../src/engine/sun';
 import { BASIC } from './helpers';
 import { makeEnv, makeWorld, startDb, TEST_KEY, TEST_PASSWORD, type TestDb, type World } from './fakes';
 
@@ -453,6 +456,46 @@ describe('limits on sign-in codes', () => {
     expect((await new Client('203.0.113.4').post('/api/auth/code', { number: '+17324440204' })).status).toBe(429);
   });
 
+  for (const signup of ['invite', 'closed'] as const) {
+    it(`${signup === 'invite' ? 'by invitation' : 'closed'}: numbers that may not sign up do not use up the daily total, and get the same answer once it is reached`, async () => {
+      const op = await site({ config: { dailyCodeLimit: 3 } });
+      await signIn(HUSBAND, new Client('203.0.113.20')); // one code today
+      await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, dailyCodeLimit: 3, signup });
+      // strangers, many more than the daily total, from several addresses
+      for (let i = 0; i < 6; i++) {
+        const r = await new Client(`203.0.113.${30 + i}`).post('/api/auth/code', { number: `+1732444030${i}` });
+        expect(r.status).toBe(200);
+        expect(r.json).toEqual({ ok: true });
+      }
+      expect(world.telnyx.sent).toHaveLength(1);
+      // the account that exists still gets its codes, up to the total
+      for (let i = 0; i < 2; i++) {
+        world.clock.now += 2 * MINUTE;
+        expect((await new Client(`203.0.113.${40 + i}`).post('/api/auth/code', { number: HUSBAND })).status).toBe(200);
+      }
+      expect(textsTo(HUSBAND)).toHaveLength(3);
+      // now the total is reached: the member and a stranger get the same answer
+      world.clock.now += 2 * MINUTE;
+      const member = await new Client('203.0.113.50').post('/api/auth/code', { number: HUSBAND });
+      const stranger = await new Client('203.0.113.51').post('/api/auth/code', { number: '+17324440309' });
+      expect(member.status).toBe(429);
+      expect(stranger.status).toBe(429);
+      expect(stranger.json).toEqual(member.json);
+      expect(member.json.error).toContain('paused for today');
+      expect(world.telnyx.sent).toHaveLength(3);
+    });
+  }
+
+  it('a number that may not sign up is still held to the limits per number and per address', async () => {
+    await site({ config: { signup: 'closed' } });
+    const c = new Client('203.0.113.77');
+    expect((await c.post('/api/auth/code', { number: OTHER })).status).toBe(200);
+    expect((await c.post('/api/auth/code', { number: OTHER })).status).toBe(429); // a minute between codes
+    for (let i = 0; i < 7; i++) expect((await c.post('/api/auth/code', { number: `+1732444020${i}` })).status).toBe(200);
+    expect((await c.post('/api/auth/code', { number: '+17324440209' })).status).toBe(429); // eight an hour from one address
+    expect(world.telnyx.sent).toEqual([]);
+  });
+
   it('a monthly total of texts for the whole site', async () => {
     await site({ config: { monthlyMessageLimit: 1 } });
     await signIn(HUSBAND);
@@ -783,6 +826,31 @@ describe('one account never sees another', () => {
     await a.post('/api/phones/code', { number: '+17324440151' });
     expect((await new Client('203.0.113.61').post('/api/auth/verify', { number: '+17324440151', code: lastCode('+17324440151') })).status).toBe(400);
     expect(await count('households')).toBe(2);
+  });
+
+  it('the right code entered by another account does not use it up; the account that asked for it can still use it', async () => {
+    world.clock.now += 2 * MINUTE;
+    expect((await a.post('/api/phones/code', { number: WIFE })).status).toBe(200);
+    const code = lastCode(WIFE);
+    const wrongAccount = await b.post('/api/phones/verify', { number: WIFE, code });
+    expect(wrongAccount.status).toBe(400);
+    expect(wrongAccount.json.error).toBe('That code is not right, or it has expired.');
+    const r = await a.post('/api/phones/verify', { number: WIFE, code });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    expect((await a.state()).phones.map((p: any) => p.number)).toEqual([HUSBAND, WIFE]);
+    expect((await b.state()).phones.map((p: any) => p.number)).toEqual([OTHER]);
+  });
+
+  it('wrong guesses still count against the five allowed, whichever account makes them', async () => {
+    world.clock.now += 2 * MINUTE;
+    expect((await a.post('/api/phones/code', { number: WIFE })).status).toBe(200);
+    const code = lastCode(WIFE);
+    const wrong = code === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 3; i++) expect((await b.post('/api/phones/verify', { number: WIFE, code: wrong })).status).toBe(400);
+    for (let i = 0; i < 2; i++) expect((await a.post('/api/phones/verify', { number: WIFE, code: wrong })).status).toBe(400);
+    const r = await a.post('/api/phones/verify', { number: WIFE, code });
+    expect(r.status).toBe(400);
+    expect(r.json.error).toBe('Too many wrong codes. Ask for a new one.');
   });
 
   it('a text changes only the account its phone belongs to', async () => {
@@ -1332,6 +1400,46 @@ describe('reminders', () => {
     expect(reminders(WIFE)).toHaveLength(1);
   });
 
+  it('while texting is off, a due reminder is put off, and sent if texting comes back within its time', async () => {
+    await textsOn(c, WIFE, ['hefsek']);
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    const op = await operator();
+    expect((await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, smsEnabled: false })).status).toBe(200);
+    world.clock.now = at(11, 26, 14, 34);
+    await run();
+    expect(reminders(WIFE)).toEqual([]);
+    const hefsek = (await queue()).find(q => q.key.startsWith('hefsek:'))!;
+    expect(hefsek).toMatchObject({ status: 'pending', notBefore: world.clock.now + 10 * MINUTE });
+    // the stored wake time moved forward instead of staying in the past
+    expect(await count('households', `wake_at = ${world.clock.now + 10 * MINUTE}`)).toBe(1);
+    world.clock.now += 5 * MINUTE;
+    expect((await (await operator()).put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, smsEnabled: true })).status).toBe(200);
+    await run();
+    expect(reminders(WIFE)).toEqual([]); // not before its new time
+    world.clock.now += 6 * MINUTE;
+    await run();
+    expect(reminders(WIFE)).toHaveLength(1);
+    expect(reminders(WIFE)[0]).toMatch(/^Hefsek tahara: Thu Nov 26/);
+  });
+
+  it('while texting stays off, a due reminder is dropped once its time is over', async () => {
+    await textsOn(c, WIFE, ['hefsek']);
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    const op = await operator();
+    expect((await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, smsEnabled: false })).status).toBe(200);
+    for (let t = at(11, 26, 14, 34); t <= at(11, 26, 18); t += 10 * MINUTE) {
+      world.clock.now = t;
+      await run();
+    }
+    const hefsek = (await queue()).find(q => q.key.startsWith('hefsek:'))!;
+    expect(hefsek).toMatchObject({ status: 'dropped', text: '' });
+    expect((await (await operator()).put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, smsEnabled: true })).status).toBe(200);
+    world.clock.now = at(11, 26, 18, 10);
+    await run();
+    expect(reminders(WIFE)).toEqual([]);
+    expect(await count('households', `wake_at IS NOT NULL AND wake_at <= ${world.clock.now}`)).toBe(0);
+  });
+
   it('a reminder whose time passed long ago is not sent late', async () => {
     await textsOn(c, WIFE, ['hefsek']);
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
@@ -1664,6 +1772,29 @@ describe('the operator\'s console', () => {
     expect((await c.get('/api/admin/state')).status).toBe(200);
     world.clock.now += 12 * HOUR + 1000;
     expect((await c.get('/api/admin/state')).status).toBe(401);
+  });
+
+  it('wrong passwords lock out only the address they come from', async () => {
+    const attacker = new Client('203.0.113.66');
+    for (let i = 0; i < 8; i++) expect((await attacker.post('/api/admin/login', { password: `wrong ${i}` })).status).toBe(401);
+    expect((await attacker.post('/api/admin/login', { password: TEST_PASSWORD })).status).toBe(429);
+    // the operator, from another address, still signs in
+    const op = new Client('198.51.100.9');
+    expect((await op.post('/api/admin/login', { password: TEST_PASSWORD })).status).toBe(200);
+    expect((await op.get('/api/admin/state')).status).toBe(200);
+    // the address is not kept in the clear
+    expect(await dump()).not.toContain('203.0.113.66');
+  });
+
+  it('a much higher count over all addresses stops guessing from many addresses', async () => {
+    let tried = 0;
+    for (let a = 0; tried < ADMIN_MAX_FAILURES_ALL; a++) {
+      const guesser = new Client(`192.0.2.${a}`);
+      for (let i = 0; i < 8 && tried < ADMIN_MAX_FAILURES_ALL; i++, tried++) expect((await guesser.post('/api/admin/login', { password: `wrong ${tried}` })).status).toBe(401);
+    }
+    expect((await new Client('198.51.100.9').post('/api/admin/login', { password: TEST_PASSWORD })).status).toBe(429);
+    world.clock.now += 15 * MINUTE + 1000;
+    expect((await new Client('198.51.100.9').post('/api/admin/login', { password: TEST_PASSWORD })).status).toBe(200);
   });
 
   it('is separate from the accounts: neither sign-in opens the other', async () => {
@@ -2070,5 +2201,149 @@ describe('the guided first steps', () => {
     await addPhone(c, WIFE);
     world.clock.now += 2 * MINUTE;
     expect((await (await signIn(WIFE, new Client('203.0.113.8'))).state()).account.welcomed).toBe(true);
+  });
+});
+
+describe('the month calendar on the dashboard', () => {
+  beforeEach(async () => {
+    await site();
+  });
+  const day = (grid: any, date: string): any => grid.days.find((d: any) => d.date === date);
+
+  it('is empty until a location is chosen', async () => {
+    const c = await signIn(HUSBAND);
+    expect((await c.state()).grid).toBeNull();
+  });
+
+  it('has every civil day from 62 days before today to 124 after, with its Hebrew date, rest days and sun times', async () => {
+    const c = await account(HUSBAND);
+    const { grid } = await c.state();
+    expect(Object.keys(grid).sort()).toEqual(['days', 'events', 'today']);
+    expect(grid.today).toBe('2026-11-23');
+    expect(grid.days).toHaveLength(187);
+    expect(grid.days[0].date).toBe('2026-09-22');
+    expect(grid.days[62].date).toBe('2026-11-23');
+    expect(grid.days[186].date).toBe('2027-03-27');
+    // consecutive dates
+    for (let i = 1; i < grid.days.length; i++) {
+      expect(Date.parse(`${grid.days[i].date}T00:00:00Z`) - Date.parse(`${grid.days[i - 1].date}T00:00:00Z`)).toBe(DAY);
+    }
+    expect(grid.days[62]).toEqual({ date: '2026-11-23', hebrewDay: '13', hebrewMonth: 'Kislev', monthStart: false, rest: false, sunrise: expect.any(String), sunset: expect.any(String) });
+    expect(grid.days[0]).toMatchObject({ hebrewDay: '11', hebrewMonth: 'Tishrei' });
+    expect(grid.days[186]).toMatchObject({ hebrewDay: '18', hebrewMonth: 'Adar II', rest: true }); // a Shabbat
+    // the 1st of each month, and the two Adars of a leap year
+    expect(grid.days.filter((d: any) => d.monthStart).map((d: any) => `${d.date} ${d.hebrewMonth}`)).toEqual([
+      '2026-10-12 Cheshvan',
+      '2026-11-11 Kislev',
+      '2026-12-11 Tevet',
+      '2027-01-09 Shevat',
+      '2027-02-08 Adar I',
+      '2027-03-10 Adar II',
+    ]);
+    expect(day(grid, '2026-12-10')).toMatchObject({ hebrewDay: '30', hebrewMonth: 'Kislev', monthStart: false });
+    // Shabbat and Yom Tov (two days in the diaspora)
+    expect(day(grid, '2026-11-27').rest).toBe(false); // Friday
+    expect(day(grid, '2026-11-28').rest).toBe(true); // Shabbat
+    expect(day(grid, '2026-09-26').rest).toBe(true); // 15 Tishrei, Shabbat and Sukkot
+    expect(day(grid, '2026-09-27').rest).toBe(true); // 16 Tishrei, a Sunday: the second day of Sukkot
+    expect(day(grid, '2026-10-04').rest).toBe(true); // 23 Tishrei, a Sunday: Simchat Torah
+    expect(day(grid, '2026-09-28').rest).toBe(false); // Chol Hamoed
+    expect(grid.days.filter((d: any) => d.rest).length).toBe(27 + 2); // the 27 Shabbatot, and the two Yom Tov days that are not on Shabbat
+    // sun times as the rest of the site rounds them: sunrise up, sunset down
+    expect(day(grid, '2026-11-26').sunset).toBe('4:33 PM');
+    const where = { latitude: LAKEWOOD.latitude, longitude: LAKEWOOD.longitude, timeZone: LAKEWOOD.timeZone, elevation: LAKEWOOD.elevation };
+    const first = civilToAbs({ y: 2026, m: 9, d: 22 });
+    grid.days.forEach((d: any, i: number) => {
+      expect(d.sunrise).toBe(clock12(sunriseMs(first + i, where)!, TZ, 'ceil'));
+      expect(d.sunset).toBe(clock12(sunsetMs(first + i, where)!, TZ, 'floor'));
+    });
+    expect(grid.events).toEqual([]); // nothing recorded yet
+  });
+
+  it('in Israel, the second day of Yom Tov is an ordinary day', async () => {
+    const c = await account(HUSBAND);
+    expect((await c.put('/api/halachic', { ...BASIC, yomTov: 'israel' })).status).toBe(200);
+    const { grid } = await c.state();
+    expect(day(grid, '2026-09-27').rest).toBe(false);
+    expect(day(grid, '2026-10-03').rest).toBe(true); // 22 Tishrei, Shabbat and Shemini Atzeret
+    expect(day(grid, '2026-10-04').rest).toBe(false);
+  });
+
+  it('writes the Hebrew date in Hebrew when the terms are Hebrew', async () => {
+    const c = await account(HUSBAND);
+    expect((await c.put('/api/app', appSettings({ terms: 'he' }))).status).toBe(200);
+    const { grid } = await c.state();
+    expect(day(grid, '2026-11-23')).toMatchObject({ hebrewDay: 'י״ג', hebrewMonth: 'כסלו' });
+    expect(day(grid, '2026-12-11')).toMatchObject({ hebrewDay: 'א׳', hebrewMonth: 'טבת', monthStart: true });
+    expect(day(grid, '2026-09-26')).toMatchObject({ hebrewDay: 'ט״ו', hebrewMonth: 'תשרי' });
+    expect(day(grid, '2027-02-08')).toMatchObject({ hebrewDay: 'א׳', hebrewMonth: 'אדר א׳' });
+    expect(day(grid, '2027-03-27')).toMatchObject({ hebrewDay: 'י״ח', hebrewMonth: 'אדר ב׳' });
+  });
+
+  it('has the calendar\'s events that touch those days, in order, with their civil dates and times', async () => {
+    const c = await account(HUSBAND);
+    // a flow on the night that began on the evening of Sunday 22 November
+    expect((await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'night' })).status).toBe(200);
+    const s = await c.state();
+    const { grid } = s;
+    expect(grid.events.length).toBeGreaterThan(8);
+    for (const e of grid.events) {
+      expect(Object.keys(e).sort()).toEqual(['allDay', 'description', 'end', 'endDate', 'key', 'kind', 'light', 'projected', 'start', 'startDate', 'title']);
+      expect(e.startDate >= '2026-09-22' || e.endDate >= '2026-09-22').toBe(true);
+      expect(e.startDate <= '2027-03-27').toBe(true);
+      expect(e.endDate >= e.startDate).toBe(true);
+    }
+    // in order of start
+    const starts = grid.events.map((e: any) => e.startDate);
+    expect([...starts].sort()).toEqual(starts);
+
+    const flow = grid.events.find((e: any) => e.kind === 'flow');
+    expect(flow).toMatchObject({ title: 'Flow (night)', allDay: false, projected: false, light: false, startDate: '2026-11-22', endDate: '2026-11-23' });
+    expect(flow.start).toMatch(/^4:\d\d PM$/);
+    expect(flow.end).toMatch(/^6:\d\d AM$/);
+    expect(flow.description).toContain('The night of Sunday, Nov 22, 2026');
+
+    // a clean day is all-day: it starts and ends on the same date, with no times
+    const clean = grid.events.find((e: any) => e.kind === 'clean_day');
+    expect(clean).toMatchObject({ allDay: true, start: null, end: null, projected: true });
+    expect(clean.endDate).toBe(clean.startDate);
+    expect(clean.title).toMatch(/^Seven clean days: day 1 \(projected\)$/);
+
+    // an onah at night begins on one civil date and ends on the next
+    const night = grid.events.find((e: any) => e.kind === 'onah' && e.title.endsWith('(night)'));
+    expect(night).toBeDefined();
+    expect(night.allDay).toBe(false);
+    expect(night.endDate > night.startDate).toBe(true);
+    expect(night.start).toMatch(/PM$/);
+    expect(night.end).toMatch(/AM$/);
+    expect(night.description).toContain('Separation');
+
+    // the same events, times and titles as the list of what is coming
+    for (const u of s.upcoming) {
+      const e = grid.events.find((x: any) => x.key === u.key);
+      expect(e, u.key).toBeDefined();
+      expect(e.title).toBe(u.title);
+      expect(e.description).toBe(u.description);
+    }
+  });
+
+  it('is in words, with full descriptions, also when the calendar style is discreet', async () => {
+    const c = await account(HUSBAND);
+    expect((await c.put('/api/app', appSettings({ calendar: { ...DEFAULT_APP_SETTINGS.calendar, style: 'discreet' } }))).status).toBe(200);
+    expect((await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'night' })).status).toBe(200);
+    const s = await c.state();
+    // the calendar itself is discreet
+    expect(s.upcoming.find((u: any) => u.kind === 'clean_day').title).toBe('1/7 ?');
+    expect(s.grid.events.find((e: any) => e.kind === 'clean_day').title).toBe('Seven clean days: day 1 (projected)');
+    const flow = s.grid.events.find((e: any) => e.kind === 'flow');
+    expect(flow.title).toBe('Flow (night)');
+    expect(flow.description).not.toBe('');
+    for (const e of s.grid.events) {
+      expect(e.title).not.toMatch(/^[•◆◇]|^\d\/7|^[HM] /);
+      expect(e.description.length).toBeGreaterThan(0);
+    }
+    // in the household's form of the terms
+    expect((await c.put('/api/app', appSettings({ terms: 'he', calendar: { ...DEFAULT_APP_SETTINGS.calendar, style: 'discreet' } }))).status).toBe(200);
+    expect((await c.state()).grid.events.find((e: any) => e.kind === 'flow').title).toBe('ראייה (night)');
   });
 });

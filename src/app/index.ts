@@ -392,7 +392,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
 
   app.post('/api/admin/login', async c => {
     const body = await readBody(c);
-    const result = await adminLogin(c.env, body.password, deps.now(), isSecure(c));
+    const result = await adminLogin(c.env, body.password, addressOf(c), deps.now(), isSecure(c));
     if (!result.ok) return c.json({ error: result.message }, result.status);
     c.header('Set-Cookie', result.cookie);
     return c.json({ ok: true });
@@ -606,7 +606,6 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     return household;
   };
 
-  /** The dashboard's data. `computed` passes on a picture already worked out in this request. */
   /** The number of the phone this session signed in with. */
   const numberOf = async (c: C, household: Household): Promise<string | null> => {
     const session = c.get('session');
@@ -617,6 +616,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     return myNumber;
   };
 
+  /** The dashboard's data. `computed` passes on a picture already worked out in this request. */
   const stateOf = async (c: C, site: Site, household: Household, computed?: Computed | null) => {
     const now = deps.now();
     return dashboardState({
@@ -777,7 +777,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const body = await readBody(c);
     const number = tidyNumber(body.number, site.config);
     const session = c.get('session');
-    const check = await checkCode(c.env, { number, code: body.code, purpose: 'add', now });
+    const check = await checkCode(c.env, { number, code: body.code, purpose: 'add', householdId: session.householdId, now });
     if (!check.ok) throw new HttpError(400, check.message);
     if (check.householdId !== session.householdId) throw new HttpError(400, 'That code is not right, or it has expired.');
     const added = await addPhone(c.env, session.householdId, number, now);
