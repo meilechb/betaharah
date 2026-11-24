@@ -212,7 +212,7 @@ export function privacyPage(site: Site): string {
   return layout({
     title: 'Privacy',
     updated: true,
-    intro: `Betaharah is a free tool run by ${c.who} for family and friends. It has no advertising, no analytics and no tracking. This page says exactly what is kept and who can see it.`,
+    intro: `Betaharah is a free service run by ${c.who}. It has no advertising, no analytics and no tracking. This page says exactly what is kept and who can see it.`,
     sections: [
       {
         id: 'kept',
@@ -291,7 +291,7 @@ export function termsPage(site: Site): string {
   return layout({
     title: 'Terms',
     updated: true,
-    intro: `Betaharah is a free tool run by ${c.who} for family and friends. By using it you agree to the following.`,
+    intro: `Betaharah is a free service run by ${c.who}. By using it you agree to the following.`,
     sections: [
       {
         id: 'what-it-does',

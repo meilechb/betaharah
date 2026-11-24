@@ -37,11 +37,14 @@ const HOME_PHRASES = [
   'Nothing is sent on Shabbat or Yom Tov',
   'One account, each on your own phone',
   'Everything works by text message',
-  'What encryption does not do',
+  'Private by design',
+  'Read the Privacy page',
   'Questions people ask',
   'Is it free?',
   'Does it replace asking a rav?',
 ];
+// The home page says what it does for a person; how it is built is on /privacy.
+const TECHNICAL = [/AES/, /decrypt/i, /encrypt/i, /Telnyx/, /cookie/i, /\bserver\b/i, /night of Shabbat/];
 const FOOTER_PHRASES = ['Message frequency varies', 'Message and data rates may apply', 'Reply STOP to stop, HELP for help', 'It does not rule on halacha'];
 const DOCS = [
   { path: '/help', h1: 'Help', phrases: ['On this page', 'Recording by text message', 'Using it by text only', 'MENU', 'JOIN', 'ask your rav'] },
@@ -74,7 +77,8 @@ function watch(page) {
   return w;
 }
 
-async function checkLinks(page, where) {
+/** `external`: links to other sites are allowed (the document pages credit their data sources); the home page has none. */
+async function checkLinks(page, where, external = false) {
   const hrefs = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map(a => a.getAttribute('href')));
   for (const href of hrefs) {
     if (href.startsWith('#')) {
@@ -85,7 +89,7 @@ async function checkLinks(page, where) {
       const status = await statusOf(path);
       if (status !== 200) fail(where, `${href} answers ${status}`);
       if (hash && !(await htmlOf(path)).includes(`id="${hash}"`)) fail(where, 'no place for ' + href);
-    } else if (!/^(mailto:|sms:)/.test(href)) {
+    } else if (!/^(mailto:|sms:)/.test(href) && !(external && /^https:\/\//.test(href))) {
       fail(where, 'link to another site: ' + href);
     }
   }
@@ -131,6 +135,7 @@ async function homeAt(browser, width, scheme, pub) {
   if ((await page.locator('a.skip[href="#main"]').count()) !== 1) fail(where, 'no skip link');
   const main = (await page.locator('main').textContent()).replace(/\s+/g, ' ');
   for (const p of HOME_PHRASES) if (!main.includes(p)) fail(where, 'missing: ' + p);
+  for (const word of TECHNICAL) if (word.test(main)) fail(where, 'technical wording on the home page: ' + word);
   const foot = (await page.locator('footer').textContent()).replace(/\s+/g, ' ');
   for (const p of FOOTER_PHRASES) if (!foot.includes(p)) fail(where, 'footer missing: ' + p);
   for (const href of ['/help', '/privacy', '/terms', '/app/']) if ((await page.locator(`footer a[href="${href}"]`).count()) === 0) fail(where, 'the footer has no link to ' + href);
@@ -234,7 +239,14 @@ async function metaAndHeaders() {
   const image = /property="og:image" content="([^"]+)"/.exec(html);
   if (image) {
     const path = new URL(image[1]).pathname;
-    if ((await statusOf(path)) !== 200) fail(where, 'the share image does not load: ' + path);
+    const img = await fetch(base + path);
+    if (img.status !== 200) fail(where, 'the share image does not load: ' + path);
+    else if (!/^image\/(png|jpeg)$/.test(img.headers.get('content-type') || '')) fail(where, 'the share image is not a PNG or JPEG: ' + img.headers.get('content-type'));
+    const typeTag = /property="og:image:type" content="([^"]+)"/.exec(html);
+    if (!typeTag || typeTag[1] !== img.headers.get('content-type')) fail(where, 'og:image:type does not match the image');
+    if (/noindex/i.test(img.headers.get('x-robots-tag') || '')) fail(where, 'the share image is sent with noindex');
+    const tw = /name="twitter:image" content="([^"]+)"/.exec(html);
+    if (!tw || tw[1] !== image[1]) fail(where, 'twitter:image differs from og:image');
   }
   for (const path of ['/app/', '/admin/', '/help', '/privacy', '/terms', '/site.css']) {
     const tag = (await fetch(base + path)).headers.get('x-robots-tag') || '';
@@ -263,7 +275,7 @@ async function docs(browser) {
           const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
           if (sideways > 0) fail(where, `scrolls sideways by ${sideways}px`);
         }
-        await checkLinks(page, where);
+        await checkLinks(page, where, true);
         if (w.errors.length) fail(where, w.errors.join('; '));
         if (w.foreign.length) fail(where, 'requested from another origin: ' + w.foreign.join(', '));
         page.removeAllListeners();
