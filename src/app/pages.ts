@@ -70,12 +70,12 @@ ${sections}
 function contact(site: Site): { who: string; how: string } {
   const name = site.config.contactName.trim();
   const email = site.config.contactEmail.trim();
-  const who = name ? escapeHtml(name) : 'the person who invited you';
+  const who = name ? escapeHtml(name) : 'its operator';
   const how = email
     ? `Write to <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>.`
     : name
       ? `Contact ${escapeHtml(name)} directly.`
-      : 'Contact the person who invited you.';
+      : 'A contact address has not been added to this page yet.';
   return { who, how };
 }
 
