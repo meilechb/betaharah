@@ -87,7 +87,7 @@ describe('dates in words', () => {
 
   it('names a night by the evening on which it begins, with the Hebrew date it belongs to', () => {
     // The night of 12 Kislev begins on the evening of Saturday 21 November.
-    expect(onahLabel({ abs: SUN, part: 'night' }, 'en')).toBe('The night of Shabbat, Nov 21, 2026 (12 Kislev 5787)');
+    expect(onahLabel({ abs: SUN, part: 'night' }, 'en')).toBe('Saturday evening, Nov 21, 2026 (the night of 12 Kislev 5787)');
     expect(onahLabel({ abs: SUN, part: 'day' }, 'en')).toBe('Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
   });
 
@@ -121,7 +121,7 @@ describe('calendar events', () => {
     expect(byKind('clean_day').map(e => e.allDay!.startAbs)).toEqual([5, 6, 7, 8, 9, 10, 11].map(n => SUN + n));
     const m = byKind('mikvah')[0]!;
     expect(m.title).toBe('Mikvah night (after 5:16 PM) (projected)');
-    expect(m.description).toContain('The night of Thursday, Dec 3, 2026 (24 Kislev 5787)');
+    expect(m.description).toContain('Thursday evening, Dec 3, 2026 (the night of 24 Kislev 5787)');
     expect(m.description).toContain('Immersion after nightfall: 5:16 PM');
     expect(localDateTime(m.timed!.start, TZ)).toMatchObject({ y: 2026, m: 12, d: 3 });
     expect(m.timed!.start).toBeGreaterThanOrEqual(dayTimes(SUN + 11, LAKEWOOD, ZOPTS).tzeit);
@@ -165,7 +165,7 @@ describe('calendar events', () => {
     const events = buildCalendar(timeline(entries, at(2026, 12, 6, 10)), EN);
     const m = events.find(e => e.kind === 'mikvah')!;
     expect(m.title).toBe('Immersion ✓');
-    expect(m.description).toBe('The night of Friday, Dec 4, 2026 (25 Kislev 5787)');
+    expect(m.description).toBe('Friday evening, Dec 4, 2026 (the night of 25 Kislev 5787)');
     expect(localDateTime(m.timed!.start, TZ)).toMatchObject({ m: 12, d: 4 });
   });
 
@@ -174,7 +174,7 @@ describe('calendar events', () => {
     const onot = events.filter(e => e.kind === 'onah');
     expect(onot.map(e => e.title)).toEqual(['Or Zarua (night)', 'Veset onah (day)', 'Or Zarua (night)', 'Veset onah (day)']);
     expect(onot[0]!.description).toBe(
-      'The night of Sunday, Dec 20, 2026 (11 Tevet 5787)\nFrom 4:34 PM until 7:16 AM\n\nOr Zarua of onah beinonit (day 30)\n\nSeparation.',
+      'Sunday evening, Dec 20, 2026 (the night of 11 Tevet 5787)\nFrom 4:34 PM until 7:16 AM\n\nOr Zarua of onah beinonit (day 30)\n\nSeparation.',
     );
     expect(onot.map(e => e.light)).toEqual([true, false, true, false]);
   });

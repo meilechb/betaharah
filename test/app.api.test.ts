@@ -881,7 +881,7 @@ describe('one account never sees another', () => {
     const feedB = (await new Client().get(new URL(linkB).pathname)).text.replace(/\r\n /g, '');
     expect(feedA).toContain('Nov 22\\, 2026');
     expect(feedA).not.toContain('Nov 10\\, 2026');
-    expect(feedB).toContain('The night of Tuesday\\, Nov 10\\, 2026');
+    expect(feedB).toContain('Tuesday evening\\, Nov 10\\, 2026');
     expect(feedB).not.toContain('Nov 22\\, 2026');
   });
 
@@ -1780,24 +1780,28 @@ describe('what can be read in the database', () => {
       'Test phone',
       'Spouse (example)',
       'simulated',
-      'demo',
-      demoCode,
+      // Short strings are looked for as whole values, because a few characters can turn up by chance in encrypted text.
+      '"demo"',
+      `"${demoCode}"`,
+      `: ${demoCode}.`,
       '7324440101',
       '7324440102',
       '7324440199',
       '7324440177',
-      '0101',
+      '"0101"',
       'Private name',
       'a private note',
       'Lakewood',
       '"flow"',
-      'onah',
+      'onah:',
+      '"onah"',
       'Niddah',
       'Tehorah',
       'refresh-1',
       'cal-1@group',
       new URL(link).pathname.slice(5, -4),
-      pending,
+      `"${pending}"`,
+      `: ${pending}.`,
       'telnyx-key',
       'client-secret',
       world.telnyx.publicKey,
@@ -2365,7 +2369,7 @@ describe('the month calendar on the dashboard', () => {
     expect(flow).toMatchObject({ title: 'Flow (night)', allDay: false, projected: false, light: false, startDate: '2026-11-22', endDate: '2026-11-23' });
     expect(flow.start).toMatch(/^4:\d\d PM$/);
     expect(flow.end).toMatch(/^6:\d\d AM$/);
-    expect(flow.description).toContain('The night of Sunday, Nov 22, 2026');
+    expect(flow.description).toContain('Sunday evening, Nov 22, 2026');
 
     // a clean day is all-day: it starts and ends on the same date, with no times
     const clean = grid.events.find((e: any) => e.kind === 'clean_day');

@@ -35,12 +35,26 @@ export function fullDate(abs: number, lang: TermLanguage): string {
 /**
  * An onah in words. A night belongs to the Hebrew date that follows it, so
  * it is named by the evening on which it begins:
- * "The night of Sunday, Dec 20, 2026 (11 Tevet 5787)", or
+ * "Sunday evening, Dec 20, 2026 (the night of 11 Tevet 5787)", or
  * "Monday, 11 Tevet 5787 (Dec 21, 2026), by day".
  */
+const CIVIL_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+
+/**
+ * A night in words: the civil evening on which it begins, and the Hebrew
+ * date it belongs to: "Saturday evening, Dec 12, 2026 (the night of 3 Tevet
+ * 5787)". `nightAbs` is the R.D. number of that Hebrew date's daytime. The
+ * evening is named by its civil weekday, because "the night of Shabbat"
+ * would be read as Friday night.
+ */
+export function eveningLabel(nightAbs: number, lang: TermLanguage): string {
+  const evening = nightAbs - 1;
+  return `${CIVIL_WEEKDAYS[dayOfWeek(evening)]} evening, ${civilDate(evening)} (the night of ${hebrewDate(nightAbs, lang)})`;
+}
+
 export function onahLabel(onah: { abs: number; part: 'night' | 'day' }, lang: TermLanguage): string {
   if (onah.part === 'day') return `${fullDate(onah.abs, lang)}, by day`;
-  return `The night of ${weekday(onah.abs - 1)}, ${civilDate(onah.abs - 1)} (${hebrewDate(onah.abs, lang)})`;
+  return capital(eveningLabel(onah.abs, lang));
 }
 
 function baseReason(r: BaseReason, lang: TermLanguage): string {
@@ -203,7 +217,7 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
       key: `mikvah:${p.startId}`,
       kind: 'mikvah',
       title: discreet ? 'M ✓' : `${capital(term('immersion', lang))} ✓`,
-      description: discreet ? '' : `The night of ${weekday(m.eveningAbs)}, ${civilDate(m.eveningAbs)} (${hebrewDate(m.nightAbs, lang)})`,
+      description: discreet ? '' : capital(eveningLabel(m.nightAbs, lang)),
       timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 60 * MINUTE },
       projected: false,
     });
@@ -211,7 +225,7 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
     const m = p.planMikvah;
     const after = clock12(m.tzeit, tz, 'ceil');
     const lines = [
-      `The night of ${weekday(m.eveningAbs)}, ${civilDate(m.eveningAbs)} (${hebrewDate(m.nightAbs, lang)})`,
+      eveningLabel(m.nightAbs, lang),
       fill(`{immersion} after {nightfall}: ${after}`, lang),
     ].map(capital);
     if (m.postponedOver.length > 0) lines.push(fill('Moved: there is no {immersion} on the night of {yom_kippur} or of {tisha_bav}.', lang));
