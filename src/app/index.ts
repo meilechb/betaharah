@@ -14,10 +14,7 @@ import { parseHalachicSettings, SettingsError } from '../engine/settings';
 import { NoSunError } from '../engine/zmanim';
 import { addPhone, createAccount, markVerified, prefixAllowed, prefixMessage, removePhone, tidyNumber } from './accounts';
 import {
-  ADMIN_COOKIE,
-  adminLogin,
   clearedCookie,
-  hasAdminSession,
   isConfigured,
   makeOAuthState,
   readOAuthState,
@@ -26,14 +23,15 @@ import {
   sessionCookie,
   type Session,
 } from './auth';
+import { registerAdminRoutes } from './admin-routes';
 import { checkPassword, fingerprint, hashPassword, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, randomToken } from './crypto';
 import { dashboardState, draftFromForm, FRESH_MS } from './dashboard';
-import { buildDemoData, DEMO_NUMBER, DEMO_SPOUSE, isFictionalNumber } from './demo';
+import { DEMO_NUMBER, isFictionalNumber } from './demo';
 import { realDeps, type Deps, type Env } from './env';
 import { authorizationUrl, exchangeCode, GoogleCalendar, GoogleError, revokeToken } from './google';
 import { compute, confirmationText, recordEntry, rejectionText, removeEntry, whereOf, type Computed } from './household';
 import { toICalendar } from './ics';
-import { addMessage, DEFAULT_SITE_CONFIG, googleReady, lastFour, MAX_PHONES, SITE_SECRET_KEYS, smsReady, type Site } from './model';
+import { addMessage, DEFAULT_SITE_CONFIG, googleReady, lastFour, MAX_PHONES, smsReady, type Site } from './model';
 import { helpPage, privacyPage, termsPage } from './pages';
 import { allowText, refundText } from './queue';
 import { ensureSchema } from './schema';
@@ -42,7 +40,6 @@ import {
   checkCode,
   CODE_MINUTES,
   CODE_RESEND_SECONDS,
-  codesTodayKey,
   codeText,
   handleInbound,
   messageStatus,
@@ -51,9 +48,7 @@ import {
   REMINDERS_ON_TEXT,
   requestCode,
   sendHouseholdText,
-  sendSms,
   TEST_TEXT,
-  textsThisMonthKey,
   tick,
 } from './service';
 import { assertSunTimesExist, parseAppSettings, parsePhoneOptions, ValidationError } from './settings';
@@ -62,27 +57,18 @@ import {
   bump,
   changeHousehold,
   ConflictError,
-  createHousehold,
-  createInvite,
   deleteHousehold,
-  deleteInvite,
   endSessions,
   getInvite,
   getPhone,
   householdIdByLink,
-  insertPhone,
   inviteHash,
-  listHouseholds,
-  listInvites,
   loadHousehold,
   loadSite,
   phoneHash,
   readCounter,
-  saveSiteConfig,
-  saveSiteSecrets,
   setPassword,
   setRefresh,
-  siteTotals,
   useInvite,
   type Household,
 } from './store';
@@ -390,168 +376,9 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     return c.json({ ok: true });
   });
 
-  // ----- the operator's console: the site's settings, never a household's data -----
+  // ----- the operator's console: the site's settings, never a household's data (admin-routes.ts) -----
 
-  app.post('/api/admin/login', async c => {
-    const body = await readBody(c);
-    const result = await adminLogin(c.env, body.password, addressOf(c), deps.now(), isSecure(c));
-    if (!result.ok) return c.json({ error: result.message }, result.status);
-    c.header('Set-Cookie', result.cookie);
-    return c.json({ ok: true });
-  });
-
-  app.post('/api/admin/logout', c => {
-    c.header('Set-Cookie', clearedCookie(ADMIN_COOKIE, isSecure(c)));
-    return c.json({ ok: true });
-  });
-
-  app.use('/api/admin/*', async (c, next) => {
-    if (!(await hasAdminSession(c.env, c.req.header('cookie'), deps.now()))) return c.json({ error: 'Please sign in.' }, 401);
-    await next();
-  });
-
-  const adminState = async (c: C) => {
-    const now = deps.now();
-    const site = await loadSite(c.env);
-    const origin = originOf(c);
-    return {
-      config: site.config,
-      secretsSet: Object.fromEntries(SITE_SECRET_KEYS.map(k => [k, Boolean(site.secrets[k])])),
-      textingNumber: site.secrets.telnyxNumber ?? null,
-      smsReady: smsReady(site),
-      googleReady: googleReady(site),
-      totals: await siteTotals(c.env.DB),
-      usage: {
-        textsThisMonth: await readCounter(c.env.DB, textsThisMonthKey(now), now),
-        codesToday: await readCounter(c.env.DB, codesTodayKey(now), now),
-      },
-      households: await listHouseholds(c.env.DB),
-      // The test account, found by its phone; nothing of its data is read here.
-      demo: { exists: (await getPhone(c.env.DB, await phoneHash(c.env, DEMO_NUMBER))) !== null, number: DEMO_NUMBER },
-      invites: (await listInvites(c.env.DB, now)).map(i => ({ id: i.hash, kind: i.kind, note: i.note, createdAt: i.created_at, expiresAt: i.expires_at, maxUses: i.max_uses, uses: i.uses })),
-      urls: {
-        webhook: `${origin}/webhooks/telnyx`,
-        redirect: `${origin}/api/google/callback`,
-        home: `${origin}/`,
-        privacy: `${origin}/privacy`,
-        terms: `${origin}/terms`,
-      },
-    };
-  };
-
-  app.get('/api/admin/state', async c => c.json(await adminState(c)));
-
-  app.put('/api/admin/config', async c => {
-    await saveSiteConfig(c.env, await readBody(c), deps.now());
-    return c.json(await adminState(c));
-  });
-
-  app.put('/api/admin/secrets', async c => {
-    const site = await loadSite(c.env);
-    const body = await readBody(c);
-    const patch: Partial<Record<(typeof SITE_SECRET_KEYS)[number], string | null>> = {};
-    for (const key of SITE_SECRET_KEYS) {
-      if (!(key in body)) continue;
-      const value = body[key];
-      if (value !== null && typeof value !== 'string') throw new ValidationError(`${key}: expected text`);
-      if (typeof value === 'string' && value.length > 500) throw new ValidationError(`${key}: too long`);
-      patch[key] = value;
-    }
-    // The texting number is checked only for its form; it need not begin with a prefix that people may sign up with.
-    if (typeof patch.telnyxNumber === 'string' && patch.telnyxNumber.trim() !== '') patch.telnyxNumber = tidyNumber(patch.telnyxNumber, site.config);
-    await saveSiteSecrets(c.env, site.secrets, patch, deps.now());
-    return c.json(await adminState(c));
-  });
-
-  app.post('/api/admin/invites', async c => {
-    const now = deps.now();
-    const site = await loadSite(c.env);
-    const body = await readBody(c);
-    const days = typeof body.days === 'number' && Number.isInteger(body.days) && body.days >= 1 && body.days <= 90 ? body.days : 14;
-    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 80) || null : null;
-    const code = randomToken();
-    const base = { hash: await inviteHash(c.env, code), note, created_at: now, expires_at: now + days * DAY };
-    if (body.kind === 'setup') {
-      const number = tidyNumber(body.number, site.config);
-      if (!prefixAllowed(number, site.config)) throw new ValidationError(prefixMessage(site.config));
-      if (isFictionalNumber(number)) throw new HttpError(400, `${FICTIONAL_MESSAGE} To try the site, open the test account instead.`);
-      const hash = await phoneHash(c.env, number);
-      if (await getPhone(c.env.DB, hash)) throw new HttpError(400, 'That number already has an account.');
-      await createInvite(c.env.DB, { ...base, kind: 'setup', phone_hash: hash, max_uses: 1 });
-    } else if (body.kind === 'signup') {
-      const maxUses = typeof body.maxUses === 'number' && Number.isInteger(body.maxUses) && body.maxUses >= 1 && body.maxUses <= 100 ? body.maxUses : 1;
-      await createInvite(c.env.DB, { ...base, kind: 'signup', phone_hash: null, max_uses: maxUses });
-    } else {
-      throw new ValidationError('kind: signup or setup');
-    }
-    // The link is shown once; only a fingerprint of it is stored.
-    return c.json({ link: `${originOf(c)}/app/?invite=${code}`, state: await adminState(c) });
-  });
-
-  app.delete('/api/admin/invites/:id', async c => {
-    await deleteInvite(c.env.DB, c.req.param('id'));
-    return c.json(await adminState(c));
-  });
-
-  app.delete('/api/admin/households/:id', async c => {
-    const household = await loadHousehold(c.env, c.req.param('id')).catch(() => null);
-    if (household?.data.google) await revokeToken(deps, household.data.google.refreshToken);
-    await deleteHousehold(c.env.DB, c.req.param('id'));
-    return c.json(await adminState(c));
-  });
-
-  app.post('/api/admin/test-text', async c => {
-    const site = await loadSite(c.env);
-    const body = await readBody(c);
-    const to = tidyNumber(body.to, site.config);
-    if (isFictionalNumber(to)) throw new HttpError(400, FICTIONAL_MESSAGE);
-    const outcome = await sendSms(c.env, deps, site, { to, text: TEST_TEXT, now: deps.now() });
-    if (!outcome.ok) throw new HttpError(502, outcome.detail);
-    return c.json({ ok: true });
-  });
-
-  /** Deletes the test account, found by the phones it was made with. Only a test account is ever deleted here. */
-  const deleteDemo = async (env: Env): Promise<void> => {
-    for (const number of [DEMO_NUMBER, DEMO_SPOUSE]) {
-      const row = await getPhone(env.DB, await phoneHash(env, number));
-      if (!row) continue;
-      const household = await loadHousehold(env, row.household_id).catch(() => null);
-      if (household && !household.data.demo) throw new HttpError(409, 'A regular account uses a number of the test account; it was left alone.');
-      if (household?.data.google) await revokeToken(deps, household.data.google.refreshToken);
-      await deleteHousehold(env.DB, row.household_id);
-    }
-  };
-
-  /**
-   * Opens a fresh test account: deletes the one there was, makes a new one
-   * with a made-up history, and signs this browser in to it with its test
-   * phone. No text is sent.
-   */
-  app.post('/api/admin/demo', async c => {
-    const now = deps.now();
-    const site = await loadSite(c.env);
-    await deleteDemo(c.env);
-    const household = await createHousehold(c.env, buildDemoData(now), now);
-    for (const number of [DEMO_NUMBER, DEMO_SPOUSE]) {
-      if (!(await insertPhone(c.env.DB, await phoneHash(c.env, number), household.id, null, now))) {
-        await deleteHousehold(c.env.DB, household.id);
-        throw new HttpError(409, 'Please try again.');
-      }
-    }
-    await refreshHousehold(c.env, deps, site, household, compute(household.data, now), now);
-    const phone = await getPhone(c.env.DB, await phoneHash(c.env, DEMO_NUMBER));
-    if (!phone) throw new HttpError(409, 'Please try again.');
-    // Signed in "by code", so that the password can be set within the next minutes, as after a real sign-in.
-    c.header('Set-Cookie', await sessionCookie(c.env, phone, 'code', now, isSecure(c)));
-    return c.json({ ok: true, number: DEMO_NUMBER });
-  });
-
-  app.delete('/api/admin/demo', async c => {
-    await deleteDemo(c.env);
-    return c.json(await adminState(c));
-  });
-
-  app.all('/api/admin/*', c => c.json({ error: 'Not found.' }, 404));
+  registerAdminRoutes(app, deps);
 
   // ----- Google's redirect back (it arrives as an ordinary page visit) -----
 

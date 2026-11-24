@@ -1,1 +1,415 @@
-/* The operator console (owner: the operator-console and landing agent). See docs/UI.md. Use the tokens from /site.css. */
+/* The operator console. Tokens and shared components come from /site.css; see docs/UI.md. */
+
+/* ---------- sign-in ---------- */
+.login-title {
+  font-size: var(--text-xl);
+  margin: 0 0 var(--space-2);
+}
+.signin-alert:empty {
+  display: none;
+}
+
+/* ---------- page frame ---------- */
+.console-top {
+  align-items: center;
+  gap: var(--space-3);
+}
+.console-top p.today {
+  margin: var(--space-1) 0 0;
+}
+.console-top .session {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.console {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4) var(--space-6);
+  align-items: start;
+}
+.console-main {
+  min-width: 0;
+}
+.section-wrap {
+  scroll-margin-top: var(--space-4);
+}
+.section-wrap:focus {
+  outline: none;
+}
+
+/* the list of sections: a grid of links on a phone, a sticky side list on a wide screen */
+.console-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-2);
+}
+.console-nav a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.console-nav a:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+.console-nav a[aria-current] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.console-nav a .icon {
+  flex: none;
+  color: var(--muted);
+}
+.console-nav .count {
+  margin-left: auto;
+  min-width: 1.6em;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+@media (min-width: 960px) {
+  .console {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .console-nav {
+    position: sticky;
+    top: var(--space-4);
+  }
+  .console-nav ul {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .console-nav a {
+    background: none;
+    border-color: transparent;
+    font-size: var(--text-base);
+  }
+}
+
+/* ---------- summary ---------- */
+.summary-lead {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  margin: 0 0 var(--space-2);
+}
+.summary-next {
+  margin: 0 0 var(--space-4);
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+@media (min-width: 720px) {
+  .tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.tile {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  min-width: 0;
+}
+.tile-label,
+.tile-note {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.tile-value {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  margin: var(--space-1) 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- setup steps ---------- */
+ol.steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+ol.steps-list li.step {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+ol.steps-list li.step:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.step .mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--muted);
+}
+.step.done .mark {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--surface);
+}
+.step.done .mark .icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 3;
+}
+.step.todo .mark {
+  border-color: var(--warn-line);
+  color: var(--ink);
+}
+.step.waiting .mark {
+  border-color: var(--info-line);
+  color: var(--info-line);
+}
+.step-body {
+  min-width: 0;
+  flex: 1;
+}
+.step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+.step-title {
+  font-weight: var(--weight-bold);
+}
+.step.done .step-title,
+.step.done .step-detail {
+  color: var(--muted);
+}
+.step-detail,
+.step-next {
+  margin: var(--space-1) 0 0;
+}
+.step-next {
+  font-size: var(--text-sm);
+}
+
+/* ---------- status ---------- */
+ul.health {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.health-row {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+.health-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.health-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.health-title {
+  font-weight: var(--weight-bold);
+}
+.health-row p {
+  margin: var(--space-1) 0 0;
+}
+
+/* ---------- usage ---------- */
+.table-scroll {
+  overflow-x: auto;
+}
+table.usage th[scope='row'],
+.chart-table th[scope='row'] {
+  font-weight: var(--weight-normal);
+}
+th.n,
+td.n {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cost {
+  margin: var(--space-3) 0;
+}
+.price-form {
+  margin-bottom: var(--space-2);
+}
+.price-form input {
+  width: 8em;
+}
+.price-form .field {
+  margin-bottom: var(--space-2);
+}
+.chart-wrap {
+  margin: var(--space-2) 0;
+}
+.chart-readout {
+  min-height: 1.6em;
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+svg.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+svg.chart .bar {
+  fill: var(--accent);
+}
+svg.chart .hit {
+  fill: transparent;
+}
+svg.chart .bar-hit:hover .bar,
+svg.chart .bar-hit:focus .bar {
+  fill: var(--accent-hover);
+}
+svg.chart .bar-hit:focus {
+  outline: none;
+}
+svg.chart .bar-hit:focus .hit {
+  fill: var(--accent-soft);
+}
+svg.chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+svg.chart .axis {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+svg.chart .tick {
+  fill: var(--muted);
+  font-size: 12px;
+  font-family: var(--font);
+}
+.chart-table summary {
+  cursor: pointer;
+  color: var(--accent);
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+}
+.segmented {
+  flex-wrap: wrap;
+}
+
+/* ---------- accounts ---------- */
+dl.periods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+dl.periods > div {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+dl.periods dt {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+dl.periods dd {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+.filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0 var(--space-4);
+}
+@media (min-width: 720px) {
+  .filters {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+ul.accounts .icon {
+  margin-top: 2px;
+  color: var(--muted);
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+/* ---------- keys ---------- */
+.keys-form + .keys-form {
+  margin-top: var(--space-2);
+}
+.keys-form h4 {
+  margin: var(--space-5) 0 var(--space-1);
+}
+.keys-form label .tag {
+  margin-left: var(--space-1);
+  vertical-align: middle;
+}
+.clear-key {
+  margin-top: var(--space-1);
+}
+ol.how {
+  padding-left: 1.4em;
+  margin: var(--space-2) 0 var(--space-4);
+}
+ol.how li + li {
+  margin-top: var(--space-1);
+}
+
+/* ---------- tools ---------- */
+ul.links {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+ul.links li {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+ul.links a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+}
+
+/* The skeleton's hidden label can sit outside the page and widen it (site.css); keep it inside. */
+.console .skeleton {
+  position: relative;
+  overflow: hidden;
+}
