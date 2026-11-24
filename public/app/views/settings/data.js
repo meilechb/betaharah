@@ -9,6 +9,9 @@ function linkRow(href, title, summary) {
   return h('a', { class: 'st-row st-nav', href }, h('span', { class: 'st-text' }, h('span', { class: 'st-title' }, title), h('span', { class: 'st-summary' }, summary)), h('span', { class: 'st-chev' }, icon('chevron-right')));
 }
 
+/** " for every phone on it (2)", or nothing when the account has no phone. */
+const forPhones = () => (S.phones.length ? ' for every phone on it (' + S.phones.length + ')' : '');
+
 function view() {
   return {
     title: 'Your data',
@@ -33,7 +36,7 @@ function view() {
       group(
         { title: 'Delete the account', id: 'data-delete', className: 'danger' },
         blockRow(
-          h('p', { class: 'help' }, 'Deletes the account for every phone on it (' + S.phones.length + '): all dates, settings and messages. It cannot be undone. Download your data first if you want a copy.'),
+          h('p', { class: 'help' }, 'Deletes the account' + forPhones() + ': all dates, settings and messages. It cannot be undone. Download your data first if you want a copy.'),
           h(
             'div',
             { class: 'actions' },
@@ -46,7 +49,7 @@ function view() {
                 const btn = e.currentTarget;
                 const typed = await promptDialog({
                   title: 'Delete the account?',
-                  body: 'This deletes the account for every phone on it (' + S.phones.length + '): all entries, settings and messages. It cannot be undone.',
+                  body: 'This deletes the account' + forPhones() + ': all entries, settings and messages. It cannot be undone.',
                   label: 'Type DELETE to confirm',
                   expect: 'DELETE',
                   mismatchMessage: 'Type DELETE in capital letters. Nothing has been deleted.',

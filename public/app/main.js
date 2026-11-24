@@ -21,7 +21,7 @@ import { viewLog } from './views/log.js';
 import { viewCustoms } from './views/customs.js';
 import { viewSettings } from './views/settings/index.js';
 import { demoBanner } from './views/demo.js';
-import { captureFocus, captureOpen, fmtDate, hasUnsavedChanges, mayLeave, restoreFocus, restoreOpen } from './views/shared.js';
+import { captureFocus, captureOpen, fmtDate, hasUnsavedChanges, mayLeave, restoreFocus, restoreOpen, signOut } from './views/shared.js';
 
 const TABS = [
   { id: 'today', label: 'Today', icon: 'calendar', view: viewToday },
@@ -87,6 +87,7 @@ function render() {
         { class: 'top dash-top' },
         h('h1', {}, h('a', { href: '#today', onclick: e => (e.preventDefault(), go('today')) }, 'Betaharah')),
         dateLine(),
+        button({ label: 'Sign out', icon: 'log-out', size: 'sm', className: 'top-signout', attrs: { id: 'top-sign-out' }, onclick: signOutFromHeader }),
       ),
       demoBanner(),
       tabs({ label: 'Sections', items: TABS, current: tab, onselect: go }),
@@ -100,6 +101,13 @@ function render() {
   requestAnimationFrame(() => {
     root.style.minHeight = '';
   });
+}
+
+/** The header's "Sign out": the same as in Settings, after asking about unsaved changes. */
+async function signOutFromHeader(e) {
+  const btn = e.currentTarget;
+  if (!(await mayLeave())) return;
+  signOut({ currentTarget: btn });
 }
 
 async function go(id) {
@@ -117,14 +125,22 @@ async function go(id) {
   if (el && document.activeElement && document.activeElement.closest && document.activeElement.closest('.tabs')) el.focus();
 }
 
+/** The way out of a page that cannot be used. */
+const homeLink = () => h('p', { class: 'fatal-home' }, h('a', { href: '/', id: 'fatal-home' }, 'Back to the home page'));
+
+/** Why the page could not be loaded: api() already words it (the server's sentence, or no answer). */
+const fatalReason = e => (e && e.message) || 'Something went wrong.';
+
 function showFatal(e) {
+  document.body.classList.remove('has-tabbar');
   mount(
     h(
       'div',
-      { class: 'card login' },
+      { class: 'card login fatal' },
       h('h2', {}, 'The page could not be loaded'),
-      alert({ kind: 'bad', role: 'alert' }, (e && e.message) || 'Something went wrong.'),
+      alert({ kind: 'bad', role: 'alert' }, fatalReason(e)),
       h('div', { class: 'actions' }, button({ label: 'Try again', variant: 'primary', icon: 'refresh', attrs: { id: 'fatal-retry' }, onclick: () => restart() })),
+      homeLink(),
     ),
   );
 }
@@ -133,7 +149,8 @@ async function start() {
   mount(pageLoading('Loading…'));
   setPublic(await api('GET', '/api/public'));
   if (!P.configured) {
-    mount(h('div', { class: 'card login' }, h('h2', {}, 'Not set up yet'), h('p', {}, 'This site is not ready to be used yet.')));
+    document.body.classList.remove('has-tabbar');
+    mount(h('div', { class: 'card login fatal' }, h('h2', {}, 'Not set up yet'), h('p', {}, 'This site is not ready to be used yet.'), homeLink()));
     return;
   }
   const params = new URLSearchParams(location.search);
@@ -142,6 +159,7 @@ async function start() {
     wasSignedIn = true;
     if (params.get('google_error')) toast(params.get('google_error'), true);
     if (params.get('google') === 'connected') toast('Google Calendar is connected. It fills in within a minute.');
+    if (params.get('google') === 'signed-in') toast('You can sign in with Google from now on.');
     if (location.search) history.replaceState(null, '', location.pathname + location.hash);
     render();
     return;

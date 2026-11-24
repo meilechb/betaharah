@@ -14,7 +14,8 @@
 // the shown code, removing); reminders and their scheduled list; calendar;
 // language; texting; sign-in; your data; nothing typed lost, scroll and focus
 // kept on a redraw; the disabled states of an account without texting; no
-// sideways scrolling at 360 px; the wide layout; no console or CSP errors.
+// sideways scrolling at 360 px; the wide layout; accounts signed in with Google
+// and accounts with no phone (state rewritten in the browser); no console or CSP errors.
 // Exits 0 when every step passed.
 const { chromium } = require('playwright');
 const out = process.argv[2] || '.';
@@ -475,6 +476,184 @@ const H = { 'x-betaharah': '1' };
     });
   }
   await page.emulateMedia({ colorScheme: 'light' });
+  await page.setViewportSize({ width: 390, height: 860 });
+
+  // ----- Google sign-in, and an account with no phone -----
+  // The real Google round trip cannot run here: the state the server sends is rewritten in the
+  // browser to the two shapes a Google sign-in gives (see GOOGLE_ONLY and PHONE_AND_GOOGLE).
+
+  /** Rewrites every answer to /api/state with shape(state) until unshape() is called. */
+  let shapeOf = null;
+  const reshape = async shape => {
+    shapeOf = shape;
+    if (!reshape.on) {
+      reshape.on = true;
+      await page.route('**/api/state', async route => {
+        const r = await route.fetch();
+        const json = await r.json();
+        if (shapeOf && json && json.state) json.state = shapeOf(json.state);
+        await route.fulfill({ response: r, json });
+      });
+    }
+  };
+  const unshape = async () => {
+    shapeOf = null;
+    if (reshape.on) await page.unroute('**/api/state');
+    reshape.on = false;
+  };
+  const withGoogle = (s, available) => {
+    s.calendar.google = { ...s.calendar.google, available };
+    s.google = { ...s.calendar.google };
+    return s;
+  };
+  /** A session that began with Google, on an account with no phone. */
+  const GOOGLE_ONLY = s => {
+    withGoogle(s, true);
+    s.account = { ...s.account, number: null, method: 'google', hasPassword: false, googleEmail: 'ada@example.com' };
+    s.phones = [];
+    return s;
+  };
+  /** A phone account that added Google, signed in through Google now. */
+  const PHONE_AND_GOOGLE = s => {
+    withGoogle(s, true);
+    s.account = { ...s.account, number: null, method: 'google', hasPassword: false, googleEmail: 'ada@example.com' };
+    s.phones = s.phones.slice(0, 1).map(p => ({ ...p, me: false }));
+    return s;
+  };
+  const openSettings = async path => {
+    await page.goto('about:blank');
+    await page.goto(base + '/app/#settings' + (path ? '/' + path : ''));
+    await page.waitForSelector(path ? '#st-title' : '.st.at-home');
+  };
+  /** No "undefined", "null" or "NaN" on screen. */
+  const noLeftovers = async label => {
+    const text = await page.textContent('#root');
+    const m = /\b(undefined|null|NaN)\b/.exec(text);
+    if (m) throw new Error((label || 'the page') + ' shows "' + m[1] + '"');
+  };
+  const SECTIONS = ['', 'location', 'phones', 'phones/add', 'reminders', 'reminders/scheduled', 'calendar', 'language', 'texting', 'security', 'data'];
+
+  await step('google: where the site has no Google, sign-in and security says nothing about it', async () => {
+    await unshape();
+    await openSettings('security');
+    if (await page.locator('#sec-google').count()) throw new Error('Google shown');
+    if ((await page.textContent('.st-body')).includes('Google')) throw new Error('Google mentioned');
+  });
+
+  await step('google: a phone session where Google is on offers "Add Google sign-in" as a Google button', async () => {
+    await reshape(s => withGoogle(s, true));
+    await openSettings('security');
+    await page.waitForSelector('#sec-google:has-text("Add Google sign-in")');
+    const a = page.locator('#sec-google a#google-signin-add');
+    if ((await a.getAttribute('href')) !== '/api/auth/google/start') throw new Error('href ' + (await a.getAttribute('href')));
+    if ((await a.textContent()).trim() !== 'Continue with Google') throw new Error('label ' + (await a.textContent()));
+    if ((await a.locator('svg path').count()) !== 4) throw new Error('no four-colour G');
+    const box = await a.boundingBox();
+    if (box.height < 44) throw new Error('button is ' + box.height + ' px high');
+    if (!(await page.textContent('.st-account')).includes('Signed in with (732) 555-0100')) throw new Error('account line');
+    await page.waitForSelector('#npw1');
+  });
+
+  await step('google only, no phone: the home says so in words', async () => {
+    await reshape(GOOGLE_ONLY);
+    await openSettings('');
+    const line = (await page.textContent('.st-account')).trim();
+    if (!line.startsWith('Signed in with Google (ada@example.com)')) throw new Error('account line: ' + line);
+    if ((await summary('phones')) !== 'No phone yet · add one for reminders by text') throw new Error('phones: ' + (await summary('phones')));
+    if ((await summary('security')) !== 'Google') throw new Error('security: ' + (await summary('security')));
+    await page.waitForSelector('#st-nav-reminders .st-flag:has-text("No phone yet")');
+    if ((await page.textContent('#root')).includes('0 phones')) throw new Error('"0 phones"');
+    await noLeftovers('home');
+  });
+
+  await step('google only, no phone: sign-in and security shows the Google account and no password form', async () => {
+    await openSettings('security');
+    await page.waitForSelector('#sec-phone:has-text("Signed in with Google (ada@example.com)")');
+    await page.waitForSelector('#sec-google:has-text("Google sign-in is on")');
+    await page.waitForSelector('#sec-google:has-text("ada@example.com")');
+    if (await page.locator('#google-signin-add').count()) throw new Error('offers to add Google again');
+    if (await page.locator('#npw1, #pw-change, #pw-remove, #pw-relogin').count()) throw new Error('password controls shown');
+    await page.waitForSelector('#sec-password:has-text("A password belongs to a phone number. Add a phone, sign in with it, and set the password there.")');
+    await page.waitForSelector('#sign-out');
+    await page.click('#sign-out-all');
+    await page.waitForSelector('dialog:has-text("Google sign-in on every device")');
+    await page.click('dialog button:has-text("Cancel")');
+    await page.waitForSelector('dialog', { state: 'detached' });
+    await noLeftovers('security');
+  });
+
+  await step('google only, no phone: Phones explains what a phone is for, and adding one is the main action', async () => {
+    await openSettings('phones');
+    await page.waitForSelector('#phones-list .empty-title:has-text("No phone yet.")');
+    const body = await page.textContent('#phones-list');
+    for (const w of ['reminders by text', 'record dates by text', 'sign in with a code']) if (!body.includes(w)) throw new Error('does not say ' + w);
+    if (!(await page.getAttribute('#phone-add-first', 'class')).includes('primary')) throw new Error('adding is not the main action');
+    await page.click('#phone-add-first');
+    await expectHash('#settings/phones/add');
+    await expectTitle('Add a phone');
+    await page.waitForSelector('.st-steps-intro:has-text("Enter the phone’s number.")');
+    await noLeftovers('add a phone');
+  });
+
+  await step('google only, no phone: Reminders, Texting and Your data word it for no phone', async () => {
+    await openSettings('reminders');
+    await page.waitForSelector('.st-note:has-text("No phone is on this account yet")');
+    await openSettings('reminders/scheduled');
+    await noLeftovers('scheduled');
+    await openSettings('texting');
+    await page.waitForSelector('#txt-no-phone');
+    await openSettings('data');
+    if ((await page.textContent('#data-delete')).includes('(0)')) throw new Error('"(0)" phones');
+    await page.waitForSelector('#data-delete:has-text("Deletes the account: all dates")');
+  });
+
+  await step('google only, no phone: every section at 360 px, light and dark, without errors or sideways scrolling', async () => {
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.setViewportSize({ width: 360, height: 800 });
+      for (const id of SECTIONS) {
+        await openSettings(id);
+        await noSideways((id || 'home') + ' (Google, no phone, ' + scheme + ')');
+        await noLeftovers(id || 'home');
+      }
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.setViewportSize({ width: 390, height: 860 });
+  });
+
+  await step('a phone account that added Google: one phone that can be removed, Google sign-in on', async () => {
+    await reshape(PHONE_AND_GOOGLE);
+    await openSettings('');
+    if (!(await page.textContent('.st-account')).includes('Signed in with Google (ada@example.com)')) throw new Error('account line');
+    if ((await summary('phones')) !== '1 phone · reminders on') throw new Error('phones: ' + (await summary('phones')));
+    if ((await summary('security')) !== 'Google · a code by text') throw new Error('security: ' + (await summary('security')));
+    await openSettings('phones/17325550100');
+    await page.waitForSelector('#remove-17325550100');
+    if ((await page.textContent('#phone-remove')).includes('only phone on the account')) throw new Error('refuses to remove the last phone');
+    await page.waitForSelector('#phone-remove:has-text("you sign in to it with Google")');
+    if ((await page.textContent('.st-hero')).includes('this phone')) throw new Error('marked as this phone');
+    await openSettings('security');
+    await page.waitForSelector('#sec-google:has-text("ada@example.com")');
+    await page.waitForSelector('#sec-password:has-text("A password belongs to a phone number")');
+    for (const id of SECTIONS) {
+      await openSettings(id);
+      await noLeftovers((id || 'home') + ' (phone and Google)');
+    }
+  });
+
+  await step('back from Google with ?google=signed-in: a toast, and the address loses the parameter', async () => {
+    await page.goto(base + '/app/?google=signed-in#settings');
+    await page.waitForSelector('.toast:has-text("You can sign in with Google from now on.")');
+    if (await page.evaluate(() => location.search)) throw new Error('address: ' + page.url());
+    await expectHash('#settings');
+    await page.goto(base + '/app/?google_error=' + encodeURIComponent('Google said no.') + '#settings');
+    await page.waitForSelector('.toast:has-text("Google said no.")');
+    if (await page.evaluate(() => location.search)) throw new Error('address: ' + page.url());
+    await page.goto(base + '/app/?google=connected#settings');
+    await page.waitForSelector('.toast:has-text("Google Calendar is connected")');
+  });
+
+  await unshape();
   await context.close();
 
   // ===================== an ordinary new account (no texting on this site) =====================
@@ -554,6 +733,20 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('#npw1');
     await page.click('#pw-cancel');
     await page.waitForSelector('#pw-change');
+  });
+
+  await step('new account, Google only and no texting: Phones says when a phone can be added', async () => {
+    await reshape(GOOGLE_ONLY);
+    await openSettings('phones');
+    await page.waitForSelector('#phones-list:has-text("once text messaging is available")');
+    if (await page.locator('#phone-add-first').count()) throw new Error('adding offered without texting');
+    if ((await summary('phones')) !== 'No phone yet · texting not available here') throw new Error('phones: ' + (await summary('phones')));
+    for (const id of SECTIONS) {
+      await openSettings(id);
+      await noLeftovers((id || 'home') + ' (Google, no texting)');
+      await noSideways(id || 'home');
+    }
+    await unshape();
   });
 
   await step('new account: deleting it with the typed DELETE', async () => {

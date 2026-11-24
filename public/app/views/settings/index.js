@@ -11,9 +11,9 @@
  * then "Saved" or what went wrong (saveStatus() from shared.js). Steps that
  * need more than one field keep their own button.
  */
-import { button, h, icon, pretty } from '../../lib.js';
+import { button, h, icon } from '../../lib.js';
 import { S, go } from '../../store.js';
-import { saveStatus } from '../shared.js';
+import { saveStatus, signedInWith } from '../shared.js';
 import { back, currentPath, settle } from './route.js';
 import { navRow } from './ui.js';
 import { locationSection } from './location.js';
@@ -50,7 +50,7 @@ function sectionList(currentId, shownId) {
     'nav',
     { class: 'st-home', 'aria-labelledby': 'st-home-title' },
     h('h2', { class: 'st-home-title', id: 'st-home-title', tabindex: '-1' }, 'Settings'),
-    h('p', { class: 'st-account' }, icon('user', { size: 'sm' }), 'Signed in with ' + pretty(S.account.number), S.demo ? ' · the test account' : ''),
+    h('p', { class: 'st-account' }, icon('user', { size: 'sm' }), 'Signed in with ' + signedInWith(), S.demo ? ' · the test account' : ''),
     customsFlag(),
     h(
       'ul',

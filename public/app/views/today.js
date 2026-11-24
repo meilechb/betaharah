@@ -2,8 +2,9 @@
  * The Today tab: where things stand and what comes next, the month
  * calendar, recording an event, and a short "Coming up" list.
  */
-import { button, card, emptyState, h, icon } from '../lib.js';
-import { S, go, t } from '../store.js';
+import { button, card, emptyState, h, icon, linkButton, pretty } from '../lib.js';
+import { S, t } from '../store.js';
+import { DIGITS } from './settings/texting.js';
 import { onboardingCard } from '../onboarding.js';
 import { calendarCard, showDate } from './calendar.js';
 import { tryTextCard } from './demo.js';
@@ -19,10 +20,12 @@ export function viewToday() {
       onboardingCard(),
       card(
         { title: 'Choose your location first', icon: 'map', className: 'status-card empty-status' },
-        h('p', {}, t('Sunrise and {sunset} decide every date in this calendar, so nothing can be calculated until a location is chosen.')),
-        button({ label: 'Choose your location', variant: 'primary', icon: 'map', onclick: () => go('settings') }),
+        h('p', { id: 'no-location' }, 'Nothing can be calculated until a location is chosen.'),
+        h('p', { class: 'muted' }, t('Sunrise, {sunset} and {nightfall} are worked out for that place. Change it when you travel.')),
+        linkButton({ href: '#settings/location', label: 'Choose your location', variant: 'primary', icon: 'map', attrs: { id: 'choose-location' } }),
       ),
       alertsBlock(),
+      textCard(),
     );
   }
   // The order in the page is the order on a phone and for the keyboard: where things stand, the
@@ -36,9 +39,49 @@ export function viewToday() {
       'div',
       { class: 'today-layout' },
       h('div', { class: 'col-main' }, statusCard(), S.grid ? calendarCard() : null),
-      h('div', { class: 'col-side' }, recordCard(), tryTextCard(), upcomingCard()),
+      h('div', { class: 'col-side' }, recordCard(), tryTextCard(), textCard(), upcomingCard()),
     ),
     button({ label: 'Record', icon: 'plus', variant: 'primary', className: 'record-jump', attrs: { id: 'record-jump' }, onclick: jumpToRecord }),
+  );
+}
+
+// ---------- texting ----------
+
+/** The digits shown on Today; the rest are under Settings → Texting. */
+const TODAY_DIGITS = ['1', '2', '4', '9'];
+
+/**
+ * "Text this number": the site's number and the most used digits, when texting
+ * works here and the account has a phone to text from. The test account has
+ * "Try a text" instead, which already shows the number and the digits.
+ */
+function textCard() {
+  const sms = S.sms;
+  if (!sms || !sms.ready || !sms.number || sms.simulated || S.demo) return null;
+  if (!S.phones || S.phones.length === 0) return null;
+  const list = Array.isArray(sms.commandList) ? sms.commandList : null;
+  const rows = DIGITS.filter(([d]) => TODAY_DIGITS.includes(d) && (!list || list.some(x => x && x.text === d)));
+  const number = pretty(sms.number);
+  return card(
+    { title: 'Text this number', icon: 'message', className: 'text-card', attrs: { id: 'text-card' } },
+    h(
+      'p',
+      { class: 'text-number' },
+      h('a', { href: 'sms:' + sms.number, id: 'text-number', 'aria-label': 'Text ' + number }, number),
+    ),
+    h('p', { class: 'help' }, S.phones.length === 1 ? 'From the phone on this account.' : 'From a phone on this account.', ' Send one of these:'),
+    h(
+      'table',
+      { class: 'text-digits' },
+      h('caption', { class: 'visually-hidden' }, 'Texts to send'),
+      h('thead', { class: 'visually-hidden' }, h('tr', {}, h('th', { scope: 'col' }, 'Text'), h('th', { scope: 'col' }, 'What it does'))),
+      h(
+        'tbody',
+        {},
+        rows.map(([code, meaning]) => h('tr', {}, h('th', { scope: 'row' }, h('kbd', {}, code)), h('td', {}, cap(t(meaning))))),
+      ),
+    ),
+    h('p', { class: 'help' }, h('a', { href: '#settings/texting', id: 'text-all' }, 'All the commands are in Settings, under Texting'), '.'),
   );
 }
 

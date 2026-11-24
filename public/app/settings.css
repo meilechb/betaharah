@@ -949,6 +949,63 @@ table.st-commands {
   margin: 0;
 }
 
+/* ======================= Google sign-in ======================= */
+
+/*
+ * The button that adds Google sign-in. Its colours, stroke, padding and the
+ * "G" are fixed by Google's sign-in branding guidelines (the light theme, and
+ * the dark theme in dark mode), so they are written here and not taken from
+ * the site's tokens. Google Sans cannot be loaded (system fonts only), so the
+ * site's font is used at the same size, weight and line height.
+ */
+.gsi-button {
+  --gsi-fill: #ffffff;
+  --gsi-stroke: #747775;
+  --gsi-text: #1f1f1f;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 12px;
+  background: var(--gsi-fill);
+  color: var(--gsi-text);
+  border: 1px solid var(--gsi-stroke);
+  border-radius: 4px;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  max-width: 100%;
+}
+.gsi-button:hover {
+  color: var(--gsi-text);
+  box-shadow: var(--shadow-sm);
+}
+.gsi-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.gsi-button .gsi-icon {
+  display: inline-flex;
+  flex: none;
+  margin-right: 10px;
+}
+.gsi-button .gsi-logo {
+  width: 18px;
+  height: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  .gsi-button {
+    --gsi-fill: #131314;
+    --gsi-stroke: #8e918f;
+    --gsi-text: #e3e3e3;
+  }
+}
+.st-email {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
 /* ======================= small screens ======================= */
 
 @media (max-width: 420px) {

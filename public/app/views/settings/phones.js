@@ -4,10 +4,10 @@
  * receives, a test text, verifying it, removing it. Adding a phone is its own
  * two-step view (#settings/phones/add).
  */
-import { alert, api, button, confirmDialog, h, icon, pretty, textField } from '../../lib.js';
+import { alert, api, button, confirmDialog, emptyState, h, icon, pretty, textField } from '../../lib.js';
 import { S, signOutLocally } from '../../store.js';
 import { attempt, refresh, region } from '../shared.js';
-import { replace } from './route.js';
+import { open, replace } from './route.js';
 import { andList, blockRow, group, infoRow, navRow, save, stTag, switchRow } from './ui.js';
 
 /** The two-step flow: adding a phone, or verifying one already on the account. */
@@ -55,7 +55,30 @@ function phoneSummary(p) {
 
 // ---------- the list ----------
 
+/** No phone on the account (an account that signs in with Google): what a phone is for, and adding one. */
+function emptyListView() {
+  const lead = 'A phone on this account can receive reminders by text, record dates by text, and sign in with a code texted to it.';
+  return {
+    title: 'Phones',
+    parent: '',
+    statusKey: 'phones',
+    body: [
+      h(
+        'div',
+        { class: 'st-group st-empty', id: 'phones-list' },
+        emptyState({
+          icon: 'phone',
+          title: 'No phone yet.',
+          body: S.sms.ready ? lead + ' Up to ' + S.maxPhones + ' phones can share the account.' : lead + ' A phone can be added once text messaging is available on this site.',
+          action: S.sms.ready ? button({ label: 'Add a phone', variant: 'primary', icon: 'plus', attrs: { id: 'phone-add-first' }, onclick: () => open('phones/add') }) : null,
+        }),
+      ),
+    ],
+  };
+}
+
 function listView() {
+  if (S.phones.length === 0) return emptyListView();
   const full = S.phones.length >= S.maxPhones;
   let addRow;
   if (!S.sms.ready) addRow = infoRow({ icon: 'plus', title: 'Add a phone', summary: 'A second phone can be added once text messaging is available on this site.', className: 'muted-row' });
@@ -261,9 +284,17 @@ function detailView(key) {
         group(
           { title: 'Remove', id: 'phone-remove' },
           blockRow(
-            S.phones.length > 1
+            S.phones.length > 1 || S.account.googleEmail
               ? [
-                  h('p', { class: 'help' }, p.me ? 'This is the phone you are signed in with. Removing it signs you out here.' : 'It can no longer sign in, record by text, or receive reminders. The other phones keep everything.'),
+                  h(
+                    'p',
+                    { class: 'help' },
+                    p.me
+                      ? 'This is the phone you are signed in with. Removing it signs you out here.'
+                      : S.phones.length > 1
+                        ? 'It can no longer sign in, record by text, or receive reminders. The other phones keep everything.'
+                        : 'It can no longer sign in, record by text, or receive reminders. The account stays, and you sign in to it with Google.',
+                  ),
                   h(
                     'div',
                     { class: 'actions' },
@@ -398,7 +429,7 @@ function addView() {
     parent: 'phones',
     backLabel: 'Phones',
     body: region('phone-add', () => {
-      if (!S.sms.ready) return h('div', {}, h('p', {}, 'A second phone can be added once text messaging is available on this site.'));
+      if (!S.sms.ready) return h('div', {}, h('p', {}, (S.phones.length ? 'A second phone' : 'A phone') + ' can be added once text messaging is available on this site.'));
       if (adding.forNumber !== null) adding = idle();
       if (adding.step !== 'code' && S.phones.length >= S.maxPhones) return h('div', {}, h('p', {}, 'This account has the most phones it can have (' + S.maxPhones + '). Remove one first.'));
       if (adding.step === 'code') return h('div', { class: 'st-group' }, h('div', { class: 'st-rows' }, codeForm()));
@@ -408,7 +439,7 @@ function addView() {
         h(
           'ol',
           { class: 'st-steps-intro' },
-          h('li', {}, 'Enter the other phone’s number. A 6-digit code is texted to it.'),
+          h('li', {}, (S.phones.length ? 'Enter the other phone’s number.' : 'Enter the phone’s number.') + ' A 6-digit code is texted to it.'),
           h('li', {}, 'Enter that code here. The phone is then on this account: it can sign in, record by text, and receive its own reminders.'),
         ),
         h(
@@ -468,6 +499,7 @@ export const phonesSection = {
   icon: 'phone',
   summary: () => {
     const n = S.phones.length;
+    if (n === 0) return S.sms.ready ? 'No phone yet · add one for reminders by text' : 'No phone yet · texting not available here';
     const on = S.phones.filter(getsReminders).length;
     const head = n === 1 ? '1 phone' : n + ' phones';
     let rem;

@@ -3,8 +3,8 @@
  * partial redraws (regions), the guard against leaving unsaved changes, the
  * "save each change as it is made" model of Settings, and civil-date helpers.
  */
-import { alert, api, cap, clone, h, icon, segmented, setBusy, toast } from '../lib.js';
-import { S, adopt, draft, render, run, saved, t } from '../store.js';
+import { alert, api, cap, clone, h, icon, pretty, segmented, setBusy, toast } from '../lib.js';
+import { S, adopt, draft, render, restart, run, saved, signOutLocally, t } from '../store.js';
 
 // ---------- alerts ----------
 
@@ -252,6 +252,39 @@ export async function attempt(action, opts) {
     else toast(message, true);
     return undefined;
   }
+}
+
+// ---------- the account: how this session signed in, signing out ----------
+
+/**
+ * Google on this site: { available, connected }. available: the operator has
+ * turned Google on (Google sign-in can be added); connected: Google Calendar.
+ */
+export function googleInfo() {
+  const g = S && (S.google || (S.calendar && S.calendar.google));
+  return { available: Boolean(g && g.available), connected: Boolean(g && g.connected) };
+}
+
+/** Whether this session began with Google (it then has no phone number of its own). */
+export const googleSession = () => Boolean(S && S.account && (S.account.method === 'google' || !S.account.number));
+
+/** What this session signed in with: "(732) 555-0100", or "Google (ada@example.com)". */
+export function signedInWith() {
+  const a = S.account;
+  if (!googleSession()) return pretty(a.number);
+  return a.googleEmail ? 'Google (' + a.googleEmail + ')' : 'Google';
+}
+
+/** Signs out this browser: the header's button and Settings → Sign-in and security. */
+export function signOut(e) {
+  const btn = e && e.currentTarget ? e.currentTarget : null;
+  return attempt(() => api('POST', '/api/auth/logout'), {
+    button: btn,
+    done: () => {
+      signOutLocally();
+      restart();
+    },
+  });
 }
 
 // ---------- civil dates ('YYYY-MM-DD') ----------

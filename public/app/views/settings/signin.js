@@ -1,28 +1,47 @@
-/* Settings: Sign-in and security (how this phone signs in, the password, signing out). */
-import { alert, api, button, confirmDialog, h, pretty, textField, toast } from '../../lib.js';
+/*
+ * Settings: Sign-in and security (how this session signed in, Google sign-in,
+ * the password, signing out).
+ *
+ * A session began either with a phone number (a texted code or the password)
+ * or with Google. A password belongs to a phone number, so a session that
+ * began with Google shows why it has no password controls.
+ */
+import { alert, api, button, confirmDialog, h, textField, toast } from '../../lib.js';
 import { S, adopt, render, restart, signOutLocally } from '../../store.js';
-import { attempt, refresh, region } from '../shared.js';
+import { attempt, googleInfo, googleSession, refresh, region, signOut, signedInWith } from '../shared.js';
 import { blockRow, group, infoRow } from './ui.js';
 
 /** The password form and its errors. */
 let pw = { a: '', b: '', errA: '', errB: '', error: '' };
 let pwOpen = false;
 
-function signOut(e) {
-  attempt(() => api('POST', '/api/auth/logout'), {
-    button: e.currentTarget,
-    done: () => {
-      signOutLocally();
-      restart();
-    },
-  });
+/** The server's own sentence for a session that began with Google. */
+const GOOGLE_NO_PASSWORD = 'A password belongs to a phone number. Add a phone, sign in with it, and set the password there.';
+
+/** How this account can be signed in to, as short parts: ['A code by text · no password', 'Google']. */
+function wayParts() {
+  const acc = S.account;
+  const parts = [];
+  if (googleSession()) {
+    parts.push('Google');
+    if (S.phones.length && S.sms.ready) parts.push('a code by text');
+    return parts;
+  }
+  if (S.sms.ready) parts.push(acc.hasPassword ? 'A code by text, or the password' : 'A code by text · no password');
+  else parts.push(acc.hasPassword ? 'Password' : 'No password set');
+  if (acc.googleEmail) parts.push('Google');
+  return parts;
 }
 
-/** How this phone can sign in, in words. */
-function ways() {
-  const acc = S.account;
-  if (S.sms.ready) return acc.hasPassword ? 'A code by text, or the password' : 'A code by text · no password';
-  return acc.hasPassword ? 'Password' : 'No password set';
+/** The summary on the Settings home: "A code by text · no password · Google". */
+const ways = () => wayParts().join(' · ');
+
+/** The same as a sentence: "Ways to sign in: a code by text; no password; Google." */
+function waysSentence() {
+  const text = wayParts()
+    .map(x => x.replace(' · ', '; '))
+    .join('; ');
+  return 'Ways to sign in: ' + (text.startsWith('Google') ? text : text.charAt(0).toLowerCase() + text.slice(1)) + '.';
 }
 
 function passwordForm() {
@@ -123,6 +142,10 @@ function removeButton() {
 
 function passwordGroup() {
   const acc = S.account;
+  if (googleSession()) {
+    // The server refuses to set or remove a password here; say why instead of offering it.
+    return group({ title: 'Password', id: 'sec-password' }, infoRow({ icon: 'lock', title: 'No password in this session', summary: GOOGLE_NO_PASSWORD }));
+  }
   const state = infoRow({ icon: 'lock', leadKind: acc.hasPassword ? 'ok' : null, title: acc.hasPassword ? 'A password is set' : 'No password', summary: acc.hasPassword ? 'You can sign in with it instead of waiting for a text.' : 'Optional. With a password you can sign in without waiting for a text.' });
   if (!acc.fresh) {
     return group(
@@ -165,20 +188,76 @@ function passwordGroup() {
   );
 }
 
+// ---------- Google sign-in ----------
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+/** Google's standard four-colour "G" (18 × 18), as its branding guidelines require on a Google button. */
+function googleG() {
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', '0 0 18 18');
+  svg.setAttribute('width', '18');
+  svg.setAttribute('height', '18');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('class', 'gsi-logo');
+  const paths = [
+    ['#EA4335', 'M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z'],
+    ['#4285F4', 'M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.1.83-.64 2.08-1.84 2.92l2.84 2.2c1.7-1.57 2.68-3.88 2.68-6.62z'],
+    ['#FBBC05', 'M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z'],
+    ['#34A853', 'M9 18c2.43 0 4.47-.8 5.96-2.18l-2.84-2.2c-.76.53-1.78.9-3.12.9-2.38 0-4.4-1.57-5.12-3.74L.97 13.04C2.45 15.98 5.48 18 9 18z'],
+  ];
+  for (const [fill, d] of paths) {
+    const p = document.createElementNS(SVG, 'path');
+    p.setAttribute('fill', fill);
+    p.setAttribute('d', d);
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
+/**
+ * The button that adds Google sign-in, drawn as Google's branding guidelines
+ * ask for a custom button: the standard "G", one of the approved calls to
+ * action ("Continue with Google"), Google's light or dark colours. A plain
+ * link, so the browser goes to Google and comes back here.
+ */
+function googleButton() {
+  return h('a', { class: 'gsi-button', href: '/api/auth/google/start', id: 'google-signin-add' }, h('span', { class: 'gsi-icon' }, googleG()), h('span', { class: 'gsi-text' }, 'Continue with Google'));
+}
+
+/** Google sign-in: the connected account, or the way to add one when the site offers Google. Nothing when neither. */
+function googleGroup() {
+  const email = S.account.googleEmail;
+  if (email) {
+    return group(
+      { title: 'Google', id: 'sec-google' },
+      infoRow({ icon: 'user', leadKind: 'ok', title: 'Google sign-in is on', summary: h('span', {}, 'This account can be signed in to with the Google account ', h('strong', { class: 'st-email' }, email), '.') }),
+    );
+  }
+  if (!googleInfo().available) return null;
+  return group(
+    { title: 'Google', id: 'sec-google' },
+    infoRow({ icon: 'user', title: 'Add Google sign-in', summary: 'After you choose a Google account, you can sign in to this account with it as well as with your phone number.' }),
+    blockRow(h('div', { class: 'actions' }, googleButton())),
+  );
+}
+
+// ---------- the view ----------
+
 function view() {
+  const google = googleSession();
   return {
     title: 'Sign-in and security',
     parent: '',
     body: [
-      group(
-        { title: 'This phone', id: 'sec-phone' },
-        infoRow({ icon: 'phone', title: 'Signed in with ' + pretty(S.account.number), summary: 'Ways to sign in: ' + ways().replace(' · ', '; ').replace(/^./, c => c.toLowerCase()) + '.' }),
-      ),
+      group({ title: google ? 'This session' : 'This phone', id: 'sec-phone' }, infoRow({ icon: google ? 'user' : 'phone', title: 'Signed in with ' + signedInWith(), summary: waysSentence() })),
+      googleGroup(),
       passwordGroup(),
       group(
         { title: 'Sessions', id: 'sec-sessions' },
         blockRow(
-          h('p', { class: 'help' }, 'Sign out here, or on every device where this phone number is signed in, for example after using a shared computer.'),
+          h('p', { class: 'help' }, google ? 'Sign out here, or on every device where this Google account is signed in to this account, for example after using a shared computer.' : 'Sign out here, or on every device where this phone number is signed in, for example after using a shared computer.'),
           h(
             'div',
             { class: 'actions' },
@@ -188,7 +267,10 @@ function view() {
               attrs: { id: 'sign-out-all' },
               onclick: async e => {
                 const btn = e.currentTarget;
-                if (!(await confirmDialog({ title: 'Sign out everywhere?', body: 'This signs out this phone number on every device, this one included. Other phones on the account stay signed in.', confirmLabel: 'Sign out everywhere' }))) return;
+                const body = google
+                  ? 'This signs out the Google sign-in on every device, this one included. Phones on the account stay signed in.'
+                  : 'This signs out this phone number on every device, this one included. Other phones on the account stay signed in.';
+                if (!(await confirmDialog({ title: 'Sign out everywhere?', body, confirmLabel: 'Sign out everywhere' }))) return;
                 attempt(() => api('POST', '/api/auth/logout-all'), {
                   button: btn,
                   done: () => {
