@@ -4,13 +4,14 @@
  * each household's reminders and calendar current, answering received
  * texts, and the periodic job.
  */
+import { hiddenKey } from '../engine/calendar';
 import { filedText, messageOut, NO_TEXTS, serverText, type ChatState, type OutMessage, type SiteTexts } from './chat';
 import { fingerprint, randomCode } from './crypto';
 import { DEMO_NUMBER } from './demo';
 import { noteSmsOutcome } from './admin-notes';
 import type { Deps, Env } from './env';
 import { GoogleCalendar, GoogleError, refreshAccessToken } from './google';
-import { compute, type Computed } from './household';
+import { compute, publishedEvents, type Computed } from './household';
 import { addMessage, lastFour, rcsReady, smsReady, type HouseholdData, type Site, type SyncState } from './model';
 import { postponeDue, rebuildQueue, settle, takeDue, type Settlement } from './queue';
 import { sendTelnyx, sendTelnyxRcs, type InboundMessage, type RcsSuggestion } from './sms';
@@ -328,9 +329,11 @@ export async function syncCalendar(deps: Deps, site: Site, data: HouseholdData, 
     const calendar = new GoogleCalendar(deps, token);
     const windowStart = now - data.app.calendar.historyDays * DAY;
     const tz = computed.place.timeZone;
-    const desired = computed.events.map(e => toDesired(e, tz));
+    const show = data.app.calendar.show;
+    const desired = publishedEvents(data, computed).map(e => toDesired(e, tz));
     const existing = await calendar.listManagedEvents(data.google.calendarId, windowStart);
-    const result = await applySync(calendar, data.google.calendarId, planSync(desired, existing, windowStart), MAX_SYNC_OPS);
+    const ops = planSync(desired, existing, windowStart, key => hiddenKey(key, show));
+    const result = await applySync(calendar, data.google.calendarId, ops, MAX_SYNC_OPS);
     return { outcome: { status: 'ok', result }, sync: { dirty: result.remaining > 0, lastRunAt: now, lastOkAt: now, lastError: null } };
   } catch (e) {
     let message = e instanceof Error ? e.message : 'unknown error';

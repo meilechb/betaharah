@@ -1,13 +1,13 @@
 /*
  * Settings: Calendar. The two ways to see the dates in a calendar app
- * (Google Calendar, when this site offers it; a subscription link), how the
- * events look, the calendar's name; "More" for replacing or removing and for
+ * (Google Calendar, when this site offers it; a subscription link), which
+ * kinds of event they show, how the events look, the calendar's name; "More" for replacing or removing and for
  * the length of history.
  */
 import { alert, api, button, confirmDialog, copyField, h, linkButton, toast } from '../../lib.js';
 import { S, t, when } from '../../store.js';
 import { refresh, region } from '../shared.js';
-import { blockRow, choiceCards, errorText, group, infoRow, more, save, saveApp, tn } from './ui.js';
+import { blockRow, choiceCards, errorText, group, infoRow, more, save, saveApp, switchRow, tn } from './ui.js';
 
 let nameDraft = null;
 let nameError = '';
@@ -209,6 +209,34 @@ function moreGroup() {
   );
 }
 
+/** The kinds of event, with their labels; terms in the household's chosen form. */
+const SHOWN = [
+  ['apart', 'Days apart', '{niddah} days and {onot}'],
+  ['period', 'Period start', null],
+  ['hefsek', '{hefsek}', null],
+  ['cleanDays', '{clean_days}', null],
+  ['mikvah', '{mikvah_night}', null],
+];
+
+function showGroup() {
+  const show = S.app.calendar.show;
+  return group(
+    { title: 'Shown in your calendar app', id: 'cal-show' },
+    SHOWN.map(([kind, label, help]) =>
+      switchRow({
+        id: 'cal-show-' + kind,
+        label: tn(label, true),
+        help: help ? tn(help, true) : null,
+        checked: show[kind],
+        onchange: e => {
+          const on = e.target.checked;
+          saveApp('calendar', a => (a.calendar.show = { ...a.calendar.show, [kind]: on }));
+        },
+      }),
+    ),
+  );
+}
+
 function view() {
   const style = S.app.calendar.style;
   return {
@@ -218,6 +246,7 @@ function view() {
     body: [
       googleGroup(),
       linkGroup(),
+      showGroup(),
       group(
         { title: 'Event titles', id: 'cal-style' },
         blockRow(
@@ -227,7 +256,7 @@ function view() {
             value: style,
             options: [
               { value: 'words', label: 'In words', help: 'Readable by anyone who sees it.', example: preview('words') },
-              { value: 'discreet', label: 'Discreet', help: tn('Symbols: • start, H {hefsek}, 1/7–7/7 {clean_days}, M {mikvah_night}, ◆ {veset_onah}, ◇ {or_zarua}, ? projected.'), example: preview('discreet') },
+              { value: 'discreet', label: 'Discreet', help: tn('Symbols: N {niddah}, • start, H {hefsek}, 1/7–7/7 {clean_days}, M {mikvah_night}, ◆ {veset_onah}, ◇ {or_zarua}, ? projected.'), example: preview('discreet') },
             ],
             onchange: v => saveApp('calendar', a => (a.calendar.style = v)),
           }),

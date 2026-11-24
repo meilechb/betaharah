@@ -1786,10 +1786,11 @@ describe('Google Calendar', () => {
     expect(world.google.events()).toEqual([]);
     await tick(env, world.deps);
     const titles = world.google.events().map(e => e.resource.summary);
+    // by default: the days apart, the start of the period and the hefsek taharah
+    expect(titles).toContain('Niddah');
     expect(titles).toContain('Flow (day)');
     expect(titles).toContain('Hefsek taharah (by 4:33 PM)');
-    expect(titles).toContain('Seven clean days: day 1 (projected)');
-    expect(titles).toContain('Mikvah night (after 5:16 PM) (projected)');
+    expect(titles.filter(t => t.startsWith('Seven clean days') || t.startsWith('Mikvah night'))).toEqual([]);
     for (const e of world.google.events()) expect(e.resource.extendedProperties.private.mk).toBe('1');
     const s = await c.state();
     expect(s.calendar.sync).toMatchObject({ dirty: false, lastError: null });
@@ -1799,7 +1800,7 @@ describe('Google Calendar', () => {
     await c.post('/api/entries', { kind: 'hefsek', when: 'now' });
     const after = world.google.events().map(e => e.resource.summary);
     expect(after).toContain('Hefsek taharah ✓');
-    expect(after).toContain('Seven clean days: day 1');
+    expect(after).toContain('Niddah');
     expect(after.filter(t => t.includes('projected'))).toEqual([]);
     expect(new Set(world.google.events().map(e => e.resource.extendedProperties.private.k)).size).toBe(after.length);
   });
@@ -1815,6 +1816,37 @@ describe('Google Calendar', () => {
     const titles = world.google.events().map(e => e.resource.summary);
     expect(titles).toContain('H < 4:33 PM');
     for (const e of world.google.events()) expect(e.resource.description).toBe('');
+  });
+
+  it('follows what is switched on: clean days on, off and on again, with nothing duplicated or left behind', async () => {
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    await connect(c);
+    await tick(env, world.deps);
+    const titles = () => world.google.events().map(e => e.resource.summary);
+    const keys = () => world.google.events().map(e => e.resource.extendedProperties.private.k);
+    const base = titles();
+    expect(base.filter(t => t.startsWith('Seven clean days'))).toEqual([]);
+    const niddah = world.google.events().find(e => e.resource.summary === 'Niddah')!;
+    expect(niddah.resource.extendedProperties.private.k).toMatch(/^apart:/);
+    const calendar = (show: Record<string, boolean>) => ({ name: 'Betaharah', style: 'words', historyDays: 400, show: { apart: true, period: true, hefsek: true, cleanDays: false, mikvah: false, ...show } });
+
+    await c.put('/api/app', appSettings({ calendar: calendar({ cleanDays: true }) }));
+    expect(titles().filter(t => t.startsWith('Seven clean days'))).toHaveLength(7);
+    expect(new Set(keys()).size).toBe(keys().length);
+    // the period's event was kept, not made again
+    expect(world.google.events().find(e => e.resource.summary === 'Niddah')!.id).toBe(niddah.id);
+
+    await c.put('/api/app', appSettings({ calendar: calendar({ cleanDays: false }) }));
+    expect(titles().filter(t => t.startsWith('Seven clean days'))).toEqual([]);
+    expect(titles().sort()).toEqual([...base].sort());
+
+    await c.put('/api/app', appSettings({ calendar: calendar({ cleanDays: true }) }));
+    expect(titles().filter(t => t.startsWith('Seven clean days'))).toHaveLength(7);
+    expect(new Set(keys()).size).toBe(keys().length);
+
+    // everything off: the calendar is emptied of the app's events
+    await c.put('/api/app', appSettings({ calendar: calendar({ apart: false, period: false, hefsek: false, cleanDays: false }) }));
+    expect(world.google.events()).toEqual([]);
   });
 
   it('the way back from Google must belong to the same signed-in account', async () => {
@@ -1859,7 +1891,7 @@ describe('Google Calendar', () => {
     const sync = await c.post('/api/sync');
     expect(sync.json.outcome.status).toBe('ok');
     expect(sync.json.state.calendar.sync.lastError).toBeNull();
-    expect(world.google.events().length).toBeGreaterThan(5);
+    expect(world.google.events().length).toBeGreaterThan(2);
   });
 
   it('is simply not offered when the operator has not set it up', async () => {
@@ -1894,7 +1926,20 @@ describe('the calendar subscription link', () => {
     expect(feed.text).toContain('COLOR:#2A3C6E');
     expect(feed.text.replace(/\r\n /g, '')).toContain('https://betaharah.com/brand/logo-224.png');
     expect(feed.text).toContain('SUMMARY:Hefsek taharah (by 4:33 PM)');
-    expect(feed.text.match(/BEGIN:VEVENT/g)!.length).toBe((await c.state()).upcoming.length + 1); // and the flow, which is past
+    // by default: the days apart (the period, and the onot), the flow and the hefsek taharah
+    expect(feed.text).toContain('SUMMARY:Niddah');
+    expect(feed.text).toContain('SUMMARY:Flow (day)');
+    expect(feed.text).not.toContain('SUMMARY:Seven clean days');
+    expect(feed.text).not.toContain('SUMMARY:Mikvah night');
+    const s = await c.state();
+    const onot = s.upcoming.filter((u: any) => u.kind === 'onah').length;
+    expect(onot).toBeGreaterThan(0);
+    expect(feed.text.match(/BEGIN:VEVENT/g)!.length).toBe(3 + onot);
+    // with every kind switched on: every event, and the period's
+    await c.put('/api/app', appSettings({ calendar: { ...s.app.calendar, show: { apart: true, period: true, hefsek: true, cleanDays: true, mikvah: true } } }));
+    const all = (await new Client().get(new URL(link).pathname)).text;
+    expect(all.match(/BEGIN:VEVENT/g)!.length).toBe((await c.state()).upcoming.length + 2); // and the flow, which is past
+    expect(all).toContain('SUMMARY:Seven clean days: day 1 (projected)');
     // it follows the entries
     world.clock.now = at(11, 26, 16);
     await c.post('/api/entries', { kind: 'hefsek', when: 'now' });
@@ -1928,8 +1973,56 @@ describe('the calendar subscription link', () => {
     expect(feed).toContain('SUMMARY:H < 4:33 PM');
     expect(feed).not.toContain('DESCRIPTION');
     const titles = feed.split('\r\n').filter(l => l.startsWith('SUMMARY:')).map(l => l.slice(8));
-    expect(titles.length).toBeGreaterThan(8);
+    expect(titles).toContain('N');
+    expect(titles).toContain('•');
+    expect(titles.length).toBeGreaterThan(3);
     for (const title of titles) expect(title).not.toMatch(/[A-Za-z]{3,}/);
+  });
+
+  it('an account saved before the setting existed shows the defaults, with no migration', async () => {
+    const row = await testDb.db.prepare('SELECT id FROM households').first<{ id: string }>();
+    const old = JSON.parse(JSON.stringify((await loadHousehold(env, row!.id))!.data)) as Record<string, any>;
+    old.app.calendar = { name: 'Betaharah', style: 'words', historyDays: 400 };
+    expect(JSON.stringify(old)).not.toContain('"show"');
+    await testDb.db
+      .prepare('UPDATE households SET data = ? WHERE id = ?')
+      .bind(await encrypt(env.ENCRYPTION_KEY, JSON.stringify(old), `household:${row!.id}`), row!.id)
+      .run();
+    const data = (await loadHousehold(env, row!.id))!.data;
+    expect(data.app.calendar.show).toEqual({ apart: true, period: true, hefsek: true, cleanDays: false, mikvah: false });
+    expect((await c.state()).app.calendar.show).toEqual(data.app.calendar.show);
+    const link = (await c.post('/api/calendar-link')).json.state.calendar.link as string;
+    const feed = (await new Client().get(new URL(link).pathname)).text;
+    expect(feed).toContain('SUMMARY:Niddah');
+    expect(feed).not.toContain('SUMMARY:Seven clean days');
+    expect(feed).not.toContain('SUMMARY:Mikvah night');
+  });
+
+  it('shows only the kinds switched on in Settings; the month calendar keeps every event', async () => {
+    const link = (await c.post('/api/calendar-link')).json.state.calendar.link as string;
+    const summaries = async () =>
+      (await new Client().get(new URL(link).pathname)).text
+        .split('\r\n')
+        .filter(l => l.startsWith('SUMMARY:'))
+        .map(l => l.slice(8));
+    const before = await summaries();
+    expect(before.some(t => t.startsWith('Seven clean days'))).toBe(false);
+    const show = { apart: false, period: false, hefsek: false, cleanDays: true, mikvah: false };
+    const saved = await c.put('/api/app', appSettings({ calendar: { name: 'Betaharah', style: 'words', historyDays: 400, show } }));
+    expect(saved.status).toBe(200);
+    expect(saved.json.state.app.calendar.show).toEqual(show);
+    const after = await summaries();
+    expect(after).toHaveLength(7);
+    for (const t of after) expect(t).toMatch(/^Seven clean days: day \d \(projected\)$/);
+    // the app's own month calendar is not affected
+    const kinds = new Set(saved.json.state.grid.events.map((e: any) => e.kind));
+    expect([...kinds].sort()).toEqual(['clean_day', 'flow', 'hefsek', 'mikvah', 'onah']);
+    // each switch is checked as true or false
+    for (const bad of [{ ...show, mikvah: 'yes' }, { apart: true }, 'all']) {
+      const r = await c.put('/api/app', appSettings({ calendar: { name: 'Betaharah', style: 'words', historyDays: 400, show: bad } }));
+      expect(r.status).toBe(400);
+    }
+    expect((await c.state()).app.calendar.show).toEqual(show);
   });
 });
 

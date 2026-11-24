@@ -129,6 +129,21 @@ Titles never show the server's " (projected)": the page says "not recorded"
 A confirmation (with Undo) or a refusal is shown where the entry was recorded
 from: the status card, the chosen day, or the form.
 
+## Settings → Calendar
+
+`settings/calendar.js`, top to bottom: Google Calendar, the subscription link,
+"Shown in your calendar app", event titles and the calendar's name, then
+"More". "Shown in your calendar app" has five switches, saved in
+`app.calendar.show` (`PUT /api/app`): Days apart (`apart`: one all-day niddah
+event per period, from its first day through the evening of its mikvah
+night, and the onot), Period start (`period`), Hefsek taharah (`hefsek`),
+Seven clean days (`cleanDays`) and Mikvah night (`mikvah`). By default a
+calendar app shows only the days apart, the start of each period and the
+hefsek taharah; the other two are off. They apply to Google Calendar and the
+subscription feed only (`calendarAppEvents` in `src/engine/calendar.ts`); the
+month calendar on the Today tab, the reminders and the texts keep every event.
+The guided setup's calendar step has no such switches.
+
 ## Tokens (`:root` in `site.css`)
 
 Light values below; dark values are set under `prefers-color-scheme: dark`.

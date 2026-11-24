@@ -2,8 +2,7 @@
  * Wording for the dashboard. Sentences are English; halachic terms are
  * shown in English letters or in Hebrew script, as the household chooses.
  */
-import { eveningLabel, fullDate, onahLabel } from '../engine/calendar';
-import { absToCivil, dayOfWeek } from '../engine/civil';
+import { eveningLabel, fullDate, onahLabel, shortDate } from '../engine/calendar';
 import type { LogEntry, LogWarningCode } from '../engine/cycle';
 import type { PatternAlert } from '../engine/patterns';
 import { clock12 } from '../engine/present';
@@ -32,14 +31,7 @@ export function entryText(e: LogEntry, lang: TermLanguage): string {
   }
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-
-/** A date in running text: "Wed, Nov 25". */
-export function shortDate(abs: number): string {
-  const c = absToCivil(abs);
-  return `${DAYS[dayOfWeek(abs)]}, ${MONTHS[c.m - 1]} ${c.d}`;
-}
+export { shortDate };
 
 /** Where things stand: a headline, and one short line with the next date and its time. */
 export function statusLines(t: Timeline, timeZone: string, lang: TermLanguage): { headline: string; detail: string } {

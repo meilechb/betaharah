@@ -2,6 +2,7 @@
  * Settings that are not halachic choices: the location, the phones, the
  * reminders, how the calendar looks. Validated whenever they are saved.
  */
+import { DEFAULT_CALENDAR_SHOW, SHOWN_KINDS, type CalendarShow } from '../engine/calendar';
 import { civilToAbs, isValidTimeZone } from '../engine/civil';
 import { DEFAULT_REMINDER_OPTIONS, type ReminderKind, type ReminderOptions } from '../engine/present';
 import type { GeoPoint } from '../engine/sun';
@@ -45,6 +46,8 @@ export interface AppSettings {
     style: 'words' | 'discreet';
     /** How far back events are kept up to date in Google Calendar. */
     historyDays: number;
+    /** Which kinds of event the calendar app shows. The app's own month calendar shows all of them. */
+    show: CalendarShow;
   };
   reminders: ReminderOptions;
   /**
@@ -58,7 +61,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   place: null,
   useElevation: false,
   terms: 'en',
-  calendar: { name: 'Betaharah', style: 'words', historyDays: 400 },
+  calendar: { name: 'Betaharah', style: 'words', historyDays: 400, show: { ...DEFAULT_CALENDAR_SHOW } },
   reminders: DEFAULT_REMINDER_OPTIONS,
   boundaryMarginMinutes: 20,
 };
@@ -203,6 +206,15 @@ function calendarName(input: unknown): string {
   return name;
 }
 
+/** What the calendar app shows. Saved before this setting existed: the defaults. */
+function parseShow(input: unknown): CalendarShow {
+  if (input === undefined) return { ...DEFAULT_CALENDAR_SHOW };
+  const o = obj(input, 'calendar.show');
+  const show = {} as CalendarShow;
+  for (const kind of SHOWN_KINDS) show[kind] = bool(o[kind], `calendar.show.${kind}`);
+  return show;
+}
+
 export function parseAppSettings(input: unknown): AppSettings {
   const o = obj(input, 'settings');
   const calendar = obj(o.calendar, 'calendar');
@@ -214,6 +226,7 @@ export function parseAppSettings(input: unknown): AppSettings {
       name: calendarName(calendar.name),
       style: oneOf(calendar.style, 'calendar.style', ['words', 'discreet'] as const),
       historyDays: num(calendar.historyDays, 'calendar.historyDays', 30, 800, true),
+      show: parseShow(calendar.show),
     },
     reminders: parseReminders(o.reminders),
     boundaryMarginMinutes: num(o.boundaryMarginMinutes, 'boundaryMarginMinutes', 0, 120, true),

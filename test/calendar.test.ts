@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { toICalendar } from '../src/app/ics';
 import { entryText, noteText, patternText, statusLines, warningText } from '../src/app/wording';
-import { buildCalendar, civilDate, fullDate, onahLabel, reasonText, weekday, type CalendarOptions } from '../src/engine/calendar';
+import { planSync, toDesired } from '../src/app/sync';
+import {
+  buildCalendar,
+  calendarAppEvents,
+  civilDate,
+  DEFAULT_CALENDAR_SHOW,
+  fullDate,
+  hiddenKey,
+  onahLabel,
+  reasonText,
+  SHOWN_KINDS,
+  weekday,
+  type CalendarEvent,
+  type CalendarOptions,
+  type CalendarShow,
+  type ShownKind,
+} from '../src/engine/calendar';
 import { civilToAbs, localDateTime, localToInstant } from '../src/engine/civil';
 import type { LogEntry } from '../src/engine/cycle';
 import { choicesFor, DEFAULT_HALACHIC_SETTINGS, HALACHIC_CHOICES, tzeitPresetsFor } from '../src/engine/settings';
@@ -223,6 +239,155 @@ describe('calendar events', () => {
     // the second flow comes twelve days after the first with nothing recorded between them, so it begins the period the hefsek belongs to
     expect(events.find(e => e.key === 'mikvah:b')!.description).toContain('It falls on an onat perishah.');
     expect(events.find(e => e.kind === 'onah' && e.description.includes('It falls on the mikvah night.'))).toBeDefined();
+  });
+});
+
+describe('what a calendar app shows', () => {
+  const civil = (y: number, m: number, d: number) => civilToAbs({ y, m, d });
+  const lastDay = (e: CalendarEvent) => e.allDay!.endAbsExclusive - 1;
+  const ALL: CalendarShow = { apart: true, period: true, hefsek: true, cleanDays: true, mikvah: true };
+  const publish = (t: ReturnType<typeof timeline>, show: CalendarShow, opts = EN) => calendarAppEvents(t, buildCalendar(t, opts), show, opts);
+  // The owner's example: a period on Friday Oct 23, 2026 by day, the hefsek taharah on Wednesday Oct 28, in Lakewood.
+  const OCT23: LogEntry = { id: 'f', kind: 'flow', onah: { abs: civil(2026, 10, 23), part: 'day' }, veset: true };
+  const OCT28: LogEntry = { id: 'h', kind: 'hefsek', abs: civil(2026, 10, 28) };
+
+  it('by default: one event for the period, the flow, the hefsek and the onot; no clean days, no mikvah night', () => {
+    const t = timeline([OCT23, OCT28], at(2026, 10, 30, 12));
+    const events = publish(t, DEFAULT_CALENDAR_SHOW);
+    expect(new Set(events.map(e => e.kind))).toEqual(new Set(['apart', 'flow', 'hefsek', 'onah']));
+    const apart = events.filter(e => e.kind === 'apart');
+    expect(apart).toHaveLength(1);
+    const p = apart[0]!;
+    expect(p).toMatchObject({ key: 'apart:f', title: 'Niddah', projected: false });
+    expect(p.allDay!.startAbs).toBe(civil(2026, 10, 23));
+    // seven clean days Oct 29 to Nov 4; the mikvah night is the evening of Wednesday Nov 4
+    expect(lastDay(p)).toBe(civil(2026, 11, 4));
+    expect(p.description).toMatch(/^Until mikvah night: Wed, Nov 4, after \d:\d\d PM\.$/);
+    expect(events.find(e => e.kind === 'hefsek')!.title).toBe('Hefsek taharah ✓');
+    expect(events.find(e => e.kind === 'flow')!.title).toBe('Flow (day)');
+    expect(events.filter(e => e.kind === 'onah').length).toBeGreaterThan(0);
+    // the app's own list is unchanged and has no period event
+    expect(buildCalendar(t, EN).some(e => e.kind === 'apart')).toBe(false);
+  });
+
+  it('each switch adds or removes its own kinds only', () => {
+    const t = timeline([OCT23, OCT28], at(2026, 10, 30, 12), { orZarua: 'yes' });
+    const kindsOf: Record<ShownKind, string[]> = { apart: ['apart', 'onah'], period: ['flow'], hefsek: ['hefsek'], cleanDays: ['clean_day'], mikvah: ['mikvah'] };
+    const none: CalendarShow = { apart: false, period: false, hefsek: false, cleanDays: false, mikvah: false };
+    expect(publish(t, none)).toEqual([]);
+    for (const kind of SHOWN_KINDS) {
+      const events = publish(t, { ...none, [kind]: true });
+      expect([...new Set(events.map(e => e.kind))].sort(), kind).toEqual(kindsOf[kind]);
+    }
+    // the Or Zarua onot are among the days apart
+    expect(publish(t, { ...none, apart: true }).some(e => e.light)).toBe(true);
+    // everything on: every event of the app's own list, and the period's
+    expect(publish(t, ALL)).toHaveLength(buildCalendar(t, EN).length + 1);
+    expect(publish(t, ALL).filter(e => e.kind === 'clean_day')).toHaveLength(7);
+  });
+
+  it('a period that began at night begins on the date of that evening', () => {
+    const night: LogEntry = { id: 'f', kind: 'flow', onah: { abs: civil(2026, 10, 23), part: 'night' }, veset: true };
+    const t = timeline([night, OCT28], at(2026, 10, 30, 12));
+    const p = publish(t, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'apart')!;
+    expect(p.allDay!.startAbs).toBe(civil(2026, 10, 22));
+    // the flow event begins that evening too
+    const f = publish(t, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'flow')!;
+    expect(localDateTime(f.timed!.start, TZ)).toMatchObject({ m: 10, d: 22 });
+    expect(lastDay(p)).toBe(t.periods[0]!.planMikvah.eveningAbs);
+  });
+
+  it('with no hefsek yet, it runs to the mikvah night it would be, and moves as the days pass', () => {
+    const t1 = timeline([flow], at(2026, 11, 23, 10)); // flow Sunday Nov 22
+    const p1 = publish(t1, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'apart')!;
+    const plan = t1.periods[0]!;
+    expect(p1.allDay!.startAbs).toBe(SUN);
+    expect(lastDay(p1)).toBe(plan.planMikvah.eveningAbs);
+    expect(p1.projected).toBe(true);
+    expect(p1.description).toBe('Mikvah night would be Thu, Dec 3, if the hefsek taharah is done Thu, Nov 26.');
+    // two days after the first possible day, still no hefsek: two days later
+    const t2 = timeline([flow], at(2026, 11, 28, 10));
+    const p2 = publish(t2, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'apart')!;
+    expect(lastDay(p2)).toBe(lastDay(p1) + 2);
+    expect(p2.key).toBe(p1.key);
+    expect(p2.description).toBe('Mikvah night would be Sat, Dec 5, if the hefsek taharah is done Sat, Nov 28.');
+  });
+
+  it('a recorded immersion on a later night extends it to that night', () => {
+    const late: LogEntry[] = [flow, hefsek, { id: 'm', kind: 'mikvah', abs: SUN + 13 }]; // a night late: the evening of Dec 4
+    const t = timeline(late, at(2026, 12, 6, 10));
+    const p = publish(t, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'apart')!;
+    expect(t.periods[0]!.planMikvah.eveningAbs).toBe(civil(2026, 12, 3));
+    expect(lastDay(p)).toBe(civil(2026, 12, 4));
+    expect(p.description).toMatch(/^Until mikvah night: Fri, Dec 4, after \d:\d\d PM\.$/);
+  });
+
+  it('a period closed by the next one with no hefsek runs up to the day before the next began', () => {
+    const next: LogEntry = { id: 'g', kind: 'flow', onah: { abs: civil(2026, 12, 20), part: 'night' }, veset: true };
+    const t = timeline([flow, next], at(2026, 12, 21, 10));
+    const [first, second] = publish(t, DEFAULT_CALENDAR_SHOW).filter(e => e.kind === 'apart');
+    expect(first!.key).toBe('apart:f');
+    expect(first!.allDay!.startAbs).toBe(SUN);
+    expect(lastDay(first!)).toBe(civil(2026, 12, 18)); // the next began the evening of Dec 19
+    expect(first!.description).toBe('');
+    expect(second!.allDay!.startAbs).toBe(civil(2026, 12, 19));
+  });
+
+  it('both title styles and both forms of the terms', () => {
+    const t = timeline([OCT23, OCT28], at(2026, 10, 30, 12));
+    const he = publish(t, DEFAULT_CALENDAR_SHOW, HE).find(e => e.kind === 'apart')!;
+    expect(he.title).toBe('נדה');
+    expect(he.description).toMatch(/^Until ליל טבילה: Wed, Nov 4, after \d:\d\d PM\.$/);
+    const heProjected = publish(timeline([flow], at(2026, 11, 23, 10)), DEFAULT_CALENDAR_SHOW, HE).find(e => e.kind === 'apart')!;
+    expect(heProjected.description).toBe('ליל טבילה would be Thu, Dec 3, if the הפסק טהרה is done Thu, Nov 26.');
+    for (const lang of ['en', 'he'] as const) {
+      const discreet = publish(t, ALL, { style: 'discreet', lang, timeZone: TZ });
+      const p = discreet.find(e => e.kind === 'apart')!;
+      expect(p.title).toBe('N');
+      for (const e of discreet) expect(e.description).toBe('');
+    }
+  });
+
+  it('no description says "rav" or asks anything', () => {
+    const scenarios = [
+      timeline([flow], at(2026, 11, 23, 10)),
+      timeline([flow, hefsek], at(2026, 11, 27, 10)),
+      timeline([flow, hefsek, { id: 'm', kind: 'mikvah', abs: SUN + 13 }], at(2026, 12, 6, 10)),
+      timeline([flow, { id: 'g', kind: 'flow', onah: { abs: civil(2026, 12, 20), part: 'night' }, veset: true }], at(2026, 12, 21, 10), { orZarua: 'yes' }),
+    ];
+    for (const t of scenarios) {
+      for (const opts of [EN, HE]) {
+        for (const e of publish(t, ALL, opts)) {
+          expect(e.description).not.toMatch(/\brav\b|רב|\?/i);
+          expect(e.title + e.description).not.toMatch(/[{}]|undefined|NaN/);
+        }
+      }
+    }
+  });
+
+  it('knows the kind of an event the app wrote by its key', () => {
+    expect(hiddenKey('clean:f:1', DEFAULT_CALENDAR_SHOW)).toBe(true);
+    expect(hiddenKey('mikvah:f', DEFAULT_CALENDAR_SHOW)).toBe(true);
+    for (const key of ['apart:f', 'onah:123', 'flow:f', 'hefsek:f']) expect(hiddenKey(key, DEFAULT_CALENDAR_SHOW)).toBe(false);
+    expect(hiddenKey('onah:123', { ...DEFAULT_CALENDAR_SHOW, apart: false })).toBe(true);
+    expect(hiddenKey('something:else', { apart: false, period: false, hefsek: false, cleanDays: false, mikvah: false })).toBe(false);
+  });
+
+  it('a sync removes the events of a kind switched off, even at the far edge of the window', () => {
+    const t = timeline([flow, hefsek], at(2026, 11, 27, 10));
+    const all = publish(t, ALL).map(e => toDesired(e, TZ));
+    const existing = all.map((d, i) => ({ id: `e${i}`, endMs: d.endMs, props: { mk: '1', k: d.key, h: d.hash } }));
+    const shown = publish(t, DEFAULT_CALENDAR_SHOW).map(e => toDesired(e, TZ));
+    // a window that begins just before everything: every event is at its edge
+    const windowStart = Math.min(...all.map(d => d.endMs)) - 1;
+    const ops = planSync(shown, existing, windowStart, key => hiddenKey(key, DEFAULT_CALENDAR_SHOW));
+    expect(ops.every(o => o.op === 'delete')).toBe(true);
+    expect(ops.map(o => (o.op === 'delete' ? o.key : '')).sort()).toEqual(all.filter(d => hiddenKey(d.key, DEFAULT_CALENDAR_SHOW)).map(d => d.key).sort());
+    // switched on again: they are added once, beside the ones kept
+    const kept = existing.filter(e => !hiddenKey(e.props.k, DEFAULT_CALENDAR_SHOW));
+    const again = planSync(all, kept, windowStart, key => hiddenKey(key, ALL));
+    expect(again.filter(o => o.op === 'insert')).toHaveLength(all.length - kept.length);
+    expect(again.filter(o => o.op !== 'insert')).toEqual([]);
   });
 });
 

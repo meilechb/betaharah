@@ -27,6 +27,14 @@ export function civilDate(abs: number): string {
   return `${MONTHS[c.m - 1]} ${c.d}, ${c.y}`;
 }
 
+const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** A date in running text: "Wed, Nov 25". */
+export function shortDate(abs: number): string {
+  const c = absToCivil(abs);
+  return `${SHORT_WEEKDAYS[dayOfWeek(abs)]}, ${MONTHS[c.m - 1]} ${c.d}`;
+}
+
 /** "Thursday, 16 Kislev 5787 (Nov 26, 2026)" for the daytime of a Hebrew date. */
 export function fullDate(abs: number, lang: TermLanguage): string {
   return `${weekday(abs)}, ${hebrewDate(abs, lang)} (${civilDate(abs)})`;
@@ -86,7 +94,8 @@ export type CalendarStyle = 'words' | 'discreet';
 export interface CalendarEvent {
   /** Stable identity of the event, used to update rather than duplicate it. */
   key: string;
-  kind: 'flow' | 'onah' | 'hefsek' | 'clean_day' | 'mikvah';
+  /** 'apart' (a whole niddah period) is made only for calendar apps: see calendarAppEvents. */
+  kind: 'flow' | 'onah' | 'hefsek' | 'clean_day' | 'mikvah' | 'apart';
   title: string;
   description: string;
   /** Set for events with clock times (epoch ms). */
@@ -245,4 +254,93 @@ export function buildCalendar(t: Timeline, opts: CalendarOptions): CalendarEvent
     seen.add(e.key);
   }
   return events;
+}
+
+// ---------- what a calendar app shows ----------
+
+/** The kinds of event a household chooses to show in its calendar app. */
+export type ShownKind = 'apart' | 'period' | 'hefsek' | 'cleanDays' | 'mikvah';
+export type CalendarShow = Record<ShownKind, boolean>;
+
+export const SHOWN_KINDS: readonly ShownKind[] = ['apart', 'period', 'hefsek', 'cleanDays', 'mikvah'];
+
+/** By default only the days apart, the start of each period and the hefsek taharah. */
+export const DEFAULT_CALENDAR_SHOW: CalendarShow = { apart: true, period: true, hefsek: true, cleanDays: false, mikvah: false };
+
+const SHOWN_AS: Record<CalendarEvent['kind'], ShownKind> = {
+  apart: 'apart',
+  onah: 'apart',
+  flow: 'period',
+  hefsek: 'hefsek',
+  clean_day: 'cleanDays',
+  mikvah: 'mikvah',
+};
+
+const KEY_PREFIX: Record<string, CalendarEvent['kind']> = {
+  apart: 'apart',
+  onah: 'onah',
+  flow: 'flow',
+  hefsek: 'hefsek',
+  clean: 'clean_day',
+  mikvah: 'mikvah',
+};
+
+/** True for the key of an event of a kind that is switched off (an event the app wrote, by its stable key). */
+export function hiddenKey(key: string, show: CalendarShow): boolean {
+  const prefix = key.split(':', 1)[0] as string;
+  if (!Object.hasOwn(KEY_PREFIX, prefix)) return false;
+  return !show[SHOWN_AS[KEY_PREFIX[prefix] as CalendarEvent['kind']]];
+}
+
+/**
+ * One event for each niddah period, all day, from the civil date on which
+ * it began (a period that began at night: the date of that evening) through
+ * the civil date of the evening of its mikvah night: the recorded
+ * immersion's, or the one worked out (while no hefsek is recorded, if it is
+ * done on the first day it can be). A period the next one closed with no
+ * hefsek recorded runs up to the day before the next began.
+ */
+export function apartEvents(t: Timeline, opts: CalendarOptions): CalendarEvent[] {
+  const { lang, timeZone: tz } = opts;
+  const discreet = opts.style === 'discreet';
+  const civilStart = (p: PeriodView): number => (p.start.part === 'night' ? p.start.abs - 1 : p.start.abs);
+  return t.periods.map((p, i) => {
+    const startAbs = civilStart(p);
+    const next = t.periods[i + 1];
+    const mikvah = p.doneMikvah ?? p.planMikvah;
+    let lastAbs: number;
+    let description = '';
+    if (p.closedByNextPeriod && p.hefsekAbs === null && p.doneMikvah === null && next) {
+      lastAbs = civilStart(next) - 1;
+    } else {
+      lastAbs = mikvah.eveningAbs;
+      if (next) lastAbs = Math.min(lastAbs, civilStart(next) - 1);
+      const after = clock12(mikvah.tzeit, tz, 'ceil');
+      description =
+        p.hefsekAbs !== null || p.doneMikvah !== null
+          ? fill(`Until {mikvah_night}: ${shortDate(mikvah.eveningAbs)}, after ${after}.`, lang)
+          : capital(fill(`{mikvah_night} would be ${shortDate(mikvah.eveningAbs)}, if the {hefsek} is done ${shortDate(p.planHefsekAbs)}.`, lang));
+    }
+    lastAbs = Math.max(lastAbs, startAbs);
+    return {
+      key: `apart:${p.startId}`,
+      kind: 'apart',
+      title: discreet ? 'N' : capital(term('niddah', lang)),
+      description: discreet ? '' : description,
+      allDay: { startAbs, endAbsExclusive: lastAbs + 1 },
+      projected: p.projected && p.doneMikvah === null && !p.closedByNextPeriod,
+    };
+  });
+}
+
+/**
+ * The events a calendar app is given (Google Calendar and the subscription
+ * feed alike): the events of the kinds that are switched on, with one event
+ * for each niddah period when the days apart are. The app's own month
+ * calendar, the reminders and the texts use every event of `events`.
+ */
+export function calendarAppEvents(t: Timeline, events: readonly CalendarEvent[], show: CalendarShow, opts: CalendarOptions): CalendarEvent[] {
+  const out = show.apart ? apartEvents(t, opts) : [];
+  for (const e of events) if (show[SHOWN_AS[e.kind]]) out.push(e);
+  return out;
 }
