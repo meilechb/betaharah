@@ -7,7 +7,7 @@
  */
 import { button, card, h, icon, stepper } from './lib.js';
 import { S, currentTab, go, render } from './store.js';
-import { STEPS, currentStep, finish, flow, isDone, leave, next, screen, termsSwitch } from './setup/flow.js';
+import { STEPS, currentStep, finish, flow, isDone, leave, next, screen, signedInWith, termsSwitch } from './setup/flow.js';
 import { placeView } from './setup/place.js';
 import { customsView } from './setup/customs.js';
 import { datesView } from './setup/dates.js';
@@ -52,7 +52,11 @@ function welcomeView() {
       'Betaharah keeps your calendar of family purity: from the dates you record, it works out what comes next, and it can remind you by text message.',
       'The next few minutes cover where you live, your customs, and your most recent dates; then, if you like, your calendar app and text reminders.',
     ],
-    body: [h('p', { class: 'muted small' }, 'Each answer is saved as soon as you give it. You can stop at any point and continue later from where you left off.'), termsSwitch()],
+    body: [
+      h('p', { class: 'setup-account small' }, icon('user', { size: 'sm' }), h('span', {}, signedInWith())),
+      h('p', { class: 'muted small' }, 'Each answer is saved as soon as you give it. You can stop at any point and continue later from where you left off.'),
+      termsSwitch(),
+    ],
     back: null,
     main: { label: 'Start', onclick: next, id: 'setup-start' },
   });

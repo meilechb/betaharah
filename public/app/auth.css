@@ -150,7 +150,90 @@ details.auth-help li + li {
   margin-top: 0.1em;
 }
 
+/* the consent wording under the phone field: small and quiet */
+.sms-consent {
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+}
+.sms-consent a {
+  color: inherit;
+}
+
+/* "or", between the phone form and "Continue with Google" */
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.auth-or::before,
+.auth-or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+/*
+ * "Continue with Google", drawn as Google's sign-in branding asks: the
+ * standard "G" (google-g.svg, a local file), 12 / 10 / 12 padding around the
+ * logo and text, and Google's own colours for light and dark pages. These
+ * colours are Google's, not the site's tokens, and must not be changed.
+ */
+.google-button {
+  --g-fill: #ffffff;
+  --g-stroke: #747775;
+  --g-text: #1f1f1f;
+  --g-hover: #f2f2f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 12px;
+  border: 1px solid var(--g-stroke);
+  border-radius: var(--radius-md);
+  background: var(--g-fill);
+  color: var(--g-text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  line-height: 20px;
+  text-decoration: none;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.google-button:hover {
+  background: var(--g-hover);
+  color: var(--g-text);
+}
+.google-g {
+  display: inline-flex;
+  flex: none;
+  margin-right: 10px;
+}
+.google-g img {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+@media (prefers-color-scheme: dark) {
+  .google-button {
+    --g-fill: #131314;
+    --g-stroke: #8e918f;
+    --g-text: #e3e3e3;
+    --g-hover: #1f1f20;
+  }
+}
+
 /* ===================== the guided setup ===================== */
+
+/* "Signed in with ...", on the welcome screen */
+.setup-account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
 
 .setup-top {
   align-items: center;

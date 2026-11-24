@@ -8,7 +8,7 @@
  * browser only (no answers, just the step names), so that coming back resumes
  * at the first step that is neither done nor passed.
  */
-import { api, button, confirmDialog, h, segmented, toast } from '../lib.js';
+import { api, button, confirmDialog, h, pretty, segmented, toast } from '../lib.js';
 import { S, adopt, go, render, run, saved } from '../store.js';
 
 export const STEPS = [
@@ -40,8 +40,35 @@ export function onEnter(key, fn) {
   enterHooks[key] = fn;
 }
 
-/** A short, non-identifying key for this account in this browser. */
-const who = () => String((S && S.account && S.account.number) || '').slice(-4);
+/** True for an account signed in with Google that has no phone of its own in this session. */
+export const viaGoogle = () => Boolean(S && S.account && !S.account.number);
+
+/** "Signed in with (732) 555-0123", or "Signed in with Google (ada@example.com)". */
+export function signedInWith() {
+  const acc = (S && S.account) || {};
+  if (acc.number) return 'Signed in with ' + pretty(acc.number);
+  return 'Signed in with Google' + (acc.googleEmail ? ' (' + acc.googleEmail + ')' : '');
+}
+
+/**
+ * The phone the reminders step is about: the one signed in with, or, for an
+ * account signed in with Google, the first phone on it that proved its number.
+ */
+export function ownPhone() {
+  if (!S) return null;
+  const me = S.phones.find(p => p.me);
+  if (me) return me;
+  return viaGoogle() ? S.phones.find(p => p.verified) || null : null;
+}
+
+/** A short, non-identifying key for this account in this browser: the number's last 4 digits, or a 4-character digest of the Google address. */
+function who() {
+  const acc = (S && S.account) || {};
+  if (acc.number) return String(acc.number).slice(-4);
+  let n = 0;
+  for (const c of String(acc.googleEmail || '')) n = (n * 31 + c.charCodeAt(0)) % 65536;
+  return 'g' + n.toString(16).padStart(4, '0');
+}
 
 function loadPassed() {
   if (flow.loadedFor === who()) return;
@@ -78,7 +105,7 @@ export function isDone(key) {
     case 'calendar':
       return S.calendar.google.connected || Boolean(S.calendar.link);
     case 'phones':
-      return S.phones.length > 1 || S.phones.some(p => p.me && p.texts);
+      return S.phones.length > 1 || Boolean(ownPhone() && ownPhone().texts);
     default:
       return false;
   }

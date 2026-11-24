@@ -7,6 +7,9 @@
  * and "setup"), and a one-time sign-in link texted by the site (?k=).
  * The server answers "code sent" in the same way whether or not a number may
  * sign in, so the wording here never claims that a code was sent.
+ * When the operator has saved the Google keys (P.google), "Continue with
+ * Google" is offered as a second way in; the server sends the person back to
+ * /app/ signed in, or to /app/?google_error=<message>.
  */
 import { alert, api, button, checkRow, h, icon, mount, pageLoading, pretty, setFieldError, textField } from './lib.js';
 import { P, restart } from './store.js';
@@ -28,6 +31,7 @@ const fresh = () => ({
   linkTried: false,
   linkProblem: '',
   message: '', // a note about the whole page ("Please sign in again.")
+  googleError: '', // why signing in with Google did not work (?google_error=)
   errors: {}, // field id -> message
   status: '', // a polite note under the resend button
   busy: false,
@@ -41,6 +45,22 @@ let ticker = null;
 /** A message shown above the form the next time it is drawn (e.g. "Please sign in again."). */
 export function setAuthMessage(message) {
   auth.message = message;
+}
+
+/**
+ * The consent wording under every phone-number field from which a code is texted.
+ * This sentence was filed with the phone carrier's review: do not reword it.
+ */
+export function smsConsent() {
+  return h(
+    'span',
+    { class: 'sms-consent' },
+    'Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. ',
+    h('a', { href: '/privacy' }, 'Privacy'),
+    ' and ',
+    h('a', { href: '/terms' }, 'Terms'),
+    '.',
+  );
 }
 
 /** Takes one parameter out of the address without reloading. */
@@ -86,6 +106,9 @@ export async function showSignIn(params) {
       auth.inviteProblem = e && e.status === 404 ? 'This invitation link is not valid any more: it was used already or it has expired. Ask the person who sent it for a new one.' : messageOf(e);
     }
   }
+  const googleError = params.get('google_error');
+  if (googleError) auth.googleError = googleError;
+  dropParam('google_error');
   if (!P.sms && auth.inviteKind !== 'setup') auth.mode = 'password';
   renderAuth();
 }
@@ -96,6 +119,25 @@ function legal() {
 
 function submit(label, busy) {
   return h('div', { class: 'actions' }, button({ label, variant: 'primary', type: 'submit', block: true, busy, size: 'lg' }));
+}
+
+/**
+ * "Continue with Google", after an "or" divider. Only when the site offers it (P.google).
+ * Follows Google's sign-in branding: the standard "G" from a local file, the
+ * fixed light and dark colours, and the label "Continue with Google".
+ */
+function googleChoice(invite) {
+  if (!P.google) return null;
+  const href = '/api/auth/google/start' + (invite ? '?invite=' + encodeURIComponent(invite) : '');
+  return [
+    h('p', { class: 'auth-or', 'aria-hidden': 'true' }, h('span', {}, 'or')),
+    h(
+      'a',
+      { class: 'google-button', href, id: 'google-start' },
+      h('span', { class: 'google-g' }, h('img', { src: '/app/google-g.svg', alt: '', width: '18', height: '18' })),
+      h('span', { class: 'google-label' }, 'Continue with Google'),
+    ),
+  ];
 }
 
 function linkRow(label, onclick) {
@@ -123,6 +165,8 @@ export function renderAuth() {
   ticker = null;
   const a = auth;
   const set = patch => {
+    // Anything that clears the page's note also clears an earlier Google error.
+    if ('message' in patch) patch = { googleError: '', ...patch };
     Object.assign(a, patch);
     renderAuth();
   };
@@ -156,10 +200,11 @@ export function renderAuth() {
     if (wrap) setFieldError(wrap, '');
   };
 
-  const numberField = () =>
+  const numberField = texted =>
     phoneField({
       id: 'number',
       label: 'Your mobile number',
+      help: texted ? smsConsent() : null,
       value: a.number,
       error: err('number'),
       onvalue: v => {
@@ -183,6 +228,7 @@ export function renderAuth() {
   // Notes about the whole page, one sentence each.
   const notes = [];
   if (a.message) notes.push(alert({ kind: 'info' }, a.message));
+  if (a.googleError) notes.push(alert({ kind: 'bad', role: 'alert', title: 'Signing in with Google did not work' }, a.googleError));
   if (a.linkProblem) notes.push(alert({ kind: 'bad', role: 'alert' }, a.linkProblem));
   if (a.inviteProblem) notes.push(alert({ kind: 'bad', role: 'alert' }, a.inviteProblem));
   if (!a.invite && P.signup === 'invite') notes.push(alert({ kind: 'info' }, 'New accounts are by invitation only. If you already have an account, sign in here.'));
@@ -275,9 +321,14 @@ export function renderAuth() {
       h('h2', {}, 'Sign in with a password'),
       notes,
       signupInviteWithoutTexts
-        ? alert({ kind: 'info' }, 'This invitation is used with a code sent by text message, which this site cannot send yet; open the link again later.')
+        ? alert(
+            { kind: 'info' },
+            P.google
+              ? 'This invitation is used with a code sent by text message, which this site cannot send yet. Continue with Google below, or open the link again later.'
+              : 'This invitation is used with a code sent by text message, which this site cannot send yet; open the link again later.',
+          )
         : !P.sms
-          ? alert({ kind: 'info' }, 'Sign-in by text message is not available yet, so sign in with your password.')
+          ? alert({ kind: 'info' }, P.google ? 'Sign-in by text message is not available yet. Sign in with your password, or continue with Google.' : 'Sign-in by text message is not available yet, so sign in with your password.')
           : null,
       numberField(),
       textField({
@@ -296,6 +347,7 @@ export function renderAuth() {
       }),
       passwordToggle(),
       submit('Sign in', a.busy),
+      googleChoice(a.inviteKind === 'signup' ? a.invite : null),
       P.sms ? linkRow('Sign in with a texted code instead', () => set({ mode: 'code', step: 'number', errors: {}, message: '', focus: 'number' })) : null,
       P.sms ? h('p', { class: 'muted small' }, 'A password is optional. Without one, sign in with a code texted to your phone.') : null,
       legal(),
@@ -322,9 +374,9 @@ export function renderAuth() {
           ? 'You were invited to Betaharah. Enter your mobile number, and we text you a 6-digit code to open your account.'
           : 'Enter your mobile number. We text you a 6-digit code. That is all it takes, the first time and every time.',
       ),
-      numberField(),
+      numberField(true),
       submit('Text me a code', a.busy),
-      h('p', { class: 'consent muted small' }, 'By asking for a code you agree to receive it by text message at this number. Message and data rates may apply. Reminders are sent only if you turn them on later.'),
+      googleChoice(signup ? a.invite : null),
       linkRow('Sign in with a password instead', () => set({ mode: 'password', errors: {}, message: '', focus: 'number' })),
       legal(),
     );

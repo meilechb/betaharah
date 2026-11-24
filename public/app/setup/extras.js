@@ -4,8 +4,9 @@
  */
 import { alert, api, button, checkRow, copyField, h, icon, linkButton, pretty, withBusy } from '../lib.js';
 import { P, S, adopt, render, t } from '../store.js';
-import { back, finish, flow, goTo, next, onEnter, problem, screen } from './flow.js';
+import { back, finish, flow, goTo, next, onEnter, ownPhone, problem, screen, viaGoogle } from './flow.js';
 import { codeField, phoneField, readNumber } from './phone.js';
+import { smsConsent } from '../auth.js';
 
 /**
  * The text commands as a table, from S.sms.commandList. They are what is
@@ -106,6 +107,7 @@ export function calendarView() {
 const idle = () => ({ step: 'idle', number: '', sentTo: '', code: '', error: '', demoCode: '' });
 let part = 'reminders'; // 'reminders' | 'spouse'
 let mine = idle(); // confirming this phone's own number
+let own = idle(); // adding a phone to an account signed in with Google
 let spouse = idle(); // adding the spouse's phone
 let picks = null; // the reminders chosen for this phone
 let remError = '';
@@ -113,12 +115,16 @@ let remError = '';
 onEnter('phones', direction => {
   part = direction === 'back' ? 'spouse' : 'reminders';
   mine = idle();
+  own = idle();
   spouse = idle();
   picks = null;
   remError = '';
 });
 
-const me = () => S.phones.find(p => p.me) || null;
+const me = ownPhone;
+
+/** Where the focus goes when something about a phone number needs correcting. */
+const numberFocus = state => (state === spouse ? 'sp-number' : state === own ? 'sp-own-number' : 'sp-mine-send');
 
 /** Asks for a code to be texted to a number (POST /api/phones/code), then shows the code field. */
 function sendCode(state, number, btn, focusId) {
@@ -131,7 +137,7 @@ function sendCode(state, number, btn, focusId) {
     },
     err => {
       state.error = problem(err);
-      flow.focus = state === spouse ? 'sp-number' : 'sp-mine-send';
+      flow.focus = numberFocus(state);
       render();
     },
   );
@@ -189,9 +195,60 @@ function codeForm(state, idPrefix, onDone) {
       'div',
       { class: 'actions' },
       button({ label: 'Confirm the code', variant: 'primary', type: 'submit', attrs: { id: idPrefix + '-confirm' } }),
-      button({ label: 'Use a different number', onclick: () => (Object.assign(state, idle(), { number: state === spouse ? state.number : '' }), (flow.focus = state === spouse ? 'sp-number' : 'sp-mine-send'), render()) }),
+      button({ label: 'Use a different number', onclick: () => (Object.assign(state, idle(), { number: state === mine ? '' : state.number }), (flow.focus = numberFocus(state)), render()) }),
     ),
   );
+}
+
+/** A form for a mobile number that a code is then texted to, with the consent wording under the field. */
+function numberForm(state, ids, label) {
+  return h(
+    'form',
+    {
+      novalidate: true,
+      onsubmit: e => {
+        e.preventDefault();
+        const read = readNumber(state.number, P && P.prefixes);
+        if (read.error) {
+          state.error = read.error;
+          flow.focus = ids.number;
+          render();
+          return;
+        }
+        sendCode(state, read.number, e.submitter || document.getElementById(ids.send), ids.code);
+      },
+    },
+    phoneField({
+      id: ids.number,
+      label,
+      autocomplete: state === own ? 'tel' : 'off',
+      value: state.number,
+      error: state.error,
+      help: smsConsent(),
+      onvalue: v => (state.number = v),
+    }),
+    h('div', { class: 'actions' }, button({ label: 'Text a code to it', type: 'submit', icon: 'message', variant: 'primary', attrs: { id: ids.send } })),
+  );
+}
+
+/** For an account signed in with Google that has no phone yet: adding one is optional. */
+function addOwnPhoneView(toSpouse) {
+  return screen({
+    count: 'Phones, part 1 of 2',
+    title: 'Your phone',
+    intro: 'Optional. Add your mobile number to get reminders by text and to record by text. A code is texted to it to confirm that it is yours.',
+    body: [
+      own.step === 'code'
+        ? codeForm(own, 'sp-own', () => {
+            own = idle();
+            flow.focus = 'setup-title';
+            render();
+          })
+        : numberForm(own, { number: 'sp-own-number', send: 'sp-own-send', code: 'sp-own-code' }, 'Your mobile number'),
+    ],
+    back,
+    skip: { label: 'Not now', onclick: toSpouse },
+  });
 }
 
 function turnOnReminders(e) {
@@ -223,6 +280,7 @@ function remindersView() {
     part = 'spouse';
     render();
   };
+  if (sms.ready && !p && viaGoogle()) return addOwnPhoneView(toSpouse);
   if (!sms.ready || !p) {
     return screen({
       count: 'Phones, part 1 of 2',
@@ -237,7 +295,7 @@ function remindersView() {
       count: 'Phones, part 1 of 2',
       title: 'Text reminders',
       body: [
-        h('div', { id: 'sp-on', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Text reminders are on for this phone, ' + pretty(p.number) + '. Which reminders it receives can be changed in Settings.')),
+        h('div', { id: 'sp-on', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Text reminders are on for ' + (p.me ? 'this phone, ' : '') + pretty(p.number) + '. Which reminders it receives can be changed in Settings.')),
         p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP, so nothing is sent to it. Text START from it to receive texts again.') : null,
       ],
       back,
@@ -274,7 +332,7 @@ function remindersView() {
   if (!picks) picks = [...p.reminders];
   return screen({
     count: 'Phones, part 1 of 2',
-    title: 'Text reminders to this phone',
+    title: p.me ? 'Text reminders to this phone' : 'Text reminders to your phone',
     intro: t('Reminders before the {hefsek}, for the {bedikot}, on the {mikvah_night} and before each {onat_perishah}, sent to ') + pretty(p.number) + '.',
     body: [
       h('p', { class: 'help consent' }, 'By saving, the owner of this phone agrees to receive the reminders chosen below by text message from Betaharah. Message frequency varies. Message and data rates may apply. Reply STOP to stop, HELP for help.'),
@@ -307,7 +365,8 @@ function remindersView() {
 
 function spouseView() {
   const sms = S.sms;
-  const others = S.phones.filter(p => !p.me);
+  const mineNow = ownPhone();
+  const others = S.phones.filter(p => p !== mineNow);
   const backToReminders = () => {
     part = 'reminders';
     render();
@@ -335,32 +394,7 @@ function spouseView() {
       render();
     });
   } else {
-    body = h(
-      'form',
-      {
-        novalidate: true,
-        onsubmit: e => {
-          e.preventDefault();
-          const read = readNumber(spouse.number, P && P.prefixes);
-          if (read.error) {
-            spouse.error = read.error;
-            flow.focus = 'sp-number';
-            render();
-            return;
-          }
-          sendCode(spouse, read.number, e.submitter || document.getElementById('sp-send'), 'sp-code');
-        },
-      },
-      phoneField({
-        id: 'sp-number',
-        label: 'Mobile number to add',
-        autocomplete: 'off',
-        value: spouse.number,
-        error: spouse.error,
-        onvalue: v => (spouse.number = v),
-      }),
-      h('div', { class: 'actions' }, button({ label: 'Text a code to it', type: 'submit', icon: 'message', variant: 'primary', attrs: { id: 'sp-send' } })),
-    );
+    body = numberForm(spouse, { number: 'sp-number', send: 'sp-send', code: 'sp-code' }, 'Mobile number to add');
   }
   return screen({
     ...head,
@@ -393,6 +427,7 @@ export function doneView() {
       'div',
       { class: 'setup-texting' },
       h('h3', {}, icon('message'), 'Recording by text message'),
+      viaGoogle() && !S.phones.length ? h('p', { class: 'muted' }, 'Texts are accepted from a phone on this account. Add your phone in Settings to record by text.') : null,
       h('p', {}, 'Text one of these to ', h('strong', { class: 'nowrap' }, pretty(sms.number)), ':'),
       commandsTable(sms),
     );
