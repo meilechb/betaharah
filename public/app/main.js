@@ -107,7 +107,8 @@ async function go(id) {
   }
   if (!(await mayLeave())) return;
   tab = id;
-  history.replaceState(null, '', '#' + id);
+  // Each tab is a step in the browser's history, so that Back returns to the tab before.
+  history.pushState(null, '', '#' + id);
   render();
   window.scrollTo(0, 0);
   const el = document.getElementById('tab-' + id);
@@ -184,7 +185,7 @@ configureApi({
 });
 
 window.addEventListener('hashchange', async () => {
-  const next = location.hash.slice(1);
+  const next = location.hash.slice(1) || 'today';
   if (!S || !TAB_IDS.includes(next) || next === tab) return;
   if (!(await mayLeave())) {
     history.replaceState(null, '', '#' + tab);

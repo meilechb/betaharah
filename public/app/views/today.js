@@ -52,7 +52,8 @@ function watchRecordCard() {
   if (typeof IntersectionObserver === 'undefined') return;
   recordObserver = new IntersectionObserver(entries => {
     const jump = document.getElementById('record-jump');
-    if (jump) jump.classList.toggle('hidden-by-card', entries.some(x => x.isIntersecting));
+    // Shown only while the record card is still further down the page; hidden once it is on screen or passed.
+    if (jump) jump.classList.toggle('hidden-by-card', entries.some(x => x.isIntersecting || x.boundingClientRect.top < 0));
   });
   setTimeout(() => {
     const el = document.getElementById('record-card');
