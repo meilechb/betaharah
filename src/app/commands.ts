@@ -114,7 +114,7 @@ export function parseCommand(text: string): ParsedCommand {
 }
 
 export const HELP_TEXT =
-  '1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 you may add: day, night, yesterday day, or a time (9pm).';
+  '1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm).';
 
 export interface ResolveContext {
   now: number;

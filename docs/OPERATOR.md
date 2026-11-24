@@ -19,8 +19,11 @@ It shows totals, never any account's data. There you:
 
 1. **Set the contact** shown on the Help, Privacy and Terms pages (a name,
    and an email address if you want one public).
-2. **Choose who may sign up**: anyone, by invitation, or nobody.
-3. **Enter the keys** for Telnyx and, optionally, Google.
+2. **Choose who may sign up**: anyone, by invitation, or nobody; and
+   whether people may sign up by texting JOIN to the number ("sign-up by
+   text", on by default).
+3. **Enter the keys** for Telnyx and, optionally, Google, and later the
+   RCS agent (see "RCS" below).
 4. **Make invitations.**
 5. **Delete an account** if someone asks and cannot do it themselves.
 6. **Open the test account** (see below).
@@ -42,9 +45,10 @@ text.
 - No text is ever sent for it. Replies, reminders, the "reminders are on"
   text, test texts and the codes for adding a phone are recorded in its
   Log as "simulated" instead. Nothing is counted against the site's limits.
-- The dashboard has a box for sending a text from the test phone. It is
-  answered exactly as a real text would be (commands, STOP, START, HELP),
-  and the reply is shown on the page.
+- The dashboard has a box for sending a text from the test phone. It goes
+  through the same conversation as a real text (every word in
+  [TEXTING.md](TEXTING.md), STOP, START, HELP), and every text that would
+  have been sent is shown on the page, with its RCS buttons.
 - A phone added to it must have a number from 555-0100 to 555-0199. The code
   is shown on the page instead of being texted.
 - Its reminders are "sent" by the periodic job at their times, and appear in
@@ -56,7 +60,20 @@ text.
   any other while it exists.
 
 The site never texts a number from 555-0100 to 555-0199: sign-in codes,
-one-number invitations and the console's test text refuse them.
+one-number invitations and the console's test text refuse them, and a text
+received from one is never answered.
+
+### Trying sign-up by text before the number is approved
+
+The server has a simulator (`simulateText` in `src/app/conversation.ts`)
+that runs a text "from" a made-up number (555-0100 to 555-0199) through
+the whole real path: the sign-up rules, JOIN, setup, every word, ADD and
+JOIN with a code, WEB, DELETE ACCOUNT. Nothing is sent; the texts that
+would have gone back are shown instead; the accounts it makes are test
+accounts, which are never texted and cost nothing; and it moves none of
+the site's counters. (It is reached from the console once the console has
+a page for it.) An account made in it stays until you text DELETE ACCOUNT
+and YES from the same made-up number, or delete it from the account list.
 
 ## Before text messaging works
 
@@ -86,6 +103,7 @@ site can send is 3,000 texts a month.
    profile's opt-out settings at their defaults (do not add custom
    auto-responses: on toll-free numbers the carrier answers STOP and START
    itself, and the site answers HELP).
+   Note the profile's **Messaging Profile ID**: RCS needs it later.
 3. Set the profile's **inbound webhook URL** to the address the console
    shows (`https://betaharah.com/webhooks/telnyx`).
 4. Submit the **toll-free verification** for the number. US carriers do not
@@ -94,6 +112,53 @@ site can send is 3,000 texts a month.
 5. In the console, paste the **API key**, the **public key** (Telnyx portal
    → Keys & Credentials → Public Key) and the **number**. Use "Send a test
    text".
+
+Once this works, people can sign up by texting JOIN to the number (unless
+you switch "sign-up by text" off, or close sign-up). What they receive is
+in [TEXTING.md](TEXTING.md). While sign-up is by invitation, they text
+JOIN and an invitation word that you make (a word of 6 to 24 letters and
+digits, any case; `createInvitationWord` in `src/app/store.ts`, reached
+from the console once it has a field for it).
+
+## RCS (when the agent is approved)
+
+RCS shows the same texts with tap-to-reply buttons, from a verified
+sender. Every RCS text carries an SMS fallback with the same words, so a
+phone without RCS still gets an ordinary text, and every text says in
+words what to send, so nothing depends on the buttons. Sign-in codes and
+sign-in links always go as plain SMS.
+
+1. In the Telnyx portal, when the RCS agent is approved (or in its testing
+   stage, for test devices), link the agent to the **same Messaging
+   Profile** the number is on.
+2. Set the **RCS agent's inbound webhook** to the same address as the
+   number's: `https://betaharah.com/webhooks/telnyx` (the console shows
+   it). Telnyx sends received RCS messages to the address on the agent,
+   not the one on the profile; the site reads both kinds there and checks
+   the signature the same way.
+3. In the console, enter the **RCS agent id** (`rcsAgentId`) and the
+   **Messaging Profile ID** (`telnyxMessagingProfileId`), then switch
+   **RCS** on (`rcsEnabled`). It takes effect only while text messages are
+   set up and switched on.
+4. Text the number from an RCS phone and check that the buttons appear,
+   and from a phone without RCS (or an iPhone with RCS off) that an
+   ordinary text arrives.
+
+To stop using RCS, switch it off: everything goes by SMS again at once.
+RCS messages to the agent are still answered (by SMS) while its id is
+saved. Each RCS message is billed by Telnyx per message, like an SMS;
+check Telnyx's RCS pricing, and whether a message delivered by its SMS
+fallback is billed once or twice, before switching it on.
+
+Things to confirm with Telnyx before switching RCS on (their RCS
+documentation does not say): whether STOP sent by RCS blocks further RCS
+and SMS sends to that phone, as on toll-free SMS (the site itself stops
+texting a phone that sends STOP either way); the most suggested replies
+per message and the longest label (the site uses at most 4, of at most 20
+characters); the error code when an RCS send is refused because the phone
+opted out (the site treats 40300 as that, as for SMS); and whether the
+fallback is used only when the phone has no RCS, or also when an RCS
+delivery fails.
 
 ### Suggested answers for the toll-free verification form
 
@@ -104,17 +169,21 @@ proprietor"). Choose the closest option where the form has a list.
 |---|---|
 | Website | `https://betaharah.com` |
 | Use case | Account notifications (with two-factor sign-in codes) |
-| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign in with their mobile number and a one-time code sent by SMS. Users may text single-digit commands to record a calendar date and receive a confirmation reply. Users who turn on reminders in their account settings receive reminders about dates in their own calendar. No marketing or promotional messages are sent. |
+| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign up either by texting the keyword JOIN to the number, or on the website with their mobile number and a one-time code sent by SMS. Users text short commands to record calendar dates, set up and manage their account, and receive a reply to each text. Users who turn on reminders (by texting REMINDERS ON, or in their account settings) receive reminders about dates in their own calendar. Nothing is ever sent to a number that has not texted the service or entered itself on the website. No marketing or promotional messages are sent. |
 | Monthly volume | The lowest option offered |
-| How users opt in | (1) Sign-in codes: the user enters their own mobile number on https://betaharah.com/app/ and presses "Text me a code"; the page states that a code will be sent by text and that message and data rates may apply. (2) Reminders: off by default. A signed-in user turns on "Send text reminders to this phone" under Settings for a phone whose number was verified by code; the page shows the consent wording (program name, message frequency varies, message and data rates may apply, reply STOP to stop, HELP for help) before saving. A confirmation text is then sent. Consent is not a condition of any purchase; the service is free. |
+| How users opt in | (1) By text: the user texts the keyword JOIN to the number (the number and the keyword are published on https://betaharah.com/help). Any first text from a new number gets one reply describing the program, with message frequency, rates, STOP and HELP, and the terms link (sample message 4); JOIN then creates the account and the reply starts setup (sample message 5). A second phone joins an account only by texting JOIN and a code from its own phone. (2) Sign-in codes on the website: the user enters their own mobile number on https://betaharah.com/app/ and presses "Text me a code"; the page states that a code will be sent by text and that message and data rates may apply. (3) Reminders: off by default, also after JOIN. The user texts REMINDERS ON, and the reply confirms the consent with the full wording (sample message 6); or a signed-in user turns on "Send text reminders to this phone" under Settings for a phone whose number was verified, where the page shows the consent wording before saving, and a confirmation text is then sent. Consent is not a condition of any purchase; the service is free. |
 | Opt-in screenshots | `https://betaharah.com/sms-opt-in-1.png` (sign-in) and `https://betaharah.com/sms-opt-in-2.png` (reminders) |
 | Privacy policy | `https://betaharah.com/privacy` |
 | Terms | `https://betaharah.com/terms` |
 | Sample message 1 | `Betaharah code: 123456. It expires in 10 minutes. Do not share it.` |
 | Sample message 2 | `Betaharah: reminders are on for this number. Text ? for the list of commands. Msg&data rates may apply. Reply STOP to stop, HELP for help.` |
 | Sample message 3 | `Mikvah night: Thu Dec 3, after 5:16 PM. Reply 4 after immersing.` |
-| Opt-in confirmation message | Sample message 2 |
-| HELP reply | `Betaharah: calendar reminders and replies. Commands and help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.` |
+| Sample message 4 (first reply to a new number) | `Betaharah is a mikvah calendar by text message. Reply JOIN to sign up. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help. Terms: betaharah.com/terms` |
+| Sample message 5 (reply to JOIN) | `Welcome to Betaharah. This phone is signed up. Step 1 of 3: reply with your ZIP code (in Canada, your postal code, e.g. H3W 1A1). It sets the times of sunset.` |
+| Sample message 6 (reply to REMINDERS ON) | `Reminders are on for this phone (ending 0101). This phone agrees to receive reminder texts from Betaharah. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help.` |
+| Opt-in keyword | JOIN |
+| Opt-in confirmation message | Sample message 5 for joining by text (sample message 6 when reminders are turned on by text); sample message 2 when reminders are turned on on the website |
+| HELP reply | `Betaharah: mikvah calendar reminders and replies. Text MENU for the commands. Help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.` |
 | STOP | Handled by the carrier on toll-free numbers; the site also records it and sends nothing further to that phone until it texts START. |
 
 If the reviewer asks for changes, the wording that users see is in
@@ -166,7 +235,13 @@ and privacy policy above and proof that you own the domain.
   Texts to other countries cost more.
 - "Send text messages" is a single switch that stops all sending at once.
 - If sign-ups you did not expect appear, switch "Who may create an account"
-  to invitation only.
+  to invitation only, or switch "sign-up by text" off.
+- Numbers without an account: each gets at most one reply in 24 hours; the
+  site sends at most 50 such replies a day and creates at most 25 accounts
+  a day by text; past those, nothing is sent. More than 30 texts an hour
+  from one number are ignored. While sign-up is closed, or sign-up by text
+  is off, a number without an account gets no reply at all (except a phone
+  joining an existing account with its code).
 - Telnyx's portal has its own spending limit and usage alerts; set them.
 
 ## What you can and cannot see

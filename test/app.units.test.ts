@@ -347,7 +347,7 @@ describe('reading a Telnyx webhook', () => {
     const telnyx = await FakeTelnyx.create();
     const req = await telnyx.inbound({ from: '+17325550123', to: '+18885550100', text: '1', eventId: 'e1', nowMs: NOW });
     const r = await readTelnyxWebhook(req.body, { signature: req.headers['telnyx-signature-ed25519']!, timestamp: req.headers['telnyx-timestamp']! }, telnyx.publicKey, NOW);
-    expect(r).toEqual({ ok: true, message: { eventId: 'e1', from: '+17325550123', to: '+18885550100', text: '1', autoresponseType: null } });
+    expect(r).toEqual({ ok: true, message: { eventId: 'e1', channel: 'sms', from: '+17325550123', to: '+18885550100', agentId: null, text: '1', location: null, autoresponseType: null } });
   });
   it('passes on the keyword Telnyx says it acted on', async () => {
     const telnyx = await FakeTelnyx.create();

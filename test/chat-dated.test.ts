@@ -199,9 +199,9 @@ describe('recording dated commands', () => {
 
   it('no location yet: says how to set it by text', () => {
     const p = new Phone(household({ place: false }));
-    expect(p.say('1 11/22 night')).toBe('Not recorded: no location is set yet. Send LOCATION and your ZIP code, e.g. LOCATION 08701.');
-    expect(p.say('1')).toBe('Not recorded: no location is set yet. Send LOCATION and your ZIP code, e.g. LOCATION 08701.');
-    expect(p.say('9')).toBe('No location is set yet. Send LOCATION and your ZIP code, e.g. LOCATION 08701.');
+    expect(p.say('1 11/22 night')).toBe('Not recorded: no location is set yet. Text LOCATION and your ZIP code, e.g. LOCATION 08701, or choose it on the website.');
+    expect(p.say('1')).toBe('Not recorded: no location is set yet. Text LOCATION and your ZIP code, e.g. LOCATION 08701, or choose it on the website.');
+    expect(p.say('9')).toBe('No location is set yet. Text LOCATION and your ZIP code, e.g. LOCATION 08701, or choose it on the website.');
   });
 
   it('a phone that may not record cannot record by date either', () => {

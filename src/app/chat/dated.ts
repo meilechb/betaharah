@@ -22,7 +22,7 @@ import { absToCivil, civilToAbs, localAbs, localToInstant } from '../../engine/c
 import { englishDate } from '../../engine/present';
 import { onahAt } from '../../engine/zmanim';
 import { parseClock, type ResolvedOnah } from '../commands';
-import { confirmationText, entryEnglish, recordEntry, rejectionText, whereOf, type Computed, type DraftEntry } from '../household';
+import { confirmationText, entryEnglish, NO_PLACE_TEXT, recordEntry, rejectionText, whereOf, type Computed, type DraftEntry } from '../household';
 import type { HouseholdData } from '../model';
 
 export type DatedKind = 'flow' | 'stain' | 'broken' | 'hefsek' | 'mikvah';
@@ -220,4 +220,5 @@ export function recordDated(data: HouseholdData, p: Extract<DatedParse, { kind: 
 }
 
 /** Replaces the existing "choose your location on the website" for a phone that can set it by text. */
-export const NO_PLACE_RECORD = 'Not recorded: no location is set yet. Send LOCATION and your ZIP code, e.g. LOCATION 08701.';
+/** The same text the digit commands and the website use. */
+export const NO_PLACE_RECORD = NO_PLACE_TEXT;

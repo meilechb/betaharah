@@ -988,7 +988,7 @@ describe('recording on the website', () => {
     const fresh = await signIn(OTHER, new Client('203.0.113.3'));
     const r = await fresh.post('/api/entries', { kind: 'flow', when: 'now' });
     expect(r.status).toBe(400);
-    expect(r.json.error).toBe('Not recorded: choose your location on the website first.');
+    expect(r.json.error).toBe('Not recorded: no location is set yet. Text LOCATION and your ZIP code, e.g. LOCATION 08701, or choose it on the website.');
   });
 
   it('records a period from start to immersion, and says what follows each step', async () => {
@@ -1102,17 +1102,17 @@ describe('husband and wife on one account', () => {
     expect(r.json.state.phones[1]).toMatchObject({ number: WIFE, name: 'Rivka', canUpdate: false, reminders: ['mikvah'], texts: false });
     expect(r.json.state.phones[0]).toMatchObject({ number: HUSBAND, name: '', canUpdate: true });
     expect((await husband.put('/api/phones', { number: WIFE, name: 'R', canUpdate: true, reminders: ['everything'], texts: false })).status).toBe(400);
-    // a phone that may not record by text gets no reply and changes nothing
+    // a phone that may not record by text is told so, and nothing changes (it can still use the words that do not record)
     await text(WIFE, '1', 'ev-w');
     expect((await husband.state()).entries).toEqual([]);
-    expect(textsTo(WIFE).filter(t => !t.startsWith('Betaharah code'))).toEqual([]);
+    expect(textsTo(WIFE).filter(t => !t.startsWith('Betaharah code'))).toEqual(['This phone may not record entries. That is changed on the website, under Settings.']);
   });
 
   it('turning reminders on for a phone records the consent and sends one confirmation', async () => {
     await addPhone(husband, WIFE);
     const before = world.telnyx.sent.length;
     await textsOn(husband, WIFE, ['mikvah']);
-    expect(world.telnyx.sent.slice(before)).toEqual([{ from: OUR_NUMBER, to: WIFE, text: REMINDERS_ON_TEXT }]);
+    expect(world.telnyx.sent.slice(before)).toEqual([{ from: OUR_NUMBER, to: WIFE, text: REMINDERS_ON_TEXT, endpoint: 'sms', delivered: 'sms' }]);
     const s = await husband.state();
     expect(s.phones[1]).toMatchObject({ number: WIFE, texts: true, reminders: ['mikvah'] });
     expect(s.setup.find((x: any) => x.key === 'texts').done).toBe(true);
@@ -1200,9 +1200,13 @@ describe('text messages', () => {
     expect((await c.state()).entries).toHaveLength(1);
   });
 
-  it('ignores a number it does not know, and a message for another number', async () => {
+  it('ignores a number it does not know while sign-up by text is off, and a message for another number', async () => {
+    const op = await operator();
+    await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, textSignup: false });
     expect(await text(OTHER, '1', 'ev1')).toBe(200);
+    expect(await text(OTHER, 'JOIN', 'ev1b')).toBe(200);
     expect(await text(HUSBAND, '1', 'ev2', { to: '+18885550999' })).toBe(200);
+    expect(await text(OTHER, 'JOIN', 'ev3', { to: '+18885550999' })).toBe(200);
     expect(world.telnyx.sent.filter(s => !s.text.startsWith('Betaharah code'))).toEqual([]);
     expect((await c.state()).entries).toEqual([]);
     expect(await count('households')).toBe(1);
@@ -2028,7 +2032,7 @@ describe('the test account', () => {
     expect((await c.state()).phones[0].optedOut).toBe(false);
 
     // commands change the account, and the reply comes with the new picture
-    expect(await demoText(c, '0')).toBe('Nothing recent to undo. Older entries can be removed on the website.');
+    expect(await demoText(c, '0')).toBe('Nothing recent to undo. Older entries can be erased by text: send HISTORY. Or remove them on the website.');
     const flow = await c.post('/api/demo/text', { text: '1' });
     expect(flow.json.reply).toBe('Recorded: flow Mon Nov 23 by day. The count is cancelled; a new hefsek is needed. 0 to undo.');
     expect(flow.json.state.entryCount).toBe(15);
@@ -2038,12 +2042,12 @@ describe('the test account', () => {
     expect(undo.json.reply).toMatch(/^Removed: flow Mon Nov 23 by day\. Clean day 5 of 7\./);
     expect(undo.json.state.entryCount).toBe(14);
 
-    // a phone that may not record by text gets no answer
+    // a phone that may not record by text is told so
     await c.put('/api/phones', { number: DEMO_NUMBER, name: 'Test phone', canUpdate: false, reminders: [], texts: true });
-    expect(await demoText(c, '1')).toBeNull();
+    expect(await demoText(c, '1')).toBe('This phone may not record entries. That is changed on the website, under Settings.');
     s = await c.state();
     expect(s.entryCount).toBe(14);
-    expect(s.messages[0]).toMatchObject({ direction: 'in', body: '1', status: 'simulated' });
+    expect(s.messages[1]).toMatchObject({ direction: 'in', body: '1', status: 'simulated' });
 
     for (const bad of [{ text: '' }, { text: '   ' }, { text: 'x'.repeat(321) }, { text: 9 }, {}]) expect((await c.post('/api/demo/text', bad)).status, JSON.stringify(bad)).toBe(400);
     expect((await c.post('/api/demo/text', { text: '9' }, { header: false })).status).toBe(400);

@@ -1,6 +1,7 @@
 /**
  * Whole conversations, text by text, with the exact replies: a stranger
- * signs up and finishes setup, then invites a second phone, which joins.
+ * signs up and finishes setup, then adds a second phone, which joins by
+ * texting the code itself.
  * The same exchanges are printed in docs/TEXTING.md.
  */
 import { describe, expect, it } from 'vitest';
@@ -63,15 +64,14 @@ describe('from the first text to a finished setup', () => {
     expect(lines(p.send('9'))[0]).toMatch(/^Tehorah\. Next onah: /);
     expect(lines(p.send('REMINDERS ON'))).toEqual([T.remindersOn('0101')]);
 
-    // A second phone.
-    expect(lines(p.send('ADD 7325550102'))).toEqual([T.inviteAsk('(732) 555-0102')]);
-    const invited = p.send('YES');
-    const effect = invited.effects[0]!;
-    expect(effect.type).toBe('invite_phone');
-    if (effect.type !== 'invite_phone') return;
-    expect(effect.number).toBe(SPOUSE);
+    // A second phone: the person who asks gets a code; nothing is sent to the other phone.
+    const added = p.send('ADD');
+    const effect = added.effects[0]!;
+    expect(effect.type).toBe('join_code');
+    if (effect.type !== 'join_code') return;
+    expect(lines(added)).toEqual([T.addCode(effect.code, 7)]);
 
-    // The invited phone answers from itself.
+    // The other phone texts the code from itself.
     const reply = `JOIN ${effect.code}`;
     expect(joinWord(reply)).toBe(effect.code);
     expect(greet({ text: reply, signup: 'closed', inviteValid: true, inviteKind: 'phone' })).toEqual({ action: 'join', out: [], invite: effect.code });
@@ -80,7 +80,7 @@ describe('from the first text to a finished setup', () => {
     expect(lines(joined)).toEqual([T.joinedText(' with the phone ending 0101')]);
     const spouse = new Phone(data, p.now, SPOUSE);
     expect(lines(spouse.send('PHONES'))[0]).toBe(
-      'Phones: A ending 0101 (reminders on), B ending 0102 (this phone, reminders off). ADD and a number adds one, e.g. ADD 7325551234. REMOVE and a letter removes one. LEAVE takes this phone off.',
+      'Phones: A ending 0101 (reminders on), B ending 0102 (this phone, reminders off). ADD gives a code to add a phone. REMOVE and a letter removes one. LEAVE takes this phone off.',
     );
   });
 });

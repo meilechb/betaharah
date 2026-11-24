@@ -8,10 +8,10 @@ import { fingerprint, randomCode } from './crypto';
 import { DEMO_NUMBER } from './demo';
 import type { Deps, Env } from './env';
 import { GoogleCalendar, GoogleError, refreshAccessToken } from './google';
-import { compute, runCommand, type Computed } from './household';
-import { addMessage, lastFour, MAX_SEEN_TEXTS, smsReady, type HouseholdData, type Site, type SyncState } from './model';
-import { allowText, postponeDue, rebuildQueue, refundText, settle, takeDue, type Settlement } from './queue';
-import { sendTelnyx, type InboundMessage } from './sms';
+import { compute, type Computed } from './household';
+import { addMessage, lastFour, rcsReady, smsReady, type HouseholdData, type Site, type SyncState } from './model';
+import { postponeDue, rebuildQueue, settle, takeDue, type Settlement } from './queue';
+import { sendTelnyx, sendTelnyxRcs, type InboundMessage, type RcsSuggestion } from './sms';
 import {
   bump,
   changeHousehold,
@@ -48,12 +48,15 @@ export function codeText(code: string): string {
 
 /** Sent once when reminders are turned on for a phone. */
 export const REMINDERS_ON_TEXT = 'Betaharah: reminders are on for this number. Text ? for the list of commands. Msg&data rates may apply. Reply STOP to stop, HELP for help.';
-export const HELP_REPLY = 'Betaharah: calendar reminders and replies. Commands and help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.';
+export const HELP_REPLY = 'Betaharah: mikvah calendar reminders and replies. Text MENU for the commands. Help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.';
 export const TEST_TEXT = 'Betaharah: test message. Text 9 for status, ? for the list of commands.';
 
 // ---------- sending a text ----------
 
-export type SmsOutcome = { ok: true } | { ok: false; reason: 'not_set_up' | 'site_limit' | 'blocked' | 'failed'; detail: string };
+/** How a text went out: by RCS, or by SMS (also an RCS send that Telnyx delivered as its SMS fallback); null when Telnyx did not say. */
+export type Channel = 'rcs' | 'sms' | null;
+
+export type SmsOutcome = { ok: true; channel: Channel } | { ok: false; reason: 'not_set_up' | 'site_limit' | 'blocked' | 'failed'; detail: string };
 
 const UPSERT_COUNTER = `INSERT INTO counters (key, value, expires_at) VALUES (?1, 1, ?2)
   ON CONFLICT (key) DO UPDATE SET
@@ -71,14 +74,31 @@ export function codesTodayKey(now: number): string {
   return `codes:${new Date(now).toISOString().slice(0, 10)}`;
 }
 
+/** One text to send: the words, and for RCS the tap-to-reply buttons (an SMS phone gets the words alone, which are complete). */
+export interface TextToSend {
+  to: string;
+  text: string;
+  now: number;
+  suggestions?: RcsSuggestion[];
+  /** Send as a plain SMS even when RCS is on (sign-in codes and sign-in links: the plainest way). */
+  smsOnly?: boolean;
+}
+
 /**
- * Sends one text, counting it against the site's monthly limit. Nothing is
- * sent once the limit is reached, and only texts that were really sent are
- * counted. (A household's own monthly limit is kept in its encrypted data;
- * see queue.ts.)
+ * The one way the site sends a text, whatever it is (a reply, a sign-in
+ * code, a reminder, a confirmation). It counts against the site's monthly
+ * limit: nothing is sent once the limit is reached, and only texts that
+ * were really sent are counted. (A household's own monthly limit is kept in
+ * its encrypted data; see queue.ts.)
+ *
+ * When RCS is ready (model.rcsReady) the text goes through the RCS agent,
+ * with its suggestions as suggested replies and always with an SMS fallback
+ * of the same text from the site's number, so that a phone without RCS
+ * receives an ordinary text. Otherwise, and for `smsOnly`, it is an SMS.
+ * One text counts once either way.
  */
-export async function sendSms(env: Env, deps: Deps, site: Site, args: { to: string; text: string; now: number }): Promise<SmsOutcome> {
-  const { telnyxApiKey, telnyxNumber } = site.secrets;
+export async function sendText(env: Env, deps: Deps, site: Site, args: TextToSend): Promise<SmsOutcome> {
+  const { telnyxApiKey, telnyxNumber, rcsAgentId, telnyxMessagingProfileId } = site.secrets;
   if (!smsReady(site) || !telnyxApiKey || !telnyxNumber) return { ok: false, reason: 'not_set_up', detail: 'Text messaging is not set up.' };
   const key = textsThisMonthKey(args.now);
   const count = await bump(env.DB, key, 40 * DAY, args.now);
@@ -86,26 +106,40 @@ export async function sendSms(env: Env, deps: Deps, site: Site, args: { to: stri
   if (count > site.config.monthlyMessageLimit) {
     refused = { ok: false, reason: 'site_limit', detail: "This month's limit on text messages has been reached." };
   } else {
-    const result = await sendTelnyx(deps, { apiKey: telnyxApiKey, from: telnyxNumber, to: args.to, text: args.text });
-    if (result.ok) return { ok: true };
+    const result =
+      !args.smsOnly && rcsReady(site) && rcsAgentId && telnyxMessagingProfileId
+        ? await sendTelnyxRcs(deps, {
+            apiKey: telnyxApiKey,
+            agentId: rcsAgentId,
+            messagingProfileId: telnyxMessagingProfileId,
+            from: telnyxNumber,
+            to: args.to,
+            text: args.text,
+            suggestions: args.suggestions,
+          })
+        : await sendTelnyx(deps, { apiKey: telnyxApiKey, from: telnyxNumber, to: args.to, text: args.text });
+    if (result.ok) return { ok: true, channel: result.channel };
     refused = { ok: false, reason: result.blocked ? 'blocked' : 'failed', detail: result.error };
   }
   await env.DB.prepare('UPDATE counters SET value = MAX(value - 1, 0) WHERE key = ?').bind(key).run();
   return refused;
 }
 
+/** The same function under its earlier name. */
+export const sendSms = sendText;
+
 /** What became of a text for a household: sent, simulated (the test account), or not sent. */
-export type HouseholdSmsOutcome = { ok: true; simulated: boolean } | Extract<SmsOutcome, { ok: false }>;
+export type HouseholdSmsOutcome = { ok: true; simulated: boolean; channel: Channel } | Extract<SmsOutcome, { ok: false }>;
 
 /**
  * Sends one text to a phone of a household. For the test account nothing
  * is sent and no counter of the site is touched; the text counts as
  * delivered and is recorded as simulated.
  */
-export async function sendHouseholdText(env: Env, deps: Deps, site: Site, demo: boolean, args: { to: string; text: string; now: number }): Promise<HouseholdSmsOutcome> {
-  if (demo) return { ok: true, simulated: true };
-  const outcome = await sendSms(env, deps, site, args);
-  return outcome.ok ? { ok: true, simulated: false } : outcome;
+export async function sendHouseholdText(env: Env, deps: Deps, site: Site, demo: boolean, args: TextToSend): Promise<HouseholdSmsOutcome> {
+  if (demo) return { ok: true, simulated: true, channel: null };
+  const outcome = await sendText(env, deps, site, args);
+  return outcome.ok ? { ok: true, simulated: false, channel: outcome.channel } : outcome;
 }
 
 /** The status a sent text is recorded with in the household's messages. */
@@ -204,8 +238,9 @@ export async function requestCode(
     window_start: windowStart,
     window_count: windowCount + 1,
   });
-  if (simulate) return { ok: true, delivery: Promise.resolve({ ok: true }), code: args.send ? code : undefined };
-  const delivery: Promise<SmsOutcome> = args.send ? sendSms(env, deps, site, { to: args.number, text: codeText(code), now }) : Promise.resolve({ ok: true });
+  if (simulate) return { ok: true, delivery: Promise.resolve({ ok: true, channel: null }), code: args.send ? code : undefined };
+  // Codes always go as a plain SMS, the plainest way.
+  const delivery: Promise<SmsOutcome> = args.send ? sendText(env, deps, site, { to: args.number, text: codeText(code), now, smsOnly: true }) : Promise.resolve({ ok: true, channel: null });
   return { ok: true, delivery };
 }
 
@@ -300,8 +335,8 @@ export async function refreshById(env: Env, deps: Deps, site: Site, householdId:
 
 // ---------- received texts ----------
 
-/** More messages than this from one number in an hour are ignored. */
-const MAX_INBOUND_PER_HOUR = 30;
+/** More messages than this from one number in an hour are ignored (by SMS and RCS together, with or without an account). */
+export const MAX_INBOUND_PER_HOUR = 30;
 
 /**
  * The opt-out and opt-in words Telnyx itself acts on (its "Advanced
@@ -324,122 +359,9 @@ export function inboundKind(message: Pick<InboundMessage, 'text' | 'autoresponse
   return 'command';
 }
 
-/**
- * Handles one received text. When the household's reminders and calendar
- * should now be refreshed, returns the household as saved and its picture;
- * otherwise null.
- *
- * Strangers get no reply and leave no trace. STOP and START are confirmed
- * by the carrier, not by this app. Commands are accepted only from a phone
- * that proved its number, may record by text, and has not opted out.
- */
-export async function handleInbound(env: Env, deps: Deps, site: Site, message: InboundMessage): Promise<{ household: Household; computed: Computed | null } | null> {
-  const now = deps.now();
-  const hash = await phoneHash(env, message.from);
-  const row = await getPhone(env.DB, hash);
-  if (!row) return null;
-  if (!(await allowInbound(env, hash, now))) return null;
-  const handled = await receiveText(env, deps, site, row.household_id, message, now);
-  if (!handled || !handled.refresh) return null;
-  return { household: handled.household, computed: handled.computed };
-}
-
 /** Counts one received text from a phone; false once it sent too many this hour. */
 export async function allowInbound(env: Env, phoneHashValue: string, now: number): Promise<boolean> {
   return (await bump(env.DB, `in:${phoneHashValue.slice(0, 24)}`, HOUR, now)) <= MAX_INBOUND_PER_HOUR;
-}
-
-export interface Received {
-  /** The household as saved. */
-  household: Household;
-  /** The reply that was sent (or simulated), or null if nothing was sent. */
-  reply: string | null;
-  /** True when the household's reminders and calendar should now be refreshed. */
-  refresh: boolean;
-  /**
-   * The household's current picture: always when `refresh` is true, and
-   * otherwise when the reply needed it; else null (not worked out).
-   */
-  computed: Computed | null;
-}
-
-/**
- * The handling of one received text, shared by the webhook and by the
- * test account's "send a text" box: STOP, START, HELP and commands, the
- * reply, and the record in the household's messages. For the test account
- * the reply is not sent; both messages are recorded as simulated.
- *
- * Returns null when the phone is not on the household or the text was
- * already handled.
- */
-export async function receiveText(
-  env: Env,
-  deps: Deps,
-  site: Site,
-  householdId: string,
-  message: Pick<InboundMessage, 'eventId' | 'from' | 'text' | 'autoresponseType'>,
-  now: number,
-): Promise<Received | null> {
-  const kind = inboundKind(message);
-  const changed = await changeHousehold(env, householdId, now, data => {
-    const none = { handled: false, simulated: false, reply: null as string | null, refresh: false, computed: undefined as Computed | null | undefined };
-    const phone = data.phones.find(p => p.number === message.from);
-    if (!phone) return none;
-    if (data.seenTexts.includes(message.eventId)) return none; // a repeated delivery
-    data.seenTexts.push(message.eventId);
-    if (data.seenTexts.length > MAX_SEEN_TEXTS) data.seenTexts.splice(0, data.seenTexts.length - MAX_SEEN_TEXTS);
-    const simulated = data.demo;
-    addMessage(data, { direction: 'in', phone: lastFour(message.from), body: message.text, at: now, status: simulated ? 'simulated' : 'received' });
-
-    let text: string | null = null;
-    let refresh = false;
-    let computed: Computed | null | undefined;
-    if (kind === 'stop') {
-      refresh = !phone.optedOut;
-      phone.optedOut = true;
-    } else if (kind === 'start') {
-      refresh = phone.optedOut;
-      phone.optedOut = false;
-    } else if (kind === 'help') {
-      text = HELP_REPLY;
-    } else if (kind === 'command' && phone.verifiedAt !== null && phone.canUpdate && !phone.optedOut) {
-      const result = runCommand(data, message.text, now);
-      text = result.text;
-      refresh = result.changed;
-      computed = result.computed;
-    }
-    let reply: string | null = null;
-    if (text !== null) {
-      // The reply counts against the household's monthly limit; past it, nothing is sent.
-      const allowed = allowText(data, site.config.householdMonthlyLimit, now);
-      addMessage(data, { direction: 'out', phone: lastFour(message.from), body: text, at: now, status: allowed ? (simulated ? 'simulated' : 'sent') : 'not sent' });
-      if (allowed) reply = text;
-    }
-    return { handled: true, simulated, reply, refresh, computed };
-  });
-  if (!changed || !changed.result.handled) return null;
-  const { simulated, refresh, computed } = changed.result;
-  let { reply } = changed.result;
-  let household = changed.household;
-
-  if (reply !== null && !simulated) {
-    const text = reply;
-    const sent = await sendSms(env, deps, site, { to: message.from, text, now });
-    if (!sent.ok) {
-      reply = null;
-      const noted = await changeHousehold(env, householdId, now, data => {
-        refundText(data, now);
-        const m = data.messages.find(x => x.direction === 'out' && x.at === now && x.body === text.slice(0, 320));
-        if (m) m.status = 'not sent';
-        if (sent.reason === 'blocked') {
-          const phone = data.phones.find(p => p.number === message.from);
-          if (phone) phone.optedOut = true;
-        }
-      });
-      if (noted) household = noted.household;
-    }
-  }
-  return { household, reply, refresh, computed: computed !== undefined ? computed : refresh ? compute(household.data, now) : null };
 }
 
 // ---------- the periodic job ----------

@@ -28,7 +28,6 @@ export interface OutMessage {
 /** What a yes-or-no question would do on YES. */
 export type ConfirmAction =
   | { type: 'erase'; id: string }
-  | { type: 'invite'; number: string }
   | { type: 'remove_phone'; number: string }
   | { type: 'leave' }
   | { type: 'delete_account' }
@@ -79,15 +78,16 @@ export interface ChatState {
  */
 export type Effect =
   /**
-   * Text `text` to `number`, which is not on any account yet, and remember
-   * the invitation `code` (bound to `number` and to this household) for
-   * `days` days. When that phone replies "JOIN <code>", greet() is called
-   * with inviteValid true and inviteKind 'phone'; the server then adds the
-   * phone to this household, verified (its reply proves the number).
-   * Refuse if the number is on another account, is not an allowed prefix,
-   * or the household already has the most phones allowed.
+   * A code for adding another phone to this household. The server stores it
+   * (a keyed fingerprint only, bound to this household, single use, valid
+   * `days` days) and then sends `out`, which tells the person who asked to
+   * have the other phone text "JOIN <code>". Nothing is sent to any other
+   * number: the other phone proves its number, and asks for itself, by
+   * texting the code. The server then calls greet() with inviteValid true
+   * and inviteKind 'phone', and adds the phone to this household (verified,
+   * reminders off), unless the household is full by then.
    */
-  | { type: 'invite_phone'; number: string; code: string; days: number; text: string; ifFailed: string }
+  | { type: 'join_code'; code: string; days: number; ifFailed: string }
   /** Remove another phone (`number`) from this household (accounts.removePhone). */
   | { type: 'remove_phone'; number: string; ifFailed: string }
   /** Remove the phone that wrote (`number`) from its household. Never the last phone. */
@@ -115,7 +115,7 @@ export interface ConverseInput {
   limits: { maxPhones: number };
   lookupPostal(input: string): Place | null;
   nearestPostal(latitude: number, longitude: number): Place | null;
-  /** An unguessable random token (for calendar links and invitation codes), e.g. crypto.randomToken(). */
+  /** An unguessable random token (for calendar links and the codes for adding a phone), e.g. crypto.randomToken(). */
   random(): string;
   /** The site's address for links, default "https://betaharah.com". */
   origin?: string;

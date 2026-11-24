@@ -1,5 +1,6 @@
 /** What is stored for one household, and for the site as a whole. */
 import type { LogEntry } from '../engine/cycle';
+import type { ChatState } from './chat/types';
 import { DEFAULT_HALACHIC_SETTINGS, type HalachicSettings } from '../engine/settings';
 import { DEFAULT_APP_SETTINGS, type AppSettings, type PhoneRecord } from './settings';
 
@@ -79,6 +80,14 @@ export interface HouseholdData {
    * each one is recorded as simulated instead.
    */
   demo: boolean;
+  /**
+   * The question each phone was asked by text and has not answered yet
+   * (the conversation engine's pending question, src/app/chat), by phone
+   * number; null when no phone has one open. Kept here, inside the
+   * encrypted document, so that nothing about a conversation is readable
+   * in the database.
+   */
+  chat: Record<string, ChatState> | null;
 }
 
 export function newHousehold(): HouseholdData {
@@ -99,6 +108,7 @@ export function newHousehold(): HouseholdData {
     seenTexts: [],
     welcomedAt: null,
     demo: false,
+    chat: null,
   };
 }
 

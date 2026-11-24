@@ -348,7 +348,7 @@ describe('the menu and the words', () => {
     expect(p.say('STATUS')).toBe(p.say('9'));
     p.say('1 11/22 night');
     expect(p.say('UNDO')).toMatch(/^Removed: flow Sun Nov 22 night\./);
-    expect(p.say('UNDO')).toBe('Nothing recent to undo. Older entries can be erased by text: send HISTORY.');
+    expect(p.say('UNDO')).toBe('Nothing recent to undo. Older entries can be erased by text: send HISTORY. Or remove them on the website.');
   });
 
   it('? is the digit help, with the dated forms and MENU', () => {
@@ -495,7 +495,7 @@ describe('the menu and the words', () => {
     const p = new Phone(data);
     data.phones[1]!.consentAt = 5;
     expect(p.say('PHONES')).toBe(
-      'Phones: A ending 0101 (this phone, reminders off), B ending 0102 (reminders on). ADD and a number adds one, e.g. ADD 7325551234. REMOVE and a letter removes one. LEAVE takes this phone off.',
+      'Phones: A ending 0101 (this phone, reminders off), B ending 0102 (reminders on). ADD gives a code to add a phone. REMOVE and a letter removes one. LEAVE takes this phone off.',
     );
     expect(p.say('REMOVE A')).toBe(T.REMOVE_SELF);
     p.say('PHONES');
@@ -509,31 +509,49 @@ describe('the menu and the words', () => {
     expect(p.say('REMOVE B')).toBe(T.REMOVE_NEEDS_LIST);
   });
 
-  it('ADD: asks before texting anyone, then hands the invitation to the server', () => {
+  it('ADD: gives the person who asked a code to pass on, and texts nobody else', () => {
     const data = household();
     const p = new Phone(data);
-    expect(p.say('ADD 732-555-1234')).toBe(T.inviteAsk('(732) 555-1234'));
-    const out = p.send('YES');
-    expect(texts(out)).toBe(T.inviteSent('(732) 555-1234', 7));
+    const out = p.send('ADD');
     expect(out.effects).toHaveLength(1);
     const e = out.effects[0]!;
-    expect(e).toMatchObject({ type: 'invite_phone', number: '+17325551234', days: 7 });
-    if (e.type === 'invite_phone') {
-      expect(e.code).toMatch(/^[A-HJ-NP-Z]{8}$/);
-      expect(e.text).toBe(T.invitationText('0101', e.code, 7));
-      expect(e.text.length).toBeLessThanOrEqual(MAX_TEXT_CHARS);
-      expect(isGsmBasic(e.text)).toBe(true);
-    }
-    expect(data.phones).toHaveLength(1);
-    for (const t of ['ADD +1 (732) 555-1234', 'ADD 17325551234', 'ADD (732) 555 1234']) {
+    expect(e).toMatchObject({ type: 'join_code', days: 7, ifFailed: T.ADD_FAILED });
+    if (e.type !== 'join_code') return;
+    expect(e.code).toMatch(/^[A-HJ-NP-Z]{8}$/);
+    expect(texts(out)).toBe(T.addCode(e.code, 7));
+    expect(texts(out)).toBe(`Have that phone text JOIN ${e.code} to this number within 7 days. The code works once, for one phone. Its reminders stay off until it texts REMINDERS ON.`);
+    expect(texts(out).length).toBeLessThanOrEqual(SEGMENT_CHARS);
+    expect(isGsmBasic(texts(out))).toBe(true);
+    expect(out.chat).toBeNull(); // nothing to confirm: no one else is texted
+    expect(out.changed).toBe(false);
+    expect(data.phones).toHaveLength(1); // the phone is added when it texts the code
+    // its own text is what the server reads as JOIN and the code
+    expect(joinWord(`JOIN ${e.code}`)).toBe(e.code);
+    expect(joinWord(`join ${e.code.toLowerCase()}`)).toBe(e.code.toLowerCase());
+    // the other phone's number may be given; it is only checked against the phones already here
+    for (const t of ['ADD +1 (732) 555-1234', 'ADD 17325551234', 'ADD (732) 555 1234', 'ADD 732-555-1234']) {
       const q = new Phone(household());
-      expect(q.say(t), t).toBe(T.inviteAsk('(732) 555-1234'));
+      const o = q.send(t);
+      expect(o.effects.map(x => x.type), t).toEqual(['join_code']);
     }
     expect(p.say('ADD 12345')).toBe(T.ADD_FORMAT);
-    expect(p.say('ADD')).toBe(T.ADD_FORMAT);
     expect(p.say('ADD 7325550101')).toBe('The number ending 0101 is already on this account. Nothing was changed.');
     data.phones.push(phone('+17325550103'), phone('+17325550104'), phone('+17325550105'));
-    expect(p.say('ADD 7325551234')).toBe('This account already has 4 phones, the most allowed. Send PHONES to remove one first. Nothing was changed.');
+    const full = p.send('ADD');
+    expect(texts(full)).toBe('This account already has 4 phones, the most allowed. Send PHONES to remove one first. Nothing was changed.');
+    expect(full.effects).toEqual([]);
+  });
+
+  it('JOIN and a code from a phone that is already on an account changes nothing and says so', () => {
+    const data = household();
+    const p = new Phone(data);
+    const before = JSON.stringify(data);
+    const out = p.send('JOIN QWERTYUP');
+    expect(texts(out)).toBe(T.ALREADY_ON_ACCOUNT);
+    expect(out.effects).toEqual([]);
+    expect(out.changed).toBe(false);
+    expect(JSON.stringify(data)).toBe(before);
+    expect(p.say('JOIN')).toBe(T.ALREADY_JOINED);
   });
 
   it('LEAVE needs YES, and the last phone cannot leave', () => {
