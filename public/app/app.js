@@ -211,7 +211,15 @@ function renderAuth() {
       },
       h('h2', {}, 'Sign in'),
       notes,
-      !P.sms ? h('p', { class: 'muted' }, 'Sign-in by text message is not available yet. Sign in with Google, or with a password.') : null,
+      !P.sms
+        ? h(
+            'p',
+            { class: 'muted' },
+            P.google
+              ? 'Sign-in by text message is not available yet. Sign in with Google, or with a password.'
+              : 'Sign-in by text message is not available yet. Sign in with your password.',
+          )
+        : null,
       field('Your mobile number', numberInput),
       field('Password', p),
       h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'submit', disabled: a.busy }, 'Sign in'), googleButton(a)),
