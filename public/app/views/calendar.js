@@ -385,8 +385,9 @@ export function calendarCard() {
           button({ label: 'Today', size: 'sm', disabled: onToday, attrs: { id: 'cal-today' }, onclick: () => select(S.grid.today, true) }),
         ),
         monthGrid(i),
-        legend(),
+        // the day that was chosen comes right under the month, where it was clicked; the legend follows it
         dayDetail(i),
+        legend(),
       );
     }),
   );
