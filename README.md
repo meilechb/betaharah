@@ -97,6 +97,26 @@ npm run dev         # run locally at http://localhost:8787 (needs a .dev.vars fi
 The Hebrew calendar arithmetic is `@hebcal/hdate` (GPL-2.0-or-later), so
 this project carries the same licence.
 
+## Data
+
+The location of a US ZIP code or a Canadian postal area (`src/app/zip.ts`)
+comes from a table, `src/app/postal-data.ts`, which
+`node scripts/build-postal.mjs` makes (it downloads its sources; the header
+of the script says what it keeps and leaves out, and why).
+
+- Place names and coordinates: postal code data from
+  [GeoNames](https://www.geonames.org/), licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The table was
+  made from the files published on 2026-11-24; names are shortened and
+  coordinates rounded to about 1 km.
+- Time zones: computed from those coordinates with
+  [geo-tz](https://github.com/evansiroky/node-geo-tz), from the
+  [timezone-boundary-builder](https://github.com/evansiroky/timezone-boundary-builder)
+  boundaries, which are © OpenStreetMap contributors and available under the
+  [Open Database Licence](https://opendatacommons.org/licenses/odbl/).
+- Checked against the US Census Bureau 2025 Gazetteer (public domain) and the
+  GeoNames gazetteer (CC BY 4.0).
+
 ## Limits to know about
 
 - Cloudflare's free plan allows 10 ms of processor time per request. The
