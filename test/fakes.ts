@@ -129,9 +129,34 @@ export class FakeGoogle {
   }
 }
 
+/** One text the fake Telnyx accepted. */
+export interface SentRecord {
+  from: string;
+  to: string;
+  text: string;
+  /** Which endpoint was used: /v2/messages (sms) or /v2/messages/rcs (rcs). */
+  endpoint: 'sms' | 'rcs';
+  /** How it reached the phone: by RCS, or by SMS (an SMS send, or an RCS send to a phone without RCS, by its fallback). */
+  delivered: 'sms' | 'rcs';
+  /** RCS: the suggested replies, as sent. */
+  suggestions?: Array<{ reply: { text: string; postback_data: string } }>;
+  /** RCS: the SMS fallback, as sent. */
+  fallback?: { from: string; text: string };
+  agentId?: string;
+  messagingProfileId?: string;
+}
+
+/** The RCS agent and messaging profile the fake accepts. */
+export const RCS_AGENT = 'agent-betaharah-1';
+export const MESSAGING_PROFILE = 'profile-0001';
+
 /** An in-memory Telnyx: records what was sent; can be made to fail. */
 export class FakeTelnyx {
-  sent: Array<{ from: string; to: string; text: string }> = [];
+  sent: SentRecord[] = [];
+  /** Phones that have RCS; an RCS send to any other phone is delivered by its SMS fallback. */
+  rcsPhones = new Set<string>();
+  /** RCS requests that broke Telnyx's documented shape (should stay empty). */
+  problems: string[] = [];
   failNext = 0;
   /** Numbers that have opted out with the carrier: sending to them is refused. */
   blocked = new Set<string>();
@@ -147,6 +172,7 @@ export class FakeTelnyx {
   }
 
   handle(url: URL, init: RequestInit | undefined): Response | null {
+    if (url.href === 'https://api.telnyx.com/v2/messages/rcs') return this.handleRcs(init);
     if (url.href !== 'https://api.telnyx.com/v2/messages') return null;
     if (new Headers(init?.headers).get('authorization') !== 'Bearer telnyx-key') {
       return new Response(JSON.stringify({ errors: [{ code: '10009', title: 'Authentication failed' }] }), { status: 401 });
@@ -159,8 +185,93 @@ export class FakeTelnyx {
     if (this.blocked.has(body.to)) {
       return new Response(JSON.stringify({ errors: [{ code: '40300', title: 'Blocked due to STOP message', detail: 'Messages cannot be sent due to an existing block rule.' }] }), { status: 400 });
     }
-    this.sent.push(body);
-    return new Response(JSON.stringify({ data: { id: `msg-${this.sent.length}` } }), { status: 200 });
+    this.sent.push({ ...body, endpoint: 'sms', delivered: 'sms' });
+    return new Response(JSON.stringify({ data: { id: `msg-${this.sent.length}`, type: 'SMS' } }), { status: 200 });
+  }
+
+  /** POST /v2/messages/rcs, as in Telnyx's "Send RCS Messages" guide. */
+  private handleRcs(init: RequestInit | undefined): Response {
+    if (new Headers(init?.headers).get('authorization') !== 'Bearer telnyx-key') {
+      return new Response(JSON.stringify({ errors: [{ code: '10009', title: 'Authentication failed' }] }), { status: 401 });
+    }
+    const body = JSON.parse(String(init?.body)) as {
+      agent_id?: unknown;
+      to?: unknown;
+      messaging_profile_id?: unknown;
+      agent_message?: { content_message?: { text?: unknown; suggestions?: Array<{ reply?: { text?: unknown; postback_data?: unknown } }> } };
+      sms_fallback?: { from?: unknown; text?: unknown };
+    };
+    const content = body.agent_message?.content_message;
+    const problem = (p: string): Response => {
+      this.problems.push(p);
+      return new Response(JSON.stringify({ errors: [{ code: '10015', title: 'Bad request', detail: p }] }), { status: 422 });
+    };
+    if (body.agent_id !== RCS_AGENT) return problem('agent_id');
+    if (body.messaging_profile_id !== MESSAGING_PROFILE) return problem('messaging_profile_id');
+    if (typeof body.to !== 'string') return problem('to');
+    if (typeof content?.text !== 'string') return problem('agent_message.content_message.text');
+    if (!body.sms_fallback || typeof body.sms_fallback.from !== 'string' || typeof body.sms_fallback.text !== 'string') return problem('sms_fallback');
+    for (const s of content.suggestions ?? []) {
+      if (typeof s.reply?.text !== 'string' || typeof s.reply.postback_data !== 'string') return problem('suggestions');
+    }
+    if (this.failNext > 0) {
+      this.failNext--;
+      return new Response(JSON.stringify({ errors: [{ code: '40008', title: 'Message filtered' }] }), { status: 422 });
+    }
+    if (this.blocked.has(body.to)) {
+      return new Response(JSON.stringify({ errors: [{ code: '40300', title: 'Blocked due to STOP message' }] }), { status: 400 });
+    }
+    const delivered = this.rcsPhones.has(body.to) ? 'rcs' : 'sms';
+    this.sent.push({
+      from: body.sms_fallback.from,
+      to: body.to,
+      text: delivered === 'rcs' ? content.text : body.sms_fallback.text,
+      endpoint: 'rcs',
+      delivered,
+      suggestions: content.suggestions as SentRecord['suggestions'],
+      fallback: { from: body.sms_fallback.from, text: body.sms_fallback.text },
+      agentId: body.agent_id,
+      messagingProfileId: body.messaging_profile_id,
+    });
+    return new Response(JSON.stringify({ data: { record_type: 'message', direction: 'outbound', id: `rcs-${this.sent.length}`, type: delivered === 'rcs' ? 'RCS' : 'SMS' } }), { status: 200 });
+  }
+
+  /**
+   * A signed webhook request for a received RCS message, in the shape of
+   * Telnyx's "RCS Webhooks" guide: the sender in payload.from.phone_number,
+   * the agent in payload.to[0].agent_id, and the content in payload.body.
+   */
+  async inboundRcs(args: {
+    from: string;
+    agentId: string;
+    eventId: string;
+    nowMs: number;
+    body: { text: string } | { suggestion_response: { postback_data: string; text: string } } | { location: { latitude: number; longitude: number } } | { user_file: unknown };
+  }): Promise<{ body: string; headers: Record<string, string> }> {
+    const body = JSON.stringify({
+      data: {
+        event_type: 'message.received',
+        id: args.eventId,
+        occurred_at: new Date(args.nowMs).toISOString(),
+        payload: {
+          body: args.body,
+          direction: 'inbound',
+          from: { carrier: 'T-Mobile USA', line_type: 'long_code', phone_number: args.from, status: 'webhook_delivered' },
+          id: `in-${args.eventId}`,
+          messaging_profile_id: MESSAGING_PROFILE,
+          to: [{ agent_id: args.agentId, agent_name: 'Betaharah' }],
+          type: 'RCS',
+        },
+        record_type: 'event',
+      },
+    });
+    return this.sign(body, args.nowMs);
+  }
+
+  private async sign(body: string, nowMs: number): Promise<{ body: string; headers: Record<string, string> }> {
+    const timestamp = String(Math.floor(nowMs / 1000));
+    const signature = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, this.privateKey, new TextEncoder().encode(`${timestamp}|${body}`)));
+    return { body, headers: { 'telnyx-signature-ed25519': toBase64(signature), 'telnyx-timestamp': timestamp, 'content-type': 'application/json' } };
   }
 
   /** A signed webhook request for a received message. */
@@ -182,9 +293,7 @@ export class FakeTelnyx {
       },
       meta: { attempt: 1 },
     });
-    const timestamp = String(Math.floor(args.nowMs / 1000));
-    const signature = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, this.privateKey, new TextEncoder().encode(`${timestamp}|${body}`)));
-    return { body, headers: { 'telnyx-signature-ed25519': toBase64(signature), 'telnyx-timestamp': timestamp, 'content-type': 'application/json' } };
+    return this.sign(body, args.nowMs);
   }
 }
 

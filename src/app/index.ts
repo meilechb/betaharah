@@ -12,7 +12,7 @@ import { Hono, type Context } from 'hono';
 import { absToUtcMidnightMs } from '../engine/civil';
 import { parseHalachicSettings, SettingsError } from '../engine/settings';
 import { NoSunError } from '../engine/zmanim';
-import { addPhone, createAccount, markVerified, prefixAllowed, prefixMessage, removePhone, tidyNumber } from './accounts';
+import { addPhone, createAccount, deleteAccount, markVerified, prefixAllowed, prefixMessage, removePhone, tidyNumber } from './accounts';
 import {
   clearedCookie,
   isConfigured,
@@ -24,6 +24,7 @@ import {
   type Session,
 } from './auth';
 import { registerAdminRoutes } from './admin-routes';
+import { addressedToSite, handleInbound, receiveText } from './conversation';
 import { checkPassword, fingerprint, hashPassword, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, randomToken } from './crypto';
 import { dashboardState, draftFromForm, FRESH_MS } from './dashboard';
 import { DEMO_NUMBER, isFictionalNumber } from './demo';
@@ -41,9 +42,7 @@ import {
   CODE_MINUTES,
   CODE_RESEND_SECONDS,
   codeText,
-  handleInbound,
   messageStatus,
-  receiveText,
   refreshHousehold,
   REMINDERS_ON_TEXT,
   requestCode,
@@ -69,9 +68,11 @@ import {
   readCounter,
   setPassword,
   setRefresh,
+  takeLinkToken,
   useInvite,
   type Household,
 } from './store';
+import { lookupPostal } from './zip';
 
 type Ctx = { Bindings: Env; Variables: { session: Session } };
 type C = Context<Ctx>;
@@ -91,6 +92,13 @@ class HttpError extends Error {
     this.name = 'HttpError';
   }
 }
+
+/** The one answer to every sign-in link that does not work. */
+const LINK_FAILED = 'This sign-in link does not work. It works once, within 10 minutes of being texted. Text WEB for a new one, or sign in with your number.';
+const LINK_FAILURES_PER_ADDRESS = 20;
+const LINK_FAILURE_WINDOW_MS = 15 * MINUTE;
+/** Looking up postal codes: at most this many per signed-in phone in an hour. */
+const POSTAL_LOOKUPS_PER_HOUR = 60;
 
 /** The answer when someone tries to text, or make an account for, a number reserved for fiction. */
 const FICTIONAL_MESSAGE = 'Numbers from 555-0100 to 555-0199 are reserved for fiction; they are never real phones and cannot receive texts.';
@@ -208,8 +216,9 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       deps.now(),
     );
     if (!result.ok) return c.json({ error: result.reason }, result.status as 400 | 401);
-    if (result.message && result.message.to === telnyxNumber) {
-      const after = await handleInbound(c.env, deps, site, result.message);
+    // SMS to the site's number and RCS to the site's agent come here alike; anything else is acknowledged and ignored.
+    if (result.message && addressedToSite(site, result.message)) {
+      const after = await handleInbound(c.env, deps, site, result.message, originOf(c));
       if (after) {
         const pending = background(c, refreshHousehold(c.env, deps, site, after.household, after.computed, deps.now()));
         if (pending) await pending;
@@ -376,6 +385,31 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     return c.json({ ok: true });
   });
 
+  /**
+   * Signs in with the one-time link texted in answer to WEB
+   * (https://.../app/?k=<token>): the page posts the token here. It works
+   * once, within 10 minutes, and signs in as the phone that asked for it,
+   * on the household that phone is on now only if that is still the
+   * household it asked from. Every failure gets the same answer.
+   */
+  app.post('/api/auth/link', async c => {
+    const now = deps.now();
+    const body = await readBody(c);
+    const addressKey = `link-ip:${(await fingerprint(c.env.ENCRYPTION_KEY, 'ip', addressOf(c))).slice(0, 24)}`;
+    const refused = async () => {
+      await bump(c.env.DB, addressKey, LINK_FAILURE_WINDOW_MS, now);
+      return c.json({ error: LINK_FAILED }, 400);
+    };
+    if ((await readCounter(c.env.DB, addressKey, now)) >= LINK_FAILURES_PER_ADDRESS) return c.json({ error: LINK_FAILED }, 400);
+    if (typeof body.token !== 'string' || !/^[A-Za-z0-9_-]{24,64}$/.test(body.token)) return refused();
+    const link = await takeLinkToken(c.env, body.token, now);
+    if (!link) return refused();
+    const phone = await getPhone(c.env.DB, link.phoneHash);
+    if (!phone || phone.household_id !== link.householdId) return refused();
+    c.header('Set-Cookie', await sessionCookie(c.env, phone, 'code', now, isSecure(c)));
+    return c.json({ ok: true });
+  });
+
   // ----- the operator's console: the site's settings, never a household's data (admin-routes.ts) -----
 
   registerAdminRoutes(app, deps);
@@ -487,9 +521,11 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
 
   /**
    * The test account only: a text "sent" from this session's phone, handled
-   * exactly as a real received text is (STOP, START, HELP, commands). The
-   * reply is shown on the page instead of being sent; both messages are
-   * recorded as simulated.
+   * exactly as a real received text is (STOP, START, HELP, and every text
+   * the conversation engine reads: see docs/TEXTING.md). Nothing is sent:
+   * `replies` are the texts that would have gone back (at most two, each
+   * with its RCS buttons), and `reply` is the first of them or null. Both
+   * directions are recorded as simulated.
    */
   app.post('/api/demo/text', async c => {
     const now = deps.now();
@@ -502,9 +538,39 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const from = await numberOf(c, household);
     if (!from) throw new HttpError(404, 'This phone is no longer on the account.');
     if (!(await allowInbound(c.env, c.get('session').phoneHash, now))) throw new HttpError(429, 'Too many texts in the last hour. Try again later.');
-    const received = await receiveText(c.env, deps, site, household.id, { eventId: `demo:${randomToken()}`, from, text: body.text, autoresponseType: null }, now);
+    const received = await receiveText(
+      c.env,
+      deps,
+      site,
+      household.id,
+      { eventId: `demo:${randomToken()}`, from, text: body.text, autoresponseType: null, location: null },
+      now,
+      { origin: originOf(c) },
+    );
     if (!received) throw new HttpError(409, 'Please try again.');
-    return finish(c, site, received.household, received.computed ?? compute(received.household.data, now), { reply: received.reply });
+    const extra = { reply: received.reply, replies: received.replies };
+    // DELETE ACCOUNT, or this phone left: the session no longer opens anything.
+    const after = received.household;
+    if (!after || !after.data.phones.some(p => p.number === from)) {
+      c.header('Set-Cookie', clearedCookie(SESSION_COOKIE, isSecure(c)));
+      return c.json({ ...extra, signedOut: true });
+    }
+    return finish(c, site, after, received.computed ?? compute(after.data, now), extra);
+  });
+
+  /**
+   * A place from a US ZIP code or a Canadian postal code, for the location
+   * form. It is public data, but only for a signed-in phone, and at most 60
+   * lookups an hour per phone.
+   */
+  app.get('/api/postal/:code', async c => {
+    const now = deps.now();
+    const key = `postal:${c.get('session').phoneHash.slice(0, 24)}`;
+    if ((await bump(c.env.DB, key, 60 * MINUTE, now)) > POSTAL_LOOKUPS_PER_HOUR) throw new HttpError(429, 'Too many lookups in the last hour. Try again later.');
+    const found = lookupPostal(c.req.param('code'));
+    if (!found) return c.json({ error: 'No place was found for that code. Enter a 5-digit US ZIP code or a Canadian postal code.' }, 404);
+    const { name, latitude, longitude, timeZone, elevation, postal } = found;
+    return c.json({ place: { name, latitude, longitude, timeZone, elevation, postal } });
   });
 
   app.post('/api/auth/logout-all', async c => {
@@ -826,8 +892,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const body = await readBody(c);
     if (body.confirm !== 'DELETE') throw new ValidationError('Type DELETE to confirm.');
     const household = await mine(c);
-    if (household.data.google) await revokeToken(deps, household.data.google.refreshToken);
-    await deleteHousehold(c.env.DB, household.id);
+    await deleteAccount(c.env, deps, { id: household.id, google: household.data.google });
     c.header('Set-Cookie', clearedCookie(SESSION_COOKIE, isSecure(c)));
     return c.json({ ok: true });
   });

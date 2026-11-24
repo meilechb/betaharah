@@ -166,4 +166,10 @@ describe('the day of a hefsek and the night of an immersion', () => {
     expect(resolveMikvahNight(false, ctx(at(24, 10)))).toBe(TUE); // Tuesday morning: last night
     expect(resolveMikvahNight(true, ctx(at(24, 10)))).toBe(MON); // the night before
   });
+
+  it('does not mistake the built-in names of an object for a command', () => {
+    for (const text of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf', 'constructor day', '__proto__ 9pm']) {
+      expect(parseCommand(text), text).toEqual({ kind: 'unknown' });
+    }
+  });
 });

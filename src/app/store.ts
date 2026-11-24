@@ -8,6 +8,8 @@
  * another household's row will not decrypt.
  */
 import { parseHalachicSettings } from '../engine/settings';
+import { validChat } from './chat/engine';
+import type { ChatState } from './chat/types';
 import { decrypt, encrypt, fingerprint, randomId } from './crypto';
 import type { Env } from './env';
 import {
@@ -132,6 +134,8 @@ export async function sweep(db: D1Database, now: number): Promise<void> {
     db.prepare('DELETE FROM counters WHERE expires_at <= ?').bind(now),
     db.prepare('DELETE FROM codes WHERE expires_at <= ?').bind(now - 86_400_000),
     db.prepare('DELETE FROM invites WHERE expires_at <= ?').bind(now - 30 * 86_400_000),
+    db.prepare('DELETE FROM join_codes WHERE expires_at <= ?').bind(now),
+    db.prepare('DELETE FROM link_tokens WHERE expires_at <= ?').bind(now),
   ]);
 }
 
@@ -164,7 +168,19 @@ function parseHousehold(raw: unknown): HouseholdData {
     seenTexts: Array.isArray(d.seenTexts) ? d.seenTexts : [],
     welcomedAt: typeof d.welcomedAt === 'number' ? d.welcomedAt : null,
     demo: d.demo === true,
+    chat: parseChats(d.chat),
   };
+}
+
+/** The pending questions by text, one per phone; anything malformed is dropped (it counts as no question). */
+function parseChats(raw: unknown): Record<string, ChatState> | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const out: Record<string, ChatState> = {};
+  for (const [number, value] of Object.entries(raw as Record<string, unknown>)) {
+    const chat = validChat(value);
+    if (chat) out[number] = chat;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 async function linkHash(env: Env, data: HouseholdData): Promise<string | null> {
@@ -274,6 +290,8 @@ export async function clearWake(db: D1Database, id: string): Promise<void> {
 export async function deleteHousehold(db: D1Database, id: string): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM codes WHERE household_id = ?').bind(id),
+    db.prepare('DELETE FROM join_codes WHERE household_id = ?').bind(id),
+    db.prepare('DELETE FROM link_tokens WHERE household_id = ?').bind(id),
     db.prepare('DELETE FROM phones WHERE household_id = ?').bind(id),
     db.prepare('DELETE FROM households WHERE id = ?').bind(id),
   ]);
@@ -305,6 +323,7 @@ export async function deletePhone(db: D1Database, hash: string, householdId: str
   await db.batch([
     db.prepare('DELETE FROM phones WHERE hash = ? AND household_id = ?').bind(hash, householdId),
     db.prepare('DELETE FROM codes WHERE phone_hash = ?').bind(hash),
+    db.prepare('DELETE FROM link_tokens WHERE phone_hash = ?').bind(hash),
   ]);
 }
 
@@ -415,6 +434,114 @@ export async function listInvites(db: D1Database, now: number): Promise<InviteRo
 export async function deleteInvite(db: D1Database, hash: string): Promise<boolean> {
   const result = await db.prepare('DELETE FROM invites WHERE hash = ?').bind(hash).run();
   return result.meta.changes > 0;
+}
+
+// ---------- invitation words (JOIN <word> by text) ----------
+
+/** What an invitation word may be: 6 to 24 letters and digits, with at least one letter. Case does not matter. */
+export const INVITATION_WORD = /^(?=.*[A-Z])[A-Z0-9]{6,24}$/;
+
+/**
+ * Creates a sign-up invitation that a person uses by texting "JOIN <word>"
+ * to the site's number while sign-up is by invitation (the operator's
+ * 32-character links are impractical to type). The word is case-insensitive
+ * and is stored only as a keyed fingerprint, like every invitation; it is
+ * an ordinary 'signup' invitation, so it is listed, counted and cancelled
+ * with the others, and also works as the invitation code on the website
+ * when typed in capitals. Throws a ValidationError for a word that is not
+ * allowed or is already in use.
+ *
+ * For the operator's console (not connected to a route here).
+ */
+export async function createInvitationWord(
+  env: Env,
+  args: { word: unknown; days?: number; maxUses?: number; note?: string | null; now: number },
+): Promise<{ word: string; hash: string; expiresAt: number; maxUses: number }> {
+  if (typeof args.word !== 'string') throw new ValidationError('word: 6 to 24 letters and digits');
+  const word = args.word.trim().toUpperCase();
+  if (!INVITATION_WORD.test(word)) throw new ValidationError('word: 6 to 24 letters and digits, with at least one letter');
+  const days = args.days ?? 14;
+  const maxUses = args.maxUses ?? 1;
+  if (!Number.isInteger(days) || days < 1 || days > 90) throw new ValidationError('days: a whole number from 1 to 90');
+  if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > 100) throw new ValidationError('maxUses: a whole number from 1 to 100');
+  const hash = await inviteHash(env, word);
+  const expiresAt = args.now + days * 86_400_000;
+  const note = typeof args.note === 'string' ? args.note.trim().slice(0, 80) || null : null;
+  const result = await env.DB.prepare('INSERT OR IGNORE INTO invites (hash, kind, phone_hash, note, created_at, expires_at, max_uses) VALUES (?, ?, NULL, ?, ?, ?, ?)')
+    .bind(hash, 'signup', note, args.now, expiresAt, maxUses)
+    .run();
+  if (result.meta.changes === 0) throw new ValidationError('That word is already in use. Choose another.');
+  return { word, hash, expiresAt, maxUses };
+}
+
+/**
+ * The sign-up invitation typed after JOIN: an invitation word (any case) or
+ * an operator's link code (exactly as given). Null if neither is valid.
+ */
+export async function findSignupInvite(env: Env, typed: string, now: number): Promise<InviteRow | null> {
+  const asWord = typed.toUpperCase();
+  const hashes = [...new Set([await inviteHash(env, asWord), await inviteHash(env, typed)])];
+  const { results } = await env.DB.prepare(
+    `SELECT hash, kind, phone_hash, note, created_at, expires_at, max_uses, uses FROM invites WHERE hash IN (${hashes.map(() => '?').join(', ')}) AND kind = 'signup' AND expires_at > ? AND uses < max_uses`,
+  )
+    .bind(...hashes, now)
+    .all<InviteRow>();
+  return results[0] ?? null;
+}
+
+// ---------- codes for adding a phone by text ----------
+
+const joinHash = (env: Env, code: string): Promise<string> => fingerprint(env.ENCRYPTION_KEY, 'join', code.toUpperCase());
+
+/**
+ * Stores the code a household's phone was given by ADD. Only its keyed
+ * fingerprint is stored, bound to the household. A household has at most
+ * one code waiting: a new one replaces the one before. Returns false if it
+ * could not be stored.
+ */
+export async function putJoinCode(env: Env, code: string, householdId: string, now: number, days: number): Promise<boolean> {
+  const hash = await joinHash(env, code);
+  const [, inserted] = await env.DB.batch([
+    env.DB.prepare('DELETE FROM join_codes WHERE household_id = ?').bind(householdId),
+    env.DB.prepare('INSERT OR IGNORE INTO join_codes (hash, household_id, created_at, expires_at) VALUES (?, ?, ?, ?)').bind(hash, householdId, now, now + days * 86_400_000),
+  ]);
+  return (inserted?.meta.changes ?? 0) > 0;
+}
+
+/** The household a code that has not expired was made for, without using it up; null if there is none. */
+export async function findJoinCode(env: Env, code: string, now: number): Promise<{ hash: string; householdId: string } | null> {
+  const hash = await joinHash(env, code);
+  const row = await env.DB.prepare('SELECT household_id FROM join_codes WHERE hash = ? AND expires_at > ?').bind(hash, now).first<{ household_id: string }>();
+  return row ? { hash, householdId: row.household_id } : null;
+}
+
+/** Uses a code up. False if it was used, replaced or expired in the meantime. */
+export async function spendJoinCode(env: Env, hash: string, householdId: string, now: number): Promise<boolean> {
+  const result = await env.DB.prepare('DELETE FROM join_codes WHERE hash = ? AND household_id = ? AND expires_at > ?').bind(hash, householdId, now).run();
+  return result.meta.changes > 0;
+}
+
+// ---------- one-time sign-in links (WEB by text) ----------
+
+/** How long a sign-in link texted in answer to WEB works. */
+export const LINK_TOKEN_MS = 10 * 60_000;
+
+const linkTokenHash = (env: Env, token: string): Promise<string> => fingerprint(env.ENCRYPTION_KEY, 'weblink', token);
+
+/** Stores a sign-in link's secret (a keyed fingerprint of it), for the phone that asked and its household. */
+export async function putLinkToken(env: Env, token: string, householdId: string, phoneHashValue: string, now: number): Promise<void> {
+  await env.DB.prepare('INSERT INTO link_tokens (hash, household_id, phone_hash, expires_at) VALUES (?, ?, ?, ?)')
+    .bind(await linkTokenHash(env, token), householdId, phoneHashValue, now + LINK_TOKEN_MS)
+    .run();
+}
+
+/** Uses a sign-in link up and says whom it was for; null if it is unknown, used or expired. */
+export async function takeLinkToken(env: Env, token: string, now: number): Promise<{ householdId: string; phoneHash: string } | null> {
+  const row = await env.DB.prepare('DELETE FROM link_tokens WHERE hash = ? RETURNING household_id, phone_hash, expires_at')
+    .bind(await linkTokenHash(env, token))
+    .first<{ household_id: string; phone_hash: string; expires_at: number }>();
+  if (!row || row.expires_at <= now) return null;
+  return { householdId: row.household_id, phoneHash: row.phone_hash };
 }
 
 // ---------- totals for the operator ----------

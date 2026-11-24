@@ -14,6 +14,7 @@ import { DEMO_NUMBER } from './demo';
 import type { Deps, Env } from './env';
 import { addUsageStatement, dayOf, dayStart, ensureAdminSchema, monthOf, OPS, putOpsStatement, type FailureKind } from './admin-notes';
 import { DEFAULT_SITE_CONFIG, googleReady, rcsReady, SITE_SECRET_KEYS, smsReady, type Site, type SiteConfig, type SiteSecrets } from './model';
+import { STRANGER_REPLIES_PER_DAY, STRANGER_REPLIES_PER_NUMBER, strangerDayKey, TEXT_SIGNUPS_PER_DAY, textSignupsKey } from './conversation';
 import { codesTodayKey, textsThisMonthKey } from './service';
 import { parseSiteConfig, phoneHash, type HouseholdSummary } from './store';
 
@@ -388,10 +389,13 @@ export async function adminState(env: Env, now: number, origin: string, cookieHe
       .bind(`${month}-01`),
     db.prepare('SELECT day, texts_sent, codes_sent, texts_received, signups, deletions FROM usage_daily WHERE day = ?').bind(dayOf(now)),
     ...snapshotReads(db, demoHash, now),
+    db.prepare('SELECT value FROM counters WHERE key = ? AND expires_at > ?').bind(strangerDayKey(now), now),
+    db.prepare('SELECT value FROM counters WHERE key = ? AND expires_at > ?').bind(textSignupsKey(now), now),
   ];
   const results = await db.batch(reads);
   const S = 7; // where the snapshot's reads begin
-  const snap = snapshotWrites(db, results.slice(S), now);
+  const T = S + 6; // where the texting caps' reads begin
+  const snap = snapshotWrites(db, results.slice(S, T), now);
 
   const siteRows = (results[0]?.results ?? []) as Array<{ key: string; value: string; updated_at: number }>;
   const rows = new Map(siteRows.map(r => [r.key, r]));
@@ -482,6 +486,14 @@ export async function adminState(env: Env, now: number, origin: string, cookieHe
     },
     notes,
     checks,
+    /** The caps on texting with numbers that have no account (conversation.ts), and today's counts against them. */
+    textCaps: {
+      strangerRepliesPerNumber: STRANGER_REPLIES_PER_NUMBER,
+      strangerRepliesPerDay: STRANGER_REPLIES_PER_DAY,
+      textSignupsPerDay: TEXT_SIGNUPS_PER_DAY,
+      strangerRepliesToday: first<{ value: number }>(results[T])?.value ?? 0,
+      textSignupsToday: first<{ value: number }>(results[T + 1])?.value ?? 0,
+    },
     checklist: buildChecklist({
       config,
       configSaved: configRow !== undefined,

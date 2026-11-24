@@ -9,19 +9,19 @@
  * saved, never what it is.
  */
 import type { Context, Hono } from 'hono';
-import { prefixAllowed, prefixMessage, tidyNumber } from './accounts';
+import { deleteAccount, prefixAllowed, prefixMessage, tidyNumber } from './accounts';
+import { simulateText } from './conversation';
 import { ADMIN_COOKIE, adminLogin, clearedCookie, hasAdminSession, sessionCookie, type Session } from './auth';
 import { randomToken } from './crypto';
 import { adminSessionUntil, adminState, checkGoogle, checkRcs, checkTelnyx, listAccounts, saveCheck, saveNotes, usageHistory, type AccountSort, type Notes } from './admin-data';
 import { ensureAdminSchema, failureOf, noteSmsOutcome } from './admin-notes';
 import { buildDemoData, DEMO_NUMBER, DEMO_SPOUSE, isFictionalNumber } from './demo';
 import type { Deps, Env } from './env';
-import { revokeToken } from './google';
 import { compute } from './household';
 import { SITE_SECRET_KEYS } from './model';
 import { refreshHousehold, sendSms, TEST_TEXT } from './service';
 import { ValidationError } from './settings';
-import { createHousehold, createInvite, deleteHousehold, deleteInvite, getPhone, insertPhone, inviteHash, loadHousehold, loadSite, phoneHash, saveSiteConfig, saveSiteSecrets } from './store';
+import { createHousehold, createInvitationWord, createInvite, deleteHousehold, deleteInvite, getPhone, insertPhone, inviteHash, loadHousehold, loadSite, phoneHash, saveSiteConfig, saveSiteSecrets } from './store';
 
 type AdminApp = Hono<{ Bindings: Env; Variables: { session: Session } }>;
 type C = Context<{ Bindings: Env; Variables: { session: Session } }>;
@@ -214,10 +214,65 @@ export function registerAdminRoutes(app: AdminApp, deps: Deps): void {
     return c.json(await state(c));
   });
 
+  /**
+   * A word people text as "JOIN <word>" to sign up while sign-up is by
+   * invitation. It is an ordinary sign-up invitation: listed and cancelled
+   * with the others.
+   */
+  app.post(
+    '/api/admin/invite-words',
+    handle(async c => {
+      const body = await readBody(c);
+      const num = (v: unknown): number | undefined => (v === undefined || v === null ? undefined : (v as number));
+      try {
+        const made = await createInvitationWord(c.env, {
+          word: body.word,
+          days: num(body.days),
+          maxUses: num(body.maxUses),
+          note: typeof body.note === 'string' ? body.note : null,
+          now: deps.now(),
+        });
+        return c.json({ word: made.word, state: await state(c) });
+      } catch (e) {
+        if (e instanceof ValidationError) throw new AdminError(400, e.message, /^(\w+):/.exec(e.message)?.[1] ?? 'word');
+        throw e;
+      }
+    }),
+  );
+
+  /**
+   * "Try signing up by text": a text from a number reserved for fiction,
+   * run through the real path with every reply returned instead of sent.
+   * Only the conversation the operator is typing comes back.
+   */
+  app.post(
+    '/api/admin/simulate',
+    handle(async c => {
+      const body = await readBody(c);
+      const site = await loadSite(c.env);
+      let from: string;
+      try {
+        from = tidyNumber(body.from, site.config);
+      } catch {
+        throw new AdminError(400, 'Type a number from 555-0100 to 555-0199, for example (732) 555-0150.', 'from');
+      }
+      const loc = body.location as { latitude?: unknown; longitude?: unknown } | null | undefined;
+      const location =
+        loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number' && Math.abs(loc.latitude) <= 90 && Math.abs(loc.longitude) <= 180 ? { latitude: loc.latitude, longitude: loc.longitude } : null;
+      if (typeof body.text !== 'string' || (body.text.trim() === '' && !location)) throw new AdminError(400, 'Type a text to send.', 'text');
+      try {
+        const result = await simulateText(c.env, deps, site, { from, text: body.text, location, origin: originOf(c) });
+        return c.json({ outcome: result.outcome, replies: result.replies.map(r => (r.suggestions ? { text: r.text, suggestions: r.suggestions } : { text: r.text })), householdId: result.householdId });
+      } catch (e) {
+        if (e instanceof ValidationError) throw new AdminError(400, e.message, isFictionalNumber(from) ? 'text' : 'from');
+        throw e;
+      }
+    }),
+  );
+
   app.delete('/api/admin/households/:id', async c => {
     const household = await loadHousehold(c.env, c.req.param('id')).catch(() => null);
-    if (household?.data.google) await revokeToken(deps, household.data.google.refreshToken);
-    await deleteHousehold(c.env.DB, c.req.param('id'));
+    await deleteAccount(c.env, deps, { id: c.req.param('id'), google: household?.data.google ?? null });
     return c.json(await state(c));
   });
 
@@ -279,8 +334,7 @@ export function registerAdminRoutes(app: AdminApp, deps: Deps): void {
       if (!row) continue;
       const household = await loadHousehold(env, row.household_id).catch(() => null);
       if (household && !household.data.demo) throw new AdminError(409, 'A regular account uses a number of the test account; it was left alone.');
-      if (household?.data.google) await revokeToken(deps, household.data.google.refreshToken);
-      await deleteHousehold(env.DB, row.household_id);
+      await deleteAccount(env, deps, { id: row.household_id, google: household?.data.google ?? null });
     }
   };
 

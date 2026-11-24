@@ -1,57 +1,157 @@
 /*
- * The Log tab: the entries recorded, and the text messages sent and received.
- * Next owner: the dashboard agent.
+ * The Log tab: the entries recorded, grouped by period, and the text
+ * messages sent and received, as a conversation.
  */
-import { api, button, card, confirmDialog, emptyState, h, list, listRow } from '../lib.js';
-import { S, run, saved, when } from '../store.js';
+import { api, button, card, confirmDialog, emptyState, h, icon } from '../lib.js';
+import { S, t, when } from '../store.js';
+import { thread, tryTextCard } from './demo.js';
+import { mark } from './marks.js';
+import { recordCard } from './record.js';
+import { refresh, region, saveChange, saveStatus } from './shared.js';
 
 const sourceLabel = s => (s === 'dashboard' ? 'Recorded on the website' : s === 'sms' ? 'Recorded by text message' : s);
 
+/** The entry whose options are open, and how many messages are shown. */
+let openEntry = null;
+let messageLimit = 30;
+
 export function viewLog() {
-  return h('div', { class: 'cols' }, entriesCard(), messagesCard());
+  return h('div', { class: 'cols' }, h('div', {}, recordCard({ past: true }), entriesCard()), h('div', {}, messagesCard()));
+}
+
+const CIVIL = /([A-Z][a-z]{2} \d{1,2}, \d{4})/;
+
+/** Periods, newest first; the entries of each in the order they happened. */
+function periods() {
+  const groups = [];
+  let current = null;
+  for (const e of [...S.entries].reverse()) {
+    const starts = e.kind === 'flow' || e.kind === 'stain';
+    if (starts && (!current || current.closed || !current.started)) {
+      current = { started: true, closed: false, entries: [] };
+      groups.push(current);
+    } else if (!current) {
+      current = { started: false, closed: false, entries: [] };
+      groups.push(current);
+    }
+    current.entries.push(e);
+    if (e.kind === 'mikvah') current.closed = true;
+  }
+  return groups.reverse();
+}
+
+function entryRow(e) {
+  const at = e.text.indexOf(': ');
+  const kindText = at > 0 ? e.text.slice(0, at) : e.text;
+  const rest = at > 0 ? e.text.slice(at + 2) : '';
+  const open = openEntry === e.id;
+  const markKind = e.kind === 'stain' ? 'flow' : e.kind;
+  return h(
+    'li',
+    { class: 'entry' + (open ? ' open' : '') },
+    e.kind === 'broken' ? h('span', { class: 'mk broken', 'aria-hidden': 'true' }, '×') : mark({ kind: markKind }, { number: 1 }),
+    h(
+      'div',
+      { class: 'entry-main' },
+      h('div', { class: 'title' }, h('strong', {}, kindText), rest ? h('span', { class: 'entry-date' }, rest) : null),
+      e.note ? h('p', { class: 'entry-note' }, icon('message', { size: 'sm' }), h('span', {}, e.note)) : null,
+      h('div', { class: 'when' }, sourceLabel(e.source) + ' · ' + when(e.createdAt)),
+      open
+        ? h(
+            'div',
+            { class: 'entry-options', id: 'entry-options-' + e.id },
+            h('p', { class: 'help' }, 'Removing an entry recalculates the calendar and the reminders. It is kept, marked as removed, in "Download my data".'),
+            button({
+              label: 'Remove this entry',
+              variant: 'danger',
+              size: 'sm',
+              icon: 'trash',
+              attrs: { id: 'entry-remove-' + e.id },
+              onclick: async ev => {
+                const btn = ev.currentTarget;
+                if (!(await confirmDialog({ title: 'Remove this entry?', body: e.text, confirmLabel: 'Remove entry', danger: true }))) return;
+                openEntry = null;
+                saveChange('entries', () => api('DELETE', '/api/entries/' + encodeURIComponent(e.id)), { message: 'Removed' }).then(ok => {
+                  if (!ok && btn.isConnected) btn.focus();
+                });
+              },
+            }),
+          )
+        : null,
+    ),
+    h(
+      'div',
+      { class: 'trail' },
+      button({
+        label: open ? 'Close' : 'Options',
+        size: 'sm',
+        variant: 'link',
+        icon: open ? 'chevron-up' : 'chevron-down',
+        attrs: { id: 'entry-more-' + e.id, 'aria-expanded': String(open), 'aria-controls': open ? 'entry-options-' + e.id : null, 'aria-label': (open ? 'Close the options for ' : 'Options for ') + e.text },
+        onclick: () => {
+          openEntry = open ? null : e.id;
+          refresh('entries');
+        },
+      }),
+    ),
+  );
 }
 
 function entriesCard() {
   return card(
-    { title: 'Entries' },
-    S.entryCount > S.entries.length ? h('p', { class: 'muted small' }, 'Showing the latest ' + S.entries.length + ' of ' + S.entryCount + '.') : null,
-    S.entries.length === 0
-      ? emptyState({ icon: 'list', title: 'Nothing recorded yet.' })
-      : list(
-          S.entries.map(e =>
-            listRow({
-              lead: h('span', { class: 'dot ' + (e.kind === 'stain' || e.kind === 'broken' ? 'flow' : e.kind), 'aria-hidden': 'true' }),
-              title: e.text,
-              meta: sourceLabel(e.source) + ' · ' + when(e.createdAt),
-              body: e.note ? h('div', { class: 'small' }, e.note) : null,
-              trail: button({
-                label: 'Remove',
-                variant: 'danger',
-                size: 'sm',
-                attrs: { 'aria-label': 'Remove ' + e.text },
-                onclick: async ev => {
-                  const btn = ev.currentTarget;
-                  if (!(await confirmDialog({ title: 'Remove this entry?', body: e.text, confirmLabel: 'Remove', danger: true }))) return;
-                  run(() => api('DELETE', '/api/entries/' + encodeURIComponent(e.id)), saved('Removed.'), btn);
-                },
-              }),
-            }),
-          ),
-        ),
+    { title: 'Entries', icon: 'list', headerAction: saveStatus('entries') },
+    region('entries', () => {
+      if (S.entries.length === 0) return h('div', {}, emptyState({ icon: 'list', title: 'Nothing recorded yet.', body: t('Record a {flow} on the Today tab, or add a past entry below.') }));
+      const groups = periods();
+      return h(
+        'div',
+        {},
+        S.entryCount > S.entries.length ? h('p', { class: 'muted small' }, 'Showing the latest ' + S.entries.length + ' of ' + S.entryCount + '.') : null,
+        groups.map((g, i) => {
+          const first = g.entries[0];
+          const m = CIVIL.exec(first.text);
+          const title = g.started ? 'Began ' + (m ? m[1] : '') : 'Other entries';
+          return h(
+            'section',
+            { class: 'period' },
+            h('h3', {}, title, i === 0 && g.started && !g.closed ? h('span', { class: 'tag info' }, 'Current') : null),
+            h('ul', { class: 'list entries' }, g.entries.map(entryRow)),
+          );
+        }),
+      );
+    }),
   );
 }
 
 function messagesCard() {
-  return card(
-    { title: 'Text messages' },
-    S.messages.length === 0
-      ? emptyState({ icon: 'message', title: 'None yet.' })
-      : list(
-          S.messages.map(m =>
-            listRow({
-              body: [h('div', {}, (m.direction === 'in' ? 'From' : 'To') + ' the phone ending ' + m.phone + ': ', h('span', { class: 'mono' }, m.body)), h('div', { class: 'when' }, when(m.at) + ' · ' + m.status)],
-            }),
-          ),
-        ),
+  const msgs = S.messages || [];
+  return h(
+    'div',
+    {},
+    S.demo ? tryTextCard() : null,
+    card(
+      { title: 'Text messages', icon: 'message', className: 'messages-card' },
+      S.demo ? h('p', { class: 'help' }, 'In the test account nothing is sent: replies, reminders and codes are kept here marked “simulated”.') : null,
+      region('messages', () =>
+        msgs.length === 0
+          ? h('div', {}, emptyState({ icon: 'message', title: 'No text messages yet.', body: S.sms.ready ? 'Texts sent to this account, and its replies and reminders, are listed here.' : 'Text messaging is not available on this site yet.' }))
+          : h(
+              'div',
+              {},
+              thread(msgs, { limit: messageLimit, label: 'Text messages, oldest first', showPhone: true }),
+              msgs.length > messageLimit
+                ? button({
+                    label: 'Show older messages',
+                    variant: 'link',
+                    attrs: { id: 'msg-more' },
+                    onclick: () => {
+                      messageLimit += 30;
+                      refresh('messages');
+                    },
+                  })
+                : null,
+            ),
+      ),
+    ),
   );
 }

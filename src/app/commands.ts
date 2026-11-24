@@ -72,8 +72,10 @@ export function parseCommand(text: string): ParsedCommand {
   if (cleaned === '' ) return { kind: 'unknown' };
   if (cleaned === '?' || cleaned === 'help' || cleaned === 'info') return { kind: 'help' };
   const tokens = cleaned.split(/\s+/);
-  const code = CODES[tokens[0] as string];
-  if (!code) return { kind: 'unknown' };
+  // Only the listed digits are commands. (A plain lookup would also find the names every object has, such as "constructor".)
+  const first = tokens[0] as string;
+  if (!Object.hasOwn(CODES, first)) return { kind: 'unknown' };
+  const code = CODES[first] as (typeof CODES)[string];
   const rest = tokens.slice(1);
 
   if (code === 'status' || code === 'undo') {
@@ -112,7 +114,7 @@ export function parseCommand(text: string): ParsedCommand {
 }
 
 export const HELP_TEXT =
-  '1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 you may add: day, night, yesterday day, or a time (9pm).';
+  '1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm).';
 
 export interface ResolveContext {
   now: number;
