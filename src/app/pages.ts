@@ -292,7 +292,7 @@ ${donateReady(site) ? '  <li><strong>Payment services</strong>, if you donate: t
       {
         id: 'logs',
         title: 'Logs and limits',
-        body: `<p>The server keeps no log of the pages or addresses requested. Errors are logged without any account's data. To stop abuse of sign-in codes, a keyed fingerprint of the network address that asked for a code is kept for up to one hour.</p>`,
+        body: `<p>The server keeps no log of the pages or addresses requested. Errors are logged without any account's data. To stop abuse of sign-in codes, a keyed fingerprint of the network address that asked for a code is kept for up to one hour. The same kind of fingerprint is kept for ten minutes for the "Try it" calendar on the home page; the dates tried there are not kept at all.</p>`,
       },
       {
         id: 'calendar-link',
