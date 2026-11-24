@@ -85,6 +85,19 @@ h3,
   letter-spacing: -0.015em;
 }
 
+a.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mark {
+  width: 36px;
+  height: 36px;
+  display: block;
+  flex: none;
+}
+
 a {
   color: var(--accent);
 }

@@ -34,6 +34,10 @@ function newRec() {
   return { kind: null, mode: 'now', date: '', how: 'day', time: '', veset: true, note: '' };
 }
 
+function brandMark() {
+  return h('a', { class: 'brand', href: '/' }, h('img', { class: 'mark', src: '/favicon.svg', width: '36', height: '36', alt: '' }), 'Betaharah');
+}
+
 // ---------- small helpers ----------
 
 function h(tag, attrs, ...children) {
@@ -290,7 +294,7 @@ function renderAuth() {
       ),
     );
   }
-  root.replaceChildren(h('header', { class: 'top' }, h('h1', {}, h('a', { href: '/' }, 'Betaharah'))), form);
+  root.replaceChildren(h('header', { class: 'top' }, h('h1', {}, brandMark())), form);
   const first = form.querySelector(a.step === 'code' && a.mode === 'code' && !a.inviteKind ? '#code' : '#number');
   if (first && !a.busy) first.focus();
 }
@@ -307,6 +311,7 @@ function googleButton(a) {
 
 function showFatal(e) {
   root.replaceChildren(
+    h('header', { class: 'top' }, h('h1', {}, brandMark())),
     h('div', { class: 'card login' }, h('h2', {}, 'Could not load'), h('p', {}, (e && e.message) || 'Unknown error'), h('p', {}, h('a', { href: '/' }, 'Back to the home page'))),
   );
 }
@@ -315,6 +320,7 @@ async function start() {
   P = await api('GET', '/api/public');
   if (!P.configured) {
     root.replaceChildren(
+      h('header', { class: 'top' }, h('h1', {}, brandMark())),
       h('div', { class: 'card login' }, h('h2', {}, 'Not set up yet'), h('p', {}, 'This site is not ready to be used yet.'), h('p', {}, h('a', { href: '/' }, 'Back to the home page'))),
     );
     return;
@@ -359,7 +365,7 @@ function render() {
     h(
       'header',
       { class: 'top' },
-      h('h1', {}, h('a', { href: '/' }, 'Betaharah')),
+      h('h1', {}, brandMark()),
       h(
         'div',
         { class: 'top-side' },

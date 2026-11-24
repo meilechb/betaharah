@@ -14,6 +14,10 @@ let invite = { kind: 'setup', number: '', note: '', maxUses: 1, days: 14, link: 
 let testTo = '';
 let toastTimer = null;
 
+function brandMark() {
+  return h('a', { class: 'brand', href: '/' }, h('img', { class: 'mark', src: '/favicon.svg', width: '36', height: '36', alt: '' }), 'Betaharah');
+}
+
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -100,7 +104,7 @@ function renderLogin(message) {
     h('div', { class: 'field' }, h('label', { for: 'pw' }, 'Operator password'), h('input', { id: 'pw', type: 'password', class: 'wide', autocomplete: 'current-password', required: true, oninput: e => (password = e.target.value) })),
     h('button', { class: 'primary', type: 'submit' }, 'Sign in'),
   );
-  root.replaceChildren(form);
+  root.replaceChildren(h('header', { class: 'top' }, h('h1', {}, brandMark())), form);
   form.querySelector('input').focus();
 }
 
@@ -115,7 +119,7 @@ async function load() {
 
 function render() {
   root.replaceChildren(
-    h('header', { class: 'top' }, h('h1', {}, 'Betaharah operator console'), h('div', { class: 'today' }, 'Accounts, phones and recent texts. Cycle entries are not listed.')),
+    h('header', { class: 'top' }, h('h1', {}, brandMark()), h('div', { class: 'today' }, 'Operator console. Accounts, phones and recent texts. Cycle entries are not listed.')),
     statusCard(),
     signupCard(),
     keysCard(),

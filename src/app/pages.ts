@@ -12,19 +12,40 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function layout(title: string, body: string, indexable = false): string {
+const SHARE = 'A free mikvah calendar that works by text message and shows up in your own calendar. Calculated by your customs.';
+const SHARE_IMAGE = 'https://betaharah.com/brand/og-1200x630.png';
+
+function layout(title: string, body: string, indexable = false, path = '/'): string {
+  const full = `${title} · Betaharah`;
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="${indexable ? 'index,follow' : 'noindex'}">
-<title>${escapeHtml(title)} · Betaharah</title>
+<title>${escapeHtml(full)}</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#6e3d45">
+<meta property="og:site_name" content="Betaharah">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${escapeHtml(full)}">
+<meta property="og:description" content="${escapeHtml(SHARE)}">
+<meta property="og:url" content="https://betaharah.com${path}">
+<meta property="og:image" content="${SHARE_IMAGE}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${escapeHtml(full)}">
+<meta name="twitter:description" content="${escapeHtml(SHARE)}">
+<meta name="twitter:image" content="${SHARE_IMAGE}">
 <link rel="stylesheet" href="/site.css">
 </head>
 <body>
 <header class="site">
-  <a class="brand" href="/">Betaharah</a>
+  <a class="brand" href="/"><img class="mark" src="/favicon.svg" width="36" height="36" alt="">Betaharah</a>
   <nav><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a class="button" href="/app/">Sign in</a></nav>
 </header>
 <main class="doc">
@@ -107,6 +128,8 @@ ${number ? `<p>Text <strong>${escapeHtml(number)}</strong> from a phone that is 
 
 <h2>Contact</h2>
 <p>This site is run by ${c.who}. ${c.how}</p>`,
+    false,
+    '/help',
   );
 }
 
@@ -165,6 +188,7 @@ export function privacyPage(site: Site): string {
 <h2>Changes and contact</h2>
 <p>If this page changes in a way that matters, the change is noted here with a new date. ${c.how}</p>`,
     true,
+    '/privacy',
   );
 }
 
@@ -210,5 +234,6 @@ export function termsPage(site: Site): string {
 <h2>Contact</h2>
 <p>${c.how}</p>`,
     true,
+    '/terms',
   );
 }
