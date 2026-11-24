@@ -132,7 +132,8 @@ main.doc section:target h2 {
 }
 main.doc p code,
 main.doc li code {
-  white-space: nowrap;
+  /* A long address in code (a Google permission) must wrap on a narrow screen. */
+  overflow-wrap: anywhere;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
