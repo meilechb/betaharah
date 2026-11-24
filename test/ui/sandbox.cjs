@@ -308,7 +308,12 @@ async function home(browser) {
   for (const [width, scheme] of [[1280, 'light'], [1280, 'dark'], [390, 'light'], [360, 'dark']]) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: scheme, deviceScaleFactor: out ? 2 : 1 });
     const page = await context.newPage();
-    const errors = watch(page);
+    // the made-up zip code below is refused with a 400 on purpose; before it, every answer must be a 200
+    const errors = watch(page, /status of 400/);
+    const refused = [];
+    page.on('response', r => {
+      if (r.url().includes('/api/try') && r.status() !== 200) refused.push(r.status());
+    });
     const step = (name, fn) => run(`home ${width}px: ${name}`, page, fn);
     await step('a date and a zip fill the month, with no place list', async () => {
       await page.goto(base + '/#try');
@@ -341,6 +346,7 @@ async function home(browser) {
       if (!text.includes('Nothing you type here is saved.')) throw new Error('does not say nothing is saved');
       const wide = await sideways(page);
       if (wide > 0) throw new Error('scrolls sideways by ' + wide + 'px');
+      if (refused.length) throw new Error('a real date and zip code were refused: ' + refused.join(', '));
       if (out) await page.locator('#try').screenshot({ path: `${out}/home-try-${width}-${scheme}.png` });
     });
     await step('a zip code that is not real is refused in plain words', async () => {
@@ -364,7 +370,11 @@ async function home(browser) {
       await page.goto(base + '/#try');
       await page.waitForSelector('#try-cal .mk.flow');
       await page.focus('#try-start');
-      await page.keyboard.press('Tab');
+      // a date box has several parts (month, day, year, picker); Tab walks through them first
+      for (let i = 0; i < 5; i++) {
+        await page.keyboard.press('Tab');
+        if ((await page.evaluate(() => document.activeElement.id)) !== 'try-start') break;
+      }
       if ((await page.evaluate(() => document.activeElement.id)) !== 'try-zip') throw new Error('Tab does not reach the zip code');
       const first = await page.evaluate(() => document.querySelector('#try .month .day[tabindex="0"]').id);
       await page.focus('#' + first);
