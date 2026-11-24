@@ -96,6 +96,12 @@ const problems = [];
     await q.click(`nav.tabs button:has-text("${name}")`);
     await q.waitForSelector(`nav.tabs button[aria-selected="true"]:has-text("${name}")`);
   };
+  /** Opens a Settings section. On a narrow screen an open section hides the list, so go back to the list first. */
+  const settingsSection = async id => {
+    if (!(await page.isVisible('#st-nav-' + id))) await page.click('#st-back');
+    await page.click('#st-nav-' + id);
+    await page.waitForSelector('#st-pane-' + id);
+  };
   const shot = (label, p) => (p || page).screenshot({ path: `${out}/${label}.png`, fullPage: true });
 
   // ===================== the public pages =====================
@@ -440,7 +446,7 @@ const problems = [];
   });
 
   await step('download my data', async () => {
-    await page.click('#st-nav-data');
+    await settingsSection('data');
     await page.waitForSelector('a:has-text("Download my data")');
     const [download] = await Promise.all([page.waitForEvent('download'), page.click('a:has-text("Download my data")')]);
     const file = await download.path();
@@ -449,8 +455,8 @@ const problems = [];
   });
 
   await step('sign out: nothing of the account is left on screen, in the title or in the browser; then in again', async () => {
-    await page.click('#st-nav-security');
-    await page.click('button:has-text("Sign out"):not(:has-text("everywhere"))');
+    await settingsSection('security');
+    await page.click('#sign-out');
     await page.waitForSelector('form.login');
     const text = await page.textContent('body');
     for (const s of [PRETTY, LOCAL, 'Tehorah', 'Kislev', 'Lakewood']) if (text.includes(s)) throw new Error('left on screen: ' + s);
@@ -472,7 +478,7 @@ const problems = [];
   await step('delete the account: typed confirmation, then gone, and its calendar link answers no more', async () => {
     feed = (await state()).calendar.link;
     await tab('Settings');
-    await page.click('#st-nav-data');
+    await settingsSection('data');
     await page.click('button:has-text("Delete my account")');
     await page.waitForSelector('dialog[open]');
     await page.fill('dialog[open] input', 'delete');

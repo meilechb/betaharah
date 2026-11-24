@@ -126,7 +126,6 @@ function coordinatesForm() {
   });
 }
 
-const round4 = n => String(Math.round(n * 10000) / 10000);
 
 function currentPlace() {
   const p = S.app.place;
@@ -147,7 +146,6 @@ function currentPlace() {
       'div',
       { class: 'st-hero-main' },
       h('p', { class: 'st-hero-title', id: 'loc-current' }, placeName(p)),
-      h('p', { class: 'st-hero-meta' }, p.timeZone.replace(/_/g, ' ') + ' · ' + round4(p.latitude) + ', ' + round4(p.longitude)),
       sun
         ? h(
             'dl',
@@ -236,7 +234,7 @@ function view() {
               'div',
               { class: 'st-device' },
               button({ label: 'Use this device’s location', icon: 'map', attrs: { id: 'place-device' }, onclick: e => useDevice(e.currentTarget) }),
-              h('p', { class: 'help' }, 'Your browser asks first. The place is saved with its coordinates only.'),
+              h('p', { class: 'help' }, 'Your browser asks first.'),
               geoError ? h('div', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, geoError)) : null,
             ),
           ),
