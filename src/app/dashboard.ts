@@ -16,6 +16,9 @@ import { entryText, noteText, patternText, statusLines, warningText } from './wo
 /** The dashboard lists this many of the most recent entries. */
 const MAX_LISTED_ENTRIES = 150;
 
+/** The texting number the test account shows while the site has none of its own (a fictional number). */
+export const DEMO_TEXTING_NUMBER = '+18885550100';
+
 /** For this long after signing in, a session may change how the account is signed in to (its password). */
 export const FRESH_MS = 15 * 60_000;
 
@@ -171,15 +174,21 @@ export function dashboardState(args: StateArgs) {
       hasPassword: session.phone.password !== null,
       // Whether this session began recently enough to set, change or remove the password.
       fresh: now - session.startedAt < FRESH_MS,
+      // Whether the guided first steps have been shown and closed.
+      welcomed: data.welcomedAt !== null,
     },
     calendar: {
       google: { available: googleReady(site), connected: data.google !== null },
       link: data.calendarLinkToken ? `${origin}/cal/${data.calendarLinkToken}.ics` : null,
       sync: data.sync,
     },
+    /** The operator's test account: texts are simulated, never sent. */
+    demo: data.demo,
     sms: {
-      ready: smsReady(site),
-      number: smsReady(site) ? (site.secrets.telnyxNumber ?? null) : null,
+      // In the test account texting always "works": the page offers a box to send a simulated text.
+      ready: data.demo || smsReady(site),
+      simulated: data.demo,
+      number: data.demo ? (site.secrets.telnyxNumber ?? DEMO_TEXTING_NUMBER) : smsReady(site) ? (site.secrets.telnyxNumber ?? null) : null,
       usedThisMonth: textsThisMonth(data, now),
       monthlyLimit: site.config.householdMonthlyLimit,
       commands: HELP_TEXT,

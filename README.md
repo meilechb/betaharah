@@ -28,6 +28,17 @@ If you run the site, read [docs/OPERATOR.md](docs/OPERATOR.md).
 | English or Hebrew terms | The site is in English. A setting chooses whether halachic terms are written in English letters (hefsek taharah) or in Hebrew (הפסק טהרה), on the site and in the calendar. Text messages are always in English letters. |
 | Leaving | Settings has "Download my data" and "Delete my account". |
 
+## Test account
+
+The operator's console opens a test account with one click: a made-up
+household, fully set up and in the middle of the seven clean days, with
+phones (732) 555-0100 and (732) 555-0199 (numbers reserved for fiction).
+Every feature works in it, but no text is ever sent: replies, reminders and
+codes are recorded in its Log as "simulated", and the dashboard has a box for
+sending a text from its phone. Details are in
+[docs/OPERATOR.md](docs/OPERATOR.md#test-account). The site never texts a
+number from 555-0100 to 555-0199.
+
 ## What is here
 
 | Part | Where |

@@ -72,6 +72,13 @@ export interface HouseholdData {
   usage: { month: string; texts: number };
   /** Ids of the latest received texts, so that one delivered twice is acted on once. */
   seenTexts: string[];
+  /** When the guided first steps were shown and closed; null until then. */
+  welcomedAt: number | null;
+  /**
+   * The operator's test account (see demo.ts). No text is ever sent for it:
+   * each one is recorded as simulated instead.
+   */
+  demo: boolean;
 }
 
 export function newHousehold(): HouseholdData {
@@ -90,6 +97,8 @@ export function newHousehold(): HouseholdData {
     queue: [],
     usage: { month: '', texts: 0 },
     seenTexts: [],
+    welcomedAt: null,
+    demo: false,
   };
 }
 
