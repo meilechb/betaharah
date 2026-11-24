@@ -6,6 +6,7 @@
  */
 import { fingerprint, randomCode } from './crypto';
 import { DEMO_NUMBER } from './demo';
+import { noteSmsOutcome } from './admin-notes';
 import type { Deps, Env } from './env';
 import { GoogleCalendar, GoogleError, refreshAccessToken } from './google';
 import { compute, type Computed } from './household';
@@ -118,10 +119,14 @@ export async function sendText(env: Env, deps: Deps, site: Site, args: TextToSen
             suggestions: args.suggestions,
           })
         : await sendTelnyx(deps, { apiKey: telnyxApiKey, from: telnyxNumber, to: args.to, text: args.text });
-    if (result.ok) return { ok: true, channel: result.channel };
+    if (result.ok) {
+      await noteSmsOutcome(env.DB, { ok: true }, args.now); // for the operator's console: when a text last went out
+      return { ok: true, channel: result.channel };
+    }
     refused = { ok: false, reason: result.blocked ? 'blocked' : 'failed', detail: result.error };
   }
   await env.DB.prepare('UPDATE counters SET value = MAX(value - 1, 0) WHERE key = ?').bind(key).run();
+  await noteSmsOutcome(env.DB, refused, args.now);
   return refused;
 }
 

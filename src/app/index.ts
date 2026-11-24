@@ -28,6 +28,8 @@ import { addressedToSite, handleInbound, receiveText } from './conversation';
 import { checkPassword, fingerprint, hashPassword, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, randomToken } from './crypto';
 import { dashboardState, draftFromForm, FRESH_MS } from './dashboard';
 import { DEMO_NUMBER, isFictionalNumber } from './demo';
+import { recordTick } from './admin-data';
+import { noteTextReceived } from './admin-notes';
 import { realDeps, type Deps, type Env } from './env';
 import { authorizationUrl, exchangeCode, GoogleCalendar, GoogleError, revokeToken } from './google';
 import { compute, confirmationText, recordEntry, rejectionText, removeEntry, whereOf, type Computed } from './household';
@@ -216,6 +218,8 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       deps.now(),
     );
     if (!result.ok) return c.json({ error: result.reason }, result.status as 400 | 401);
+    // for the operator's console: when a text was last received (a time and a count, nothing about whose)
+    if (result.message) await noteTextReceived(c.env.DB, deps.now());
     // SMS to the site's number and RCS to the site's agent come here alike; anything else is acknowledged and ignored.
     if (result.message && addressedToSite(site, result.message)) {
       const after = await handleInbound(c.env, deps, site, result.message, originOf(c));
@@ -908,6 +912,11 @@ export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => app.fetch(request, env, ctx),
   scheduled: (_event: ScheduledController, env: Env, ctx: ExecutionContext) => {
     if (!isConfigured(env)) return;
-    ctx.waitUntil(ensureSchema(env.DB).then(() => tick(env, realDeps)));
+    ctx.waitUntil(
+      ensureSchema(env.DB)
+        .then(() => tick(env, realDeps))
+        // for the operator's console: when the job last ran, and the day's counts
+        .then(() => recordTick(env, Date.now())),
+    );
   },
 } satisfies ExportedHandler<Env>;
