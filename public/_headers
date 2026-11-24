@@ -28,3 +28,13 @@
 
 /favicon.svg
   ! X-Robots-Tag
+
+# The share image named on the home page, and the mark's other files.
+/brand/*
+  ! X-Robots-Tag
+
+/favicon.ico
+  ! X-Robots-Tag
+
+/apple-touch-icon.png
+  ! X-Robots-Tag
