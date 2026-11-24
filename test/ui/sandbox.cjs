@@ -78,7 +78,7 @@ async function console_(browser) {
       await page.click(date.slice(0, 7) < shown ? '#calc-prev' : '#calc-next');
     }
   };
-  /** Clicks a day, then one button of "What happened on this day?". */
+  /** Clicks a day, then one button of "What happened?". */
   const add = async (date, button) => {
     await showMonth(date);
     await page.click('#calc-day-' + date);
@@ -99,8 +99,8 @@ async function console_(browser) {
     await page.click('#nav-calc');
     await page.waitForSelector('#page-title:text-is("Calculation test")');
     await page.waitForSelector('#calc-headline');
-    if (!(await page.textContent('.calc-note')).includes('This runs the same calculation as people’s accounts, and saves nothing.')) throw new Error('no note');
-    if (!(await page.textContent('#calc-how')).includes('Click a day, then choose what happened on it.')) throw new Error('no instruction');
+    if (!(await page.textContent('.calc-note')).includes('Same calculation as accounts. Nothing is saved.')) throw new Error('no note');
+    if (!(await page.textContent('#calc-how')).includes('Click a day, then what happened.')) throw new Error('no instruction');
     // without scrolling: the first week of the calendar, and the four buttons
     for (const sel of ['table.month button.day', '#calc-add-flow-day', '#calc-add-flow-night', '#calc-add-hefsek']) {
       const box = await page.locator(sel).first().boundingBox();
@@ -112,7 +112,7 @@ async function console_(browser) {
     if ((await headline()) !== 'Tehorah') throw new Error('not blank: ' + (await headline()));
     if (!(await page.textContent('#calc-log-title')).includes('None yet')) throw new Error('the list of dates is not empty');
     if ((await page.locator('table.month .mk').count()) !== 0) throw new Error('marks on a blank calendar');
-    if (!(await page.textContent('#calc-onot')).includes('None yet. Click the day a period began and add it.')) throw new Error('no hint to begin');
+    if (!(await page.textContent('#calc-onot')).includes('None yet.')) throw new Error('no hint to begin');
   });
 
   await step('a period, with one click: recorded; the hefsek taharah is shown as not entered; the next month is marked', async () => {
@@ -331,7 +331,7 @@ async function home(browser) {
       if (!(await page.isVisible('#try-signup'))) throw new Error('no button to sign up');
       const text = await page.textContent('#try');
       for (const word of [/\bserver\b/i, /\bengine\b/i, /\bAPI\b/, /algorithm/i]) if (word.test(text)) throw new Error('technical wording: ' + word);
-      if (!text.includes('Nothing you enter here is saved.')) throw new Error('does not say nothing is saved');
+      if (!text.includes('Nothing you enter is saved.')) throw new Error('does not say nothing is saved');
       const wide = await sideways(page);
       if (wide > 0) throw new Error('scrolls sideways by ' + wide + 'px');
       if (out) {

@@ -1,9 +1,7 @@
 /* Settings: Language (English letters or Hebrew script for halachic terms, with an example sentence). */
 import { h } from '../../lib.js';
 import { S } from '../../store.js';
-import { blockRow, choiceCards, group, saveApp, tn } from './ui.js';
-
-const EXAMPLE = 'After the {hefsek}, the {clean_days} begin. The {mikvah_night} is after {nightfall}.';
+import { blockRow, choiceCards, group, saveApp } from './ui.js';
 
 function view() {
   const value = S.app.terms;
@@ -11,10 +9,9 @@ function view() {
     title: 'Language',
     parent: '',
     statusKey: 'language',
-    lead: 'How halachic terms are written here and in your calendar.',
     body: [
       group(
-        { title: 'Halachic terms', id: 'lang-terms', footer: 'Text messages always use English letters.' },
+        { title: 'Halachic terms', id: 'lang-terms', footer: 'Texts always use English letters.' },
         blockRow(
           choiceCards({
             name: 'terms',
@@ -27,10 +24,6 @@ function view() {
             onchange: v => saveTerms(v),
           }),
         ),
-      ),
-      group(
-        { title: 'How it reads now', id: 'lang-example' },
-        blockRow(h('p', { class: 'st-sample' }, tn(EXAMPLE, true))),
       ),
     ],
   };

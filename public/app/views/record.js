@@ -30,15 +30,15 @@ const smooth = () => (window.matchMedia('(prefers-reduced-motion: reduce)').matc
 function kindHelp(kind) {
   switch (kind) {
     case 'flow':
-      return t('A period began.');
+      return '';
     case 'stain':
-      return t('One that makes her {niddah}.');
+      return t('Makes her {niddah}');
     case 'hefsek':
-      return t('Before {sunset}.');
+      return t('Before {sunset}');
     case 'broken':
-      return t('The {clean_days} start again. A new {hefsek} is needed.');
+      return t('The count restarts');
     case 'mikvah':
-      return t('Optional: assumed on the {mikvah_night}.');
+      return 'Optional';
     default:
       return '';
   }
@@ -98,12 +98,12 @@ function undo(e) {
     button: e.currentTarget,
     done: r => {
       adopt(r.state);
-      done = { where: d.where, message: 'Removed. Nothing else was changed.', id: null, undoError: '' };
+      done = { where: d.where, message: 'Removed.', id: null, undoError: '' };
       render();
       document.getElementById('rec-done')?.focus();
     },
     fail: message => {
-      d.undoError = message + ' The entry can also be removed in the Log.';
+      d.undoError = message + ' Remove it in the Log.';
       render();
     },
   });
@@ -122,7 +122,7 @@ export function notice(where) {
       'span',
       { class: 'rec-done-actions' },
       done.id ? button({ label: 'Undo', variant: 'link', attrs: { id: 'rec-undo' }, onclick: undo }) : null,
-      where === 'log' ? null : button({ label: 'See it in the Log', variant: 'link', attrs: { id: 'rec-see-log' }, onclick: () => go('log') }),
+      where === 'log' ? null : button({ label: 'See in Log', variant: 'link', attrs: { id: 'rec-see-log' }, onclick: () => go('log') }),
     ),
     done.undoError ? h('span', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, done.undoError)) : null,
   );
@@ -183,7 +183,7 @@ function submit(e) {
     if (timed(rec.kind)) {
       if (!rec.how) {
         rec.fieldError = 'how';
-        rec.error = 'Choose by day, at night, or a time.';
+        rec.error = 'Choose day, night or a time.';
         refresh('record');
         document.getElementById('r-rec-how-day')?.focus();
         return;
@@ -217,8 +217,8 @@ function submit(e) {
 
 function nowText(kind) {
   if (kind === 'hefsek') return longDate(today()) + '.';
-  if (kind === 'mikvah') return 'This evening, or the night now.';
-  return S.today ? 'It is now ' + (S.today.part === 'night' ? t('night (after {sunset})') : 'day (after sunrise)') + ': ' + S.today.hebrew + '.' : null;
+  if (kind === 'mikvah') return null;
+  return S.today ? (S.today.part === 'night' ? 'Night, ' : 'Day, ') + S.today.hebrew : null;
 }
 
 function whenPart() {
@@ -240,7 +240,7 @@ function whenPart() {
       },
     });
   const nowHint = nowText(kind);
-  const dateLabel = kind === 'hefsek' ? t('The day the {hefsek} was done') : kind === 'mikvah' ? 'The evening she immersed' : 'Date';
+  const dateLabel = kind === 'mikvah' ? 'Evening of' : 'Date';
   return h(
     'fieldset',
     { class: 'plain when' },
@@ -269,9 +269,9 @@ function whenPart() {
                 'fieldset',
                 { class: 'plain how' + (rec.fieldError === 'how' ? ' invalid' : '') },
                 h('legend', { class: 'small-legend' }, 'Time of day'),
-                radio('how', 'day', 'By day', t('Sunrise to {sunset}.')),
-                radio('how', 'night', 'At night', t('After {sunset} on this date.')),
-                radio('how', 'time', 'At a time I know'),
+                radio('how', 'day', 'By day', t('Sunrise to {sunset}')),
+                radio('how', 'night', 'At night', t('After {sunset}')),
+                radio('how', 'time', 'At a time'),
                 rec.how === 'time'
                   ? h('div', { class: 'indent' }, textField({ id: 'rec-time', label: 'Time', type: 'time', wide: false, value: rec.time, error: rec.fieldError === 'time' ? rec.error : '', oninput: e => (rec.time = e.target.value) }))
                   : null,
@@ -294,7 +294,7 @@ function form() {
     kind === 'flow'
       ? checkRow({ id: 'rec-veset', label: t('Counts for the {vesatot}'), checked: rec.veset, onchange: e => (rec.veset = e.target.checked) })
       : null,
-    textField({ id: 'rec-note', label: 'Note (optional)', help: 'Only you see it, in the Log.', maxlength: 200, value: rec.note, oninput: e => (rec.note = e.target.value) }),
+    textField({ id: 'rec-note', label: 'Note (optional)', maxlength: 200, value: rec.note, oninput: e => (rec.note = e.target.value) }),
     rec.error && !rec.fieldError ? alert({ kind: 'bad', role: 'alert', className: 'rec-error' }, h('span', { id: 'rec-error', tabindex: '-1' }, rec.error)) : null,
     h('div', { class: 'actions' }, button({ label: 'Record ' + label.toLowerCase(), variant: 'primary', type: 'submit', attrs: { id: 'rec-submit' } }), button({ label: 'Cancel', attrs: { id: 'rec-cancel' }, onclick: closeRecord })),
   );
@@ -315,7 +315,7 @@ function kindPicker() {
           onclick: () => choose(kind),
         },
         entryMark(kind),
-        h('span', { class: 'kind-text' }, h('span', { class: 'kind-label' }, S.labels.kinds[kind]), h('span', { class: 'kind-help' }, kindHelp(kind))),
+        h('span', { class: 'kind-text' }, h('span', { class: 'kind-label' }, S.labels.kinds[kind]), kindHelp(kind) ? h('span', { class: 'kind-help' }, kindHelp(kind)) : null),
       ),
     ),
   );
@@ -339,7 +339,7 @@ export function recordPanel() {
   if (!rec.open || rec.where !== 'status') return null;
   return card(
     {
-      title: 'Record something',
+      title: 'Record',
       icon: 'plus',
       className: 'record-card record-panel',
       attrs: { id: 'record-panel' },
@@ -359,9 +359,8 @@ export function recordCard() {
           'div',
           {},
           notice('log'),
-          h('p', { class: 'help' }, 'For something not recorded at the time.'),
           button({
-            label: 'Choose what to add',
+            label: 'Add entry',
             attrs: { id: 'rec-open' },
             onclick: () => {
               rec = { ...blank(), open: true, mode: 'other', date: today(), where: 'log', opener: 'rec-open' };

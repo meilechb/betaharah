@@ -14,10 +14,10 @@ const LABELS = {
 
 const HELP = {
   telnyxApiKey: 'Telnyx portal → Keys & Credentials → API Keys.',
-  telnyxPublicKey: 'Telnyx portal → Keys & Credentials → Public Key. It proves that received texts come from Telnyx.',
-  telnyxNumber: 'The toll-free number, with the country code, for example +1 888 555 0100.',
-  telnyxMessagingProfileId: 'Telnyx portal → Messaging → your profile. Needed for RCS; the Check button also compares it with the number’s profile.',
-  rcsAgentId: 'The id Telnyx gave the RCS agent when it was created.',
+  telnyxPublicKey: 'Telnyx portal → Keys & Credentials → Public Key.',
+  telnyxNumber: 'Toll-free, like +1 888 555 0100.',
+  telnyxMessagingProfileId: 'Telnyx portal → Messaging → your profile. For RCS.',
+  rcsAgentId: 'From Telnyx.',
   googleClientId: 'Google Cloud Console → APIs & Services → Credentials → your OAuth client.',
   googleClientSecret: 'Shown next to the client ID.',
 };
@@ -54,7 +54,7 @@ function secretField(key, type) {
         attrs: { 'aria-label': 'Clear the saved ' + LABELS[key].replace(/^Your /, '') },
         onclick: async e => {
           const btn = e.currentTarget;
-          const ok = await confirmDialog({ title: 'Clear the saved ' + LABELS[key].replace(/^Your /, '') + '?', body: 'It is removed from the site. What depends on it stops working until a new one is saved.', confirmLabel: 'Clear it', danger: true });
+          const ok = await confirmDialog({ title: 'Clear the saved ' + LABELS[key].replace(/^Your /, '') + '?', body: 'What depends on it stops working.', confirmLabel: 'Clear it', danger: true });
           if (ok) run(() => call('PUT', '/api/admin/secrets', { [key]: '' }), saved('Cleared.'), btn);
         },
       }),
@@ -67,7 +67,7 @@ function saveKeys(keys, btn) {
   const patch = {};
   for (const k of keys) if (k in draft.secrets) patch[k] = draft.secrets[k];
   if (Object.keys(patch).length === 0) {
-    toast('Nothing new to save. Type a key first.');
+    toast('Nothing new to save.');
     return;
   }
   fieldErrors = {};
@@ -75,7 +75,7 @@ function saveKeys(keys, btn) {
     () => call('PUT', '/api/admin/secrets', patch),
     state => {
       for (const k of keys) delete draft.secrets[k];
-      saved('Saved. The keys are stored encrypted and are not shown again.')(state);
+      saved('Saved, encrypted.')(state);
     },
     btn,
     err => {
@@ -138,29 +138,27 @@ function telnyx() {
       'div',
       { class: 'card-body' },
       h('h2', {}, 'Text messages (Telnyx)'),
-      h('p', {}, S.smsReady ? 'Texting is working from this account’s number.' : 'Texting is not working yet. Cost: about $1 a month for a toll-free number and about 1 cent per text, in each direction.'),
+      h('p', {}, S.smsReady ? 'Working.' : 'Not working yet. About $1 a month plus 1¢ a text.'),
       h(
         'ol',
         { class: 'small how' },
-        h('li', {}, 'In Telnyx, add a payment method and buy a toll-free number with SMS.'),
-        h('li', {}, 'Create a Messaging Profile and assign the number to it. Leave its opt-out settings as they are.'),
-        h('li', {}, 'Set the profile’s inbound webhook URL to the address below.'),
-        h('li', {}, 'Paste the keys and the number here, save, and press Check Telnyx.'),
-        h('li', {}, 'Submit the toll-free verification in Telnyx, and tick the boxes below as it goes.'),
+        h('li', {}, 'Buy a toll-free number with SMS.'),
+        h('li', {}, 'Put it in a Messaging Profile (opt-out settings as they are).'),
+        h('li', {}, 'Set its inbound webhook to the address below.'),
+        h('li', {}, 'Paste the keys, save, Check Telnyx.'),
+        h('li', {}, 'Submit the toll-free verification.'),
       ),
       secretField('telnyxApiKey'),
       secretField('telnyxPublicKey', 'text'),
       secretField('telnyxNumber', 'text'),
       secretField('telnyxMessagingProfileId', 'text'),
       h('div', { class: 'actions' }, button({ label: 'Save Telnyx keys', variant: 'primary', type: 'submit' }), button({ label: 'Check Telnyx', icon: 'refresh', onclick: e => check('telnyx', e.currentTarget) })),
-      h('p', { class: 'help' }, 'Check Telnyx reads the number’s record from Telnyx. It sends nothing and changes nothing.'),
-      lastCheck('telnyx'),
+            lastCheck('telnyx'),
       h('h4', {}, 'Webhook address'),
-      h('p', { class: 'help' }, 'Telnyx sends received texts here. Paste it as the Messaging Profile’s inbound webhook URL.'),
-      copyField({ value: S.urls.webhook, label: 'Copy', copiedMessage: 'The webhook address was copied.' }),
-      h('p', { class: 'small' }, received ? 'Last text received: ' + ago(received, S.now) + '.' : 'No text has reached the site yet. After setting the address, text 9 to the number from your phone.'),
+            copyField({ value: S.urls.webhook, label: 'Copy', copiedMessage: 'Copied.' }),
+      h('p', { class: 'small' }, received ? 'Last text received: ' + ago(received, S.now) + '.' : 'No text received yet.'),
       h('h4', {}, 'Toll-free verification'),
-      h('p', { class: 'help' }, 'US carriers do not deliver texts from an unverified toll-free number. Telnyx says the review takes one to two weeks. The site cannot see it, so note it here for yourself.'),
+      h('p', { class: 'help' }, 'Unverified toll-free texts are not delivered.'),
       note('tollFreeSubmitted', 'I submitted the toll-free verification', S.notes.tollFreeSubmittedAt !== null),
       note('tollFreeVerified', 'Telnyx says the number is verified', S.notes.tollFreeVerifiedAt !== null),
     ),
@@ -185,19 +183,19 @@ function rcs() {
       h(
         'p',
         {},
-        'RCS sends the same messages through the phone’s own messaging app with the site’s name and logo, where the phone and carrier support it; other phones still get SMS. It needs an RCS agent approved by Telnyx and the carriers. To get one, you register a brand in Telnyx with a legal business name and a tax ID (EIN), an address, a website, a logo and the privacy and terms pages, then submit the agent for review. Telnyx charges a one-time fee when the agent is submitted, a launch fee, and a monthly fee for the agent, on top of the price per message. SMS alone is enough for this site.',
+        'Needs an approved agent (brand, EIN). Has fees. SMS is enough.',
       ),
       h(
         'p',
         { class: 'help' },
-        'When Telnyx approves the agent: link it to the same Messaging Profile as the number, and set the RCS agent’s own inbound webhook to the same address as the number’s (shown under Telnyx above). Telnyx sends received RCS messages to the address on the agent, not the one on the profile. Every RCS text also carries an SMS copy with the same words, so phones without RCS still get it.',
+        'Once approved: same Messaging Profile, and the agent’s own webhook set to the address above.',
       ),
-      alert({ kind: S.rcsReady ? 'ok' : 'info' }, S.rcsReady ? 'RCS is in use: it is switched on, texting works, and the agent ID and Messaging Profile ID are saved.' : 'RCS is not in use. It needs texting to work, the agent ID and the Messaging Profile ID (under Telnyx) saved, and the switch below on.'),
+      alert({ kind: S.rcsReady ? 'ok' : 'info' }, S.rcsReady ? 'RCS is in use.' : 'Not in use. Needs texting, the agent ID, the profile ID and the switch.'),
       secretField('rcsAgentId', 'text'),
       checkRow({
         id: 'rcsEnabled',
-        label: 'Send by RCS (with SMS for phones without it)',
-        help: 'Switch this on only when Check RCS agent says the agent is live.',
+        label: 'Send by RCS',
+        help: 'Only once Check RCS agent says live.',
         checked: S.config.rcsEnabled,
         onchange: e => {
           const value = e.target.checked;
@@ -235,24 +233,23 @@ function google() {
     h(
       'div',
       { class: 'card-body' },
-      h('h2', {}, 'Google: sign-in and Calendar (optional)'),
-      h('p', {}, 'One Google OAuth client does two things: people can sign in with Google, and they can connect a Google calendar. Without it, people sign in with their phone and can still use the calendar subscription link, which Google refreshes on its own schedule (up to about 12 hours). With it, a connected Google calendar is updated within about a minute. Free.'),
+      h('h2', {}, 'Google (optional)'),
+      h('p', {}, 'Sign-in with Google and Google Calendar. Free.'),
       h(
         'ol',
         { class: 'small how' },
-        h('li', {}, 'In Google Cloud Console, create a project and enable the Google Calendar API.'),
-        h('li', {}, 'Set up the consent screen: audience External, published to production, with the home page, privacy and terms addresses of this site. Add the scopes openid, email and profile (for sign-in) and calendar.app.created (for the calendar).'),
-        h('li', {}, 'Create one OAuth client of type “Web application” and add both redirect addresses below as authorized redirect URIs.'),
-        h('li', {}, 'Paste the client ID and secret here, save, and press Check Google.'),
+        h('li', {}, 'Create a project; enable the Google Calendar API.'),
+        h('li', {}, 'Consent screen: External, in production, site addresses; scopes openid, email, profile, calendar.app.created.'),
+        h('li', {}, 'One “Web application” OAuth client with both redirects below.'),
+        h('li', {}, 'Paste ID and secret, save, Check Google.'),
       ),
       h('h4', {}, 'Redirect addresses'),
-      h('p', { class: 'help' }, 'Both go on the same OAuth client, as authorized redirect URIs. Sign-in or the calendar fails with a “redirect_uri_mismatch” error from Google if one is missing.'),
+      h('p', { class: 'help' }, 'Both go on the same OAuth client, as authorized redirect URIs.'),
       redirectField('Sign in with Google', S.urls.signInRedirect, 'redirect-signin'),
       redirectField('Google Calendar', S.urls.redirect, 'redirect-calendar'),
       secretField('googleClientId', 'text'),
       secretField('googleClientSecret'),
       h('div', { class: 'actions' }, button({ label: 'Save Google keys', variant: 'primary', type: 'submit' }), button({ label: 'Check Google', icon: 'refresh', onclick: e => check('google', e.currentTarget) })),
-      h('p', { class: 'help' }, 'Check Google asks Google whether it knows this client. Nobody is signed in and nothing is changed.'),
       lastCheck('google'),
     ),
   );

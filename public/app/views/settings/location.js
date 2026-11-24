@@ -33,7 +33,7 @@ function savePlace(place) {
 function findZip(btn) {
   const code = zip.replace(/\s+/g, '').toUpperCase();
   if (!/^[0-9A-Z-]{3,10}$/.test(code)) {
-    zipError = 'Enter a ZIP code, for example 08701.';
+    zipError = 'Enter a ZIP code.';
     refresh('loc-zip');
     document.getElementById('zip')?.focus();
     return;
@@ -43,7 +43,7 @@ function findZip(btn) {
     button: btn,
     done: r => {
       if (!r || !r.place) {
-        zipError = 'No place was found for this ZIP code. Choose the nearest place from the list, or use this device’s location.';
+        zipError = 'No place found for this ZIP code.';
         refresh('loc-zip');
         return;
       }
@@ -51,7 +51,7 @@ function findZip(btn) {
       savePlace(r.place);
     },
     fail: (message, e) => {
-      zipError = e && e.status === 404 ? message + ' Or choose the nearest place from the list.' : message;
+      zipError = e && e.status === 404 ? message : message;
       refresh('loc-zip');
       document.getElementById('zip')?.focus();
     },
@@ -61,7 +61,7 @@ function findZip(btn) {
 function useDevice(btn) {
   geoError = '';
   if (!navigator.geolocation) {
-    geoError = 'This browser cannot give its location. Choose from the list instead.';
+    geoError = 'This browser cannot give its location.';
     refresh('loc-device');
     return;
   }
@@ -78,7 +78,7 @@ function useDevice(btn) {
       });
     },
     () => {
-      geoError = 'The location could not be read. Allow this site to use your location, or choose from the list.';
+      geoError = 'The location could not be read.';
       if (btn.isConnected) setBusy(btn, false);
       refresh('loc-device');
     },
@@ -103,10 +103,10 @@ function coordinatesForm() {
           const lon = Number(coords.longitude);
           const elev = Number(coords.elevation || 0);
           if (!coords.name.trim()) errs.name = 'Give the place a name.';
-          if (coords.latitude.trim() === '' || !Number.isFinite(lat) || lat < -90 || lat > 90) errs.latitude = 'A latitude between -90 and 90, for example 40.0821.';
-          if (coords.longitude.trim() === '' || !Number.isFinite(lon) || lon < -180 || lon > 180) errs.longitude = 'A longitude between -180 and 180, for example -74.2097. West is negative.';
-          if (!Number.isFinite(elev) || elev < -430 || elev > 6000) errs.elevation = 'Metres above sea level, between -430 and 6000.';
-          if (!coords.timeZone.trim()) errs.timeZone = 'A time zone, for example America/New_York.';
+          if (coords.latitude.trim() === '' || !Number.isFinite(lat) || lat < -90 || lat > 90) errs.latitude = 'A latitude from -90 to 90.';
+          if (coords.longitude.trim() === '' || !Number.isFinite(lon) || lon < -180 || lon > 180) errs.longitude = 'A longitude from -180 to 180 (west is negative).';
+          if (!Number.isFinite(elev) || elev < -430 || elev > 6000) errs.elevation = 'Metres, from -430 to 6000.';
+          if (!coords.timeZone.trim()) errs.timeZone = 'A time zone, like America/New_York.';
           coordErrors = errs;
           if (Object.keys(errs).length) {
             refresh('loc-coords');
@@ -118,7 +118,7 @@ function coordinatesForm() {
           });
         },
       },
-      field('name', 'Name of the place', { maxlength: 80 }),
+      field('name', 'Place name', { maxlength: 80 }),
       h('div', { class: 'st-two' }, field('latitude', 'Latitude', { inputmode: 'decimal', wide: true }), field('longitude', 'Longitude', { inputmode: 'decimal', wide: true })),
       h('div', { class: 'st-two' }, field('elevation', 'Elevation (metres)', { inputmode: 'numeric', wide: true }), field('timeZone', 'Time zone', { placeholder: 'America/New_York', autocomplete: 'off', spellcheck: 'false' })),
       h('div', { class: 'actions' }, button({ label: 'Use these coordinates', type: 'submit', attrs: { id: 'place-save' } })),
@@ -170,7 +170,7 @@ function zipForm() {
           findZip(e.submitter || document.getElementById('zip-find'));
         },
       },
-      h('label', { for: 'zip', class: 'st-label' }, 'ZIP code'),
+      h('label', { for: 'zip', class: 'st-label' }, 'ZIP or postal code'),
       h(
         'div',
         { class: 'st-inline' },
@@ -183,12 +183,11 @@ function zipForm() {
           value: zip,
           placeholder: '08701',
           'aria-invalid': zipError ? 'true' : null,
-          'aria-describedby': 'zip-help' + (zipError ? ' zip-error' : ''),
+          'aria-describedby': zipError ? 'zip-error' : null,
           oninput: e => (zip = e.target.value),
         }),
         button({ label: 'Find', type: 'submit', variant: 'primary', attrs: { id: 'zip-find' } }),
       ),
-      h('p', { class: 'help', id: 'zip-help' }, 'US ZIP or Canadian postal code.'),
       errorText('zip-error', zipError),
     ),
   );
@@ -201,7 +200,6 @@ function view() {
     title: 'Location',
     parent: '',
     statusKey: 'location',
-    lead: 'Change it when you travel.',
     body: [
       currentPlace(),
       refused
@@ -213,12 +211,12 @@ function view() {
           )
         : null,
       group(
-        { title: 'Change the place', id: 'loc-change' },
+        { title: 'Change place', id: 'loc-change' },
         blockRow(zipForm()),
         blockRow(
           selectField({
             id: 'place',
-            label: 'Or choose from the list',
+            label: 'Or choose a place',
             wide: true,
             options: [{ value: '', label: listed < 0 ? (place ? 'Another place (' + place.name + ')' : 'Choose…') : 'Choose…', selected: listed < 0 }, ...S.places.map((p, i) => ({ value: String(i), label: p.name, selected: listed === i }))],
             onchange: e => {
@@ -232,21 +230,21 @@ function view() {
             h(
               'div',
               { class: 'st-device' },
-              button({ label: 'Use this device’s location', icon: 'map', attrs: { id: 'place-device' }, onclick: e => useDevice(e.currentTarget) }),
+              button({ label: 'Use my location', icon: 'map', attrs: { id: 'place-device' }, onclick: e => useDevice(e.currentTarget) }),
               geoError ? h('div', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, geoError)) : null,
             ),
           ),
         ),
       ),
       more(
-        { id: 'loc-adv', summary: 'Advanced: coordinates and elevation' },
+        { id: 'loc-adv', summary: 'Coordinates and elevation' },
         group({ title: 'Coordinates' }, blockRow(coordinatesForm())),
         group(
           {},
           switchRow({
             id: 'use-elevation',
             label: tn('Adjust sunrise and {sunset} for elevation'),
-            help: S.app.useElevation ? 'Times for ' + (place ? place.elevation : 0) + ' metres above sea level.' : 'Times at sea level, as most calendars print them.',
+            help: S.app.useElevation ? 'At ' + (place ? place.elevation : 0) + ' m.' : 'At sea level.',
             checked: S.app.useElevation,
             onchange: e => {
               const on = e.target.checked;

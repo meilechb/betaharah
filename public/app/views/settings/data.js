@@ -26,8 +26,8 @@ function view() {
       group(
         { title: 'Guided setup', id: 'data-setup' },
         blockRow(
-          h('p', { class: 'help' }, 'Location, customs and the first dates. Nothing is lost.'),
-          h('div', { class: 'actions' }, button({ label: 'Open the guided setup again', attrs: { id: 'open-setup' }, onclick: () => openGuidedSetup() })),
+          h('p', { class: 'help' }, 'Nothing is lost.'),
+          h('div', { class: 'actions' }, button({ label: 'Open setup again', attrs: { id: 'open-setup' }, onclick: () => openGuidedSetup() })),
         ),
       ),
       group(
@@ -41,7 +41,6 @@ function view() {
       group(
         { title: 'Delete the account', id: 'data-delete', className: 'danger' },
         blockRow(
-          h('p', { class: 'help' }, 'Deletes the account' + forPhones() + ': all dates, settings and messages. It cannot be undone. Download your data first if you want a copy.'),
           h(
             'div',
             { class: 'actions' },

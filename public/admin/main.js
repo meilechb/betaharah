@@ -170,7 +170,7 @@ function render() {
           'main',
           { class: 'app-main', id: 'main' },
           phoneSwitcher(),
-          h('div', { class: 'page-head' }, h('h1', { id: 'page-title', tabindex: '-1' }, page.label), h('p', { class: 'page-desc' }, page.desc)),
+          h('div', { class: 'page-head' }, h('h1', { id: 'page-title', tabindex: '-1' }, page.label)),
           h('div', { class: 'page', id: current }, BUILDERS[current](sub)),
         ),
       ),

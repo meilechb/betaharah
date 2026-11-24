@@ -165,7 +165,7 @@ export function legend() {
         { class: 'legend' },
         item(mark({ kind: 'flow' }), cap1(t('{flow} or {stain}'))),
         item(mark({ kind: 'hefsek', title: '✓' }), cap1(t('{hefsek}'))),
-        item(mark({ kind: 'mikvah', title: '✓' }), cap1(t('{immersion} (optional)'))),
+        item(mark({ kind: 'mikvah', title: '✓' }), cap1(t('{immersion}'))),
       ),
     ),
     h(
@@ -175,12 +175,12 @@ export function legend() {
       h(
         'ul',
         { class: 'legend' },
-        item(mark({ kind: 'hefsek', projected: true }), cap1(t('{hefsek} day, not recorded'))),
-        item(mark({ kind: 'clean_day' }, { number: 1 }), cap1(t('{clean_days}, day 1 to 7'))),
+        item(mark({ kind: 'hefsek', projected: true }), cap1(t('{hefsek} due'))),
+        item(mark({ kind: 'clean_day' }, { number: 1 }), cap1(t('{clean_days}'))),
         item(mark({ kind: 'mikvah' }), cap1(term('mikvah_night'))),
-        item(h('span', { class: 'mk-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap1(t('{veset_onah}, day or night'))),
+        item(h('span', { class: 'mk-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap1(t('{veset_onah}'))),
         item(mark({ kind: 'onah', light: true }, { night: true }), cap1(t('{or_zarua} only'))),
-        item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), 'Dashed: expected'),
+        item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), 'Expected'),
       ),
     ),
     h(
@@ -190,9 +190,9 @@ export function legend() {
       h(
         'ul',
         { class: 'legend legend-days' },
-        h('li', {}, h('span', { class: 'legend-day rest', 'aria-hidden': 'true' }, '7'), h('span', {}, t('Shaded: {shabbat} or {yom_tov}'))),
-        h('li', {}, h('span', { class: 'legend-day today', 'aria-hidden': 'true' }, '7'), h('span', {}, 'Outlined: today')),
-        h('li', { class: 'legend-note' }, h('span', {}, t('A night is marked on the day whose evening it begins.'))),
+        h('li', {}, h('span', { class: 'legend-day rest', 'aria-hidden': 'true' }, '7'), h('span', {}, t('{shabbat}, {yom_tov}'))),
+        h('li', {}, h('span', { class: 'legend-day today', 'aria-hidden': 'true' }, '7'), h('span', {}, 'Today')),
+        h('li', { class: 'legend-note' }, h('span', {}, t('A night is on the date it begins.'))),
       ),
     ),
   );

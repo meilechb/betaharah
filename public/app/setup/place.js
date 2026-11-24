@@ -62,7 +62,7 @@ function lookUpZip(e) {
   const btn = e.submitter || document.getElementById('setup-zip-go');
   const zip = st.zip.trim().toUpperCase().replace(/\s+/g, ' ');
   if (!/^\d{5}(-?\d{4})?$/.test(zip) && !/^[A-Z]\d[A-Z]( ?\d[A-Z]\d)?$/.test(zip)) {
-    st.zipError = 'Enter a 5-digit US ZIP code, such as 08701, or a Canadian postal code, such as H2X 1Y4.';
+    st.zipError = 'Enter a 5-digit US ZIP code or a Canadian postal code.';
     flow.focus = 'setup-zip';
     render();
     return;
@@ -109,7 +109,7 @@ function useDevice(e) {
           pos => {
             resolve();
             if (!zone) {
-              st.geoError = 'This device did not say which time zone it is in. Enter the coordinates and time zone below instead.';
+              st.geoError = 'This device gave no time zone. Enter coordinates below.';
               st.coordsOpen = true;
               st.lat = String(Math.round(pos.coords.latitude * 10000) / 10000);
               st.lon = String(Math.round(pos.coords.longitude * 10000) / 10000);
@@ -147,15 +147,15 @@ function useCoords() {
   const lon = Number(st.lon);
   const elev = st.elev.trim() === '' ? 0 : Number(st.elev);
   let error = '';
-  if (st.lat.trim() === '' || !Number.isFinite(lat) || lat < -90 || lat > 90) error = 'The latitude must be a number from -90 to 90, such as 40.0821.';
-  else if (st.lon.trim() === '' || !Number.isFinite(lon) || lon < -180 || lon > 180) error = 'The longitude must be a number from -180 to 180, such as -74.2097. West of Greenwich it is negative.';
-  else if (!Number.isFinite(elev) || elev < -430 || elev > 6000) error = 'The elevation must be a number of metres from -430 to 6000.';
+  if (st.lat.trim() === '' || !Number.isFinite(lat) || lat < -90 || lat > 90) error = 'Latitude: a number from -90 to 90.';
+  else if (st.lon.trim() === '' || !Number.isFinite(lon) || lon < -180 || lon > 180) error = 'Longitude: a number from -180 to 180 (west is negative).';
+  else if (!Number.isFinite(elev) || elev < -430 || elev > 6000) error = 'Elevation: metres from -430 to 6000.';
   else {
     try {
       new Intl.DateTimeFormat('en-US', { timeZone: st.tz.trim() }).format(0);
       if (!st.tz.trim()) throw new Error('empty');
     } catch (e) {
-      error = 'The time zone is not one this browser knows. Write it like America/New_York.';
+      error = 'Unknown time zone. Write it like America/New_York.';
     }
   }
   st.coordsError = error;
@@ -184,7 +184,7 @@ function save(e) {
       render();
     },
     err => {
-      st.saveError = problem(err) + (err.status === 400 ? ' The location was not saved. Choose another place, or a different time of nightfall in the customs.' : '');
+      st.saveError = problem(err) + (err.status === 400 ? ' The location was not saved.' : '');
       render();
     },
   );
@@ -194,7 +194,7 @@ function savedView() {
   const p = S.app.place;
   const sunset = sunsetToday();
   return screen({
-    title: st.justSaved ? 'Your location is saved' : 'Your location',
+    title: st.justSaved ? 'Location saved' : 'Your location',
     body: [
       h(
         'div',
@@ -203,9 +203,9 @@ function savedView() {
         h('div', {}, h('p', { class: 'setup-place-name' }, p.name), h('p', { class: 'small muted' }, 'Time zone: ' + p.timeZone)),
       ),
       sunset
-        ? alert({ kind: st.justSaved ? 'ok' : 'info', role: st.justSaved ? 'status' : null }, t('Today’s {sunset} there: ') + sunset + '. ' + (st.justSaved ? 'The times are now calculated for this place.' : ''))
+        ? alert({ kind: st.justSaved ? 'ok' : 'info', role: st.justSaved ? 'status' : null }, t('Today’s {sunset} there: ') + sunset)
         : null,
-      h('p', { class: 'link-row' }, button({ label: 'Choose a different place', variant: 'link', attrs: { id: 'setup-change-place' }, onclick: () => ((st.changing = true), (st.justSaved = false), (flow.focus = st.zipUnavailable ? 'setup-place-list' : 'setup-zip'), render()) })),
+      h('p', { class: 'link-row' }, button({ label: 'Change place', variant: 'link', attrs: { id: 'setup-change-place' }, onclick: () => ((st.changing = true), (st.justSaved = false), (flow.focus = st.zipUnavailable ? 'setup-place-list' : 'setup-zip'), render()) })),
     ],
     back,
     main: { label: 'Continue', icon: null, onclick: next },
@@ -217,7 +217,7 @@ export function placeView() {
   const listIndex = st.candFrom === 'list' ? S.places.findIndex(p => p.name === st.cand.name) : -1;
 
   const zipPart = st.zipUnavailable
-    ? alert({ kind: 'info' }, 'ZIP codes are not available yet. Choose from the list.')
+    ? alert({ kind: 'info' }, 'ZIP codes are not available yet.')
     : h(
         'form',
         { class: 'setup-zip', novalidate: true, onsubmit: lookUpZip },
@@ -226,7 +226,7 @@ export function placeView() {
           { class: 'zip-row' },
           textField({
             id: 'setup-zip',
-            label: 'ZIP code (or Canadian postal code)',
+            label: 'ZIP or postal code',
             autocomplete: 'postal-code',
             maxlength: 10,
             wide: false,
@@ -247,7 +247,6 @@ export function placeView() {
 
   return screen({
     title: 'Where do you live?',
-    intro: t('The times of {sunset} and {nightfall} are worked out for it.'),
     body: [
       zipPart,
       h('h3', { class: 'setup-or' }, st.zipUnavailable ? 'Choose from the list' : 'Or choose from the list'),
@@ -265,12 +264,11 @@ export function placeView() {
           render();
         },
       }),
-      h('h3', { class: 'setup-or' }, 'Or use where you are now'),
+      h('h3', { class: 'setup-or' }, 'Or use this device'),
       h(
         'div',
         { class: 'field', id: 'setup-geo', tabindex: '-1' },
-        button({ label: 'Use this device’s location', icon: 'map', onclick: useDevice, attrs: { id: 'setup-geo-button' } }),
-        h('div', { class: 'help' }, 'Used only to work out the times.'),
+        button({ label: 'Use my location', icon: 'map', onclick: useDevice, attrs: { id: 'setup-geo-button' } }),
         st.geoError ? h('div', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, st.geoError)) : null,
       ),
       h(
@@ -280,14 +278,13 @@ export function placeView() {
           open: st.coordsOpen,
           ontoggle: e => (st.coordsOpen = e.target.open),
         },
-        h('summary', {}, icon('chevron-right', { size: 'sm' }), 'Enter coordinates instead'),
-        h('p', { class: 'help' }, 'Decimal degrees, as a map app shows them.'),
+        h('summary', {}, icon('chevron-right', { size: 'sm' }), 'Coordinates'),
         h(
           'div',
           { class: 'coords-grid' },
           textField({ id: 'setup-lat', label: 'Latitude', inputmode: 'decimal', value: st.lat, placeholder: '40.0821', wide: true, oninput: e => (st.lat = e.target.value) }),
           textField({ id: 'setup-lon', label: 'Longitude', inputmode: 'decimal', value: st.lon, placeholder: '-74.2097', wide: true, oninput: e => (st.lon = e.target.value) }),
-          textField({ id: 'setup-elev', label: 'Elevation in metres (optional)', inputmode: 'decimal', value: st.elev, placeholder: '0', wide: true, oninput: e => (st.elev = e.target.value) }),
+          textField({ id: 'setup-elev', label: 'Elevation, m (optional)', inputmode: 'decimal', value: st.elev, placeholder: '0', wide: true, oninput: e => (st.elev = e.target.value) }),
           textField({ id: 'setup-tz', label: 'Time zone', value: st.tz, placeholder: 'America/New_York', wide: true, autocapitalize: 'off', spellcheck: 'false', oninput: e => (st.tz = e.target.value) }),
         ),
         st.coordsError ? h('p', { class: 'setup-error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, st.coordsError)) : null,
@@ -304,7 +301,7 @@ export function placeView() {
       st.saveError ? h('p', { class: 'setup-error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, st.saveError)) : null,
     ],
     back: S.app.place ? () => ((st.changing = false), render()) : back,
-    skip: S.app.place ? null : { label: 'Skip this step', onclick: next },
+    skip: S.app.place ? null : { label: 'Skip', onclick: next },
     main: { label: 'Save location', onclick: save, id: 'setup-save-place' },
   });
 }

@@ -49,16 +49,16 @@ function texting(info) {
     );
     show('offline-note');
   } else if (info.sms) {
-    show('offline-note', 'Signing up by text is not open on this site at the moment. Sign up on the website; after that, everything else works by text.');
+    show('offline-note', 'Sign up on the website. Then everything works by text.');
   } else {
-    show('offline-note', 'Text messaging is not available on this site yet. Everything can be done on the website.');
+    show('offline-note', 'Texting is not available yet. Use the website.');
   }
 }
 
 function signupNote(info) {
   let text = '';
-  if (info.signup === 'invite') text = 'Sign-up is by invitation at the moment. If someone sent you an invitation, open it to begin.';
-  else if (info.signup === 'closed') text = 'Sign-up is closed at the moment. If you have an account, you can sign in.';
+  if (info.signup === 'invite') text = 'Sign-up is by invitation only.';
+  else if (info.signup === 'closed') text = 'Sign-up is closed.';
   if (text) show('signup-note', text);
 }
 
@@ -66,7 +66,7 @@ function prefixes(info) {
   const list = Array.isArray(info.prefixes) ? info.prefixes.filter(p => typeof p === 'string' && p) : [];
   if (list.length === 0 || (list.length === 1 && list[0] === '+1')) return;
   const node = byId('faq-prefixes');
-  if (node) node.textContent = `At the moment, signing up needs a phone number that begins with ${list.join(' or ')}.`;
+  if (node) node.textContent = `Signing up needs a number that begins with ${list.join(' or ')}.`;
 }
 
 function signedIn() {

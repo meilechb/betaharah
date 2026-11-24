@@ -37,7 +37,7 @@ const sameRule = (a, b) => a.kind === b.kind && Number(a.value) === Number(b.val
 
 /** "Used now" marks the option the calendar uses until the customs are confirmed. */
 function usedNow(value) {
-  return !S.halachic.confirmedAt && value ? h('span', { class: 'used-now' }, ' ', tag('used now', 'info')) : null;
+  return !S.halachic.confirmedAt && value ? h('span', { class: 'used-now' }, ' ', tag('default', 'info')) : null;
 }
 
 function choiceGroup(c) {
@@ -134,14 +134,14 @@ function introView() {
       h(
         'ul',
         { class: 'setup-points' },
-        h('li', {}, 'Until saved, the stricter option of each is used.'),
+        h('li', {}, 'Default: the stricter option of each.'),
       ),
-      confirmed ? alert({ kind: 'ok' }, 'Your customs were confirmed on ' + when(confirmed) + '.') : null,
+      confirmed ? alert({ kind: 'ok' }, 'Saved ' + when(confirmed) + '.') : null,
       termsSwitch(),
     ],
     back,
-    skip: confirmed ? { label: 'Go over them again', onclick: () => ((part = 1), render()) } : { label: 'Keep the stricter defaults for now', onclick: keepDefaults },
-    main: confirmed ? { label: 'Continue', onclick: next } : { label: 'Go through the customs', onclick: () => ((part = 1), render()) },
+    skip: confirmed ? { label: 'Review again', onclick: () => ((part = 1), render()) } : { label: 'Keep defaults', onclick: keepDefaults },
+    main: confirmed ? { label: 'Continue', onclick: next } : { label: 'Choose customs', onclick: () => ((part = 1), render()) },
   });
 }
 
@@ -155,17 +155,15 @@ export function customsView() {
   return screen({
     count: 'Customs, part ' + part + ' of ' + groups.length,
     title: g.title(),
-    intro: S.halachic.confirmedAt ? null : h('p', { class: 'muted small' }, '“Used now”: the option used until saved.'),
     body: [
       g.keys.map(k => (k === 'tzeit' ? tzeitGroup() : byKey[k] ? choiceGroup(byKey[k]) : null)),
-      last ? h('p', { class: 'muted small setup-confirm-note' }, 'They can be changed later in the Customs tab.') : null,
       error ? h('p', { class: 'setup-error', role: 'alert', id: 'setup-customs-error', tabindex: '-1' }, icon('alert', { size: 'sm' }), h('span', {}, error)) : null,
     ],
     back: () => {
       part -= 1;
       render();
     },
-    skip: S.halachic.confirmedAt ? { label: 'Leave them as they are', onclick: keepDefaults } : { label: 'Keep the stricter defaults for now', onclick: keepDefaults },
-    main: last ? { label: 'Save and confirm my customs', onclick: confirmAndSave, id: 'setup-confirm-customs' } : { label: 'Next', onclick: () => ((part += 1), render()), id: 'setup-customs-next' },
+    skip: S.halachic.confirmedAt ? { label: 'Keep as is', onclick: keepDefaults } : { label: 'Keep defaults', onclick: keepDefaults },
+    main: last ? { label: 'Save customs', onclick: confirmAndSave, id: 'setup-confirm-customs' } : { label: 'Next', onclick: () => ((part += 1), render()), id: 'setup-customs-next' },
   });
 }

@@ -36,7 +36,7 @@ const fail = (where, message) => failures.push(`${where}: ${message}`);
 
 const HOME_PHRASES = [
   'The mikvah calendar that does the counting',
-  'Where things stand',
+  'Hefsek taharah from Sat, Dec 5, before 4:31 PM.',
   'Recorded: flow Tue Dec 1 by day. Hefsek from Sat Dec 5. 0 to undo.',
   'Calculated by your customs',
   'In the calendar you already use',

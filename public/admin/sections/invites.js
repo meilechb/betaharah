@@ -10,7 +10,7 @@ function create(btn) {
   const i = draft.invite;
   if (i.kind === 'word') return createWord(btn);
   if (i.kind === 'setup' && i.number.replace(/\D/g, '').length < 10) {
-    numberError = 'Type the person’s mobile number, with the area code.';
+    numberError = 'Enter the mobile number with area code.';
     render();
     const el = document.getElementById('inum');
     if (el) el.focus();
@@ -48,7 +48,7 @@ function createWord(btn) {
   const i = draft.invite;
   const word = (i.word || '').trim();
   if (!/^(?=.*[A-Za-z])[A-Za-z0-9]{6,24}$/.test(word)) {
-    wordError = 'Use 6 to 24 letters and digits, with at least one letter, and no spaces. For example SPRING26.';
+    wordError = '6 to 24 letters and digits, at least one letter, no spaces.';
     render();
     const el = document.getElementById('iword');
     if (el) el.focus();
@@ -94,7 +94,7 @@ function openList() {
           attrs: { 'aria-label': 'Cancel this invitation' },
           onclick: async e => {
             const btn = e.currentTarget;
-            const ok = await confirmDialog({ title: 'Cancel this invitation?', body: 'The link stops working at once. Accounts already made with it are not affected.', confirmLabel: 'Cancel the invitation', cancelLabel: 'Keep it', danger: true });
+            const ok = await confirmDialog({ title: 'Cancel this invitation?', body: 'Accounts made with it stay.', confirmLabel: 'Cancel the invitation', cancelLabel: 'Keep it', danger: true });
             if (ok) run(() => call('DELETE', '/api/admin/invites/' + encodeURIComponent(inv.id)), saved('The invitation was cancelled.'), btn);
           },
         }),
@@ -121,9 +121,9 @@ export function invitesPage() {
       name: 'ikind',
       value: i.kind,
       options: [
-        { value: 'signup', label: 'A link for sign-up on the website', help: 'People open the link and sign up on the website with a texted code. For when sign-up is by invitation only. It can be used by several people. It needs texting to work.' },
-        { value: 'word', label: 'A word for sign-up by text', help: 'People text JOIN and the word (for example JOIN SPRING26) to the number, and set up their account by text. For when sign-up is by invitation only. Easier to pass on by voice than a link. It needs texting to work.' },
-        { value: 'setup', label: 'An account for one number, with a password', help: 'The person sets up the account on the website with that number and a password, without a texted code. Use this before texting works, or for someone whose texts do not arrive.' },
+        { value: 'signup', label: 'Sign-up link', help: 'Website, with a texted code. Needs texting.' },
+        { value: 'word', label: 'Sign-up word', help: 'Text JOIN and the word. Needs texting.' },
+        { value: 'setup', label: 'One number, with a password', help: 'No texted code needed.' },
       ],
       onchange: v => {
         i.kind = v;
@@ -135,13 +135,13 @@ export function invitesPage() {
     i.kind === 'setup'
       ? textField({
           id: 'inum',
-          label: 'The person’s mobile number',
+          label: 'Mobile number',
           type: 'tel',
           autocomplete: 'off',
           placeholder: '(732) 444-0123',
           value: i.number,
           error: numberError,
-          help: 'The invitation works only with this number. The number is not stored readably.',
+          help: 'Works only with this number.',
           oninput: e => {
             i.number = e.target.value;
             numberError = '';
@@ -158,7 +158,7 @@ export function invitesPage() {
             placeholder: 'SPRING26',
             value: i.word || '',
             error: wordError,
-            help: '6 to 24 letters and digits. Capitals or not does not matter. Choose something hard to guess: anyone who has the word can sign up.',
+            help: '6 to 24 letters and digits. Anyone with it can sign up.',
             oninput: e => {
               i.word = e.target.value;
               wordError = '';
@@ -167,9 +167,9 @@ export function invitesPage() {
         : null,
     i.kind === 'setup'
       ? null
-      : h('label', { class: 'row' }, h('span', {}, 'How many people may use it'), h('input', { type: 'number', id: 'iuses', min: 1, max: 100, step: 1, value: i.maxUses, oninput: e => (i.maxUses = Math.min(100, Math.max(1, Number(e.target.value) || 1))) })),
-    h('label', { class: 'row' }, h('span', {}, 'Days until it expires (1 to 90)'), days),
-    textField({ id: 'inote', label: 'Note for yourself (optional)', maxlength: 80, value: i.note, help: 'For example "cousins". Do not write a phone number or a name: notes are not encrypted.', oninput: e => (i.note = e.target.value) }),
+      : h('label', { class: 'row' }, h('span', {}, 'Uses'), h('input', { type: 'number', id: 'iuses', min: 1, max: 100, step: 1, value: i.maxUses, oninput: e => (i.maxUses = Math.min(100, Math.max(1, Number(e.target.value) || 1))) })),
+    h('label', { class: 'row' }, h('span', {}, 'Days valid (1 to 90)'), days),
+    textField({ id: 'inote', label: 'Note (optional)', maxlength: 80, value: i.note, help: 'Not encrypted: no names or numbers.', oninput: e => (i.note = e.target.value) }),
     h('div', { class: 'actions' }, button({ label: 'Create invitation', variant: 'primary', type: 'submit' })),
   );
   return [
@@ -180,10 +180,10 @@ export function invitesPage() {
             'p',
             {},
             (i.linkKind === 'setup'
-              ? 'Send this link to the person. They open it, enter the same number and choose a password.'
+              ? 'Send this link to the person.'
               : i.linkKind === 'word'
-                ? 'Tell the people you invite to text JOIN ' + i.link + ' to ' + (S.textingNumber ? pretty(S.textingNumber) : 'the number') + '.'
-                : 'Send this link to the people you invite.') + ' It is shown only now; only a fingerprint of it is kept.',
+                ? 'Text JOIN ' + i.link + ' to ' + (S.textingNumber ? pretty(S.textingNumber) : 'the number') + '.'
+                : 'Send this link.') + ' Shown only now.',
           ),
           h('div', { id: 'invite-link', tabindex: '-1' }, copyField({ value: i.linkKind === 'word' ? 'JOIN ' + i.link : i.link, label: 'Copy', copiedMessage: 'Copied.' })),
         )
@@ -192,9 +192,9 @@ export function invitesPage() {
       'div',
       { class: 'grid-2 invites-grid' },
       card(
-    { title: 'New invitation', icon: 'plus', intro: 'You pass the link or word on yourself, by email, message or voice. The site does not send it.' },
-    S.config.signup === 'open' ? alert({ kind: 'info' }, 'Sign-up is open to anyone, so sign-up links and words are not needed now. Accounts for one number still work.') : null,
-    S.config.signup === 'closed' ? alert({ kind: 'info' }, 'Sign-up is closed: links and words do not work. Accounts for one number still work.') : null,
+    { title: 'New invitation', icon: 'plus', intro: 'The site does not send it.' },
+    S.config.signup === 'open' ? alert({ kind: 'info' }, 'Sign-up is open: links and words are not needed.') : null,
+    S.config.signup === 'closed' ? alert({ kind: 'info' }, 'Sign-up is closed: links and words do not work.') : null,
     form,
       ),
       card({ title: 'Open invitations', icon: 'list' }, openList()),

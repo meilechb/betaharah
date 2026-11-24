@@ -182,8 +182,8 @@ export async function leave(e) {
   const btn = e && e.currentTarget;
   const ok = await confirmDialog({
     title: 'Leave the setup?',
-    body: 'What you entered is saved.',
-    confirmLabel: 'Leave the setup',
+    body: 'Your answers are kept.',
+    confirmLabel: 'Leave setup',
     cancelLabel: 'Stay',
   });
   if (ok) finish(btn);
@@ -194,7 +194,7 @@ export function termsSwitch() {
   return h(
     'div',
     { class: 'row setup-terms' },
-    h('span', { class: 'small muted' }, 'Halachic terms in'),
+    h('span', { class: 'small muted' }, 'Halachic terms'),
     segmented({
       id: 'setup-terms',
       label: 'Language of halachic terms',
@@ -240,6 +240,6 @@ export function screen(o) {
 /** Shows a server refusal next to the thing it is about, by keeping it in the step's state; returns the message. */
 export function problem(err) {
   if (!err) return '';
-  if (err.status === undefined) return err.message || 'The site could not be reached. Check the internet connection and try again.';
+  if (err.status === undefined) return err.message || 'No connection. Try again.';
   return err.message || 'Something went wrong. Try again.';
 }

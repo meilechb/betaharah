@@ -152,7 +152,7 @@ function moveToday(moment, btn) {
   const latest = latestMoment();
   ui.todayError = '';
   if (moment && latest && isLater(latest, moment)) {
-    ui.todayError = 'Today cannot be before the latest date entered (' + shortDate(latest.date) + '). Remove that date first, or choose a later day.';
+    ui.todayError = 'Today cannot be before the latest date entered (' + shortDate(latest.date) + ').';
     redrawMe();
     return;
   }
@@ -268,7 +268,7 @@ function setupCard() {
     id: 'calc-place',
     label: 'Place',
     value: byZip ? '' : scenario.place.name || '',
-    options: [...places.map(p => ({ value: p, label: p })), { value: '', label: 'Another place, by ZIP or postal code' }],
+    options: [...places.map(p => ({ value: p, label: p })), { value: '', label: 'Other (ZIP or postal code)' }],
     onchange: e => {
       const v = e.target.value;
       if (!v) {
@@ -368,7 +368,7 @@ function todayBar() {
     h(
       'details',
       { class: 'calc-pick', id: 'calc-pick', open: ui.pickOpen, ontoggle: e => (ui.pickOpen = e.currentTarget.open) },
-      h('summary', {}, 'Choose another day as today'),
+      h('summary', {}, 'Choose today'),
       h(
         'div',
         { class: 'calc-pick-row' },
@@ -384,7 +384,7 @@ function todayBar() {
         }),
         segmented({ id: 'calc-part', label: 'Day or night', value: t.part, options: [{ value: 'day', label: 'By day' }, { value: 'night', label: 'At night' }], onchange: v => moveToday({ date: t.date, part: v }) }),
       ),
-      h('p', { class: 'small muted' }, 'A date cannot be entered in the future, so today is never before the latest date you entered. Move it ahead to see what an account shows on a later day.'),
+      h('p', { class: 'small muted' }, 'Not before the latest date entered.'),
     ),
     ui.todayError ? h('div', { class: 'error', id: 'calc-today-error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, ui.todayError)) : null,
   );
@@ -403,7 +403,7 @@ function copyScenario() {
     redrawMe();
   };
   if (!navigator.clipboard) return shown();
-  navigator.clipboard.writeText(text).then(() => toast('The scenario was copied as text. Paste it under "Load a scenario" to run it again.'), shown);
+  navigator.clipboard.writeText(text).then(() => toast('The scenario was copied.'), shown);
 }
 
 function loadScenario(btn) {
@@ -416,7 +416,7 @@ function loadScenario(btn) {
     return;
   }
   if (!s || typeof s !== 'object' || !s.place || !s.today || !Array.isArray(s.entries)) {
-    ui.pasteError = 'This is not a scenario copied from this page: it needs a place, today and a list of dates.';
+    ui.pasteError = 'This is not a scenario copied from this page.';
     redrawMe();
     return;
   }
@@ -442,8 +442,8 @@ function loadScenario(btn) {
 async function clearAll(btn, everything) {
   const ok = await confirmDialog(
     everything
-      ? { title: 'Start over?', body: 'The dates are removed, and the place, customs and today go back to where they start. Copy the scenario first to keep it.', confirmLabel: 'Start over', danger: true }
-      : { title: 'Remove every date?', body: 'The place and the customs stay as they are.', confirmLabel: 'Remove every date', danger: true },
+      ? { title: 'Start over?', body: 'Dates, place, customs and today are reset.', confirmLabel: 'Start over', danger: true }
+      : { title: 'Remove every date?', body: 'Place and customs stay.', confirmLabel: 'Remove every date', danger: true },
   );
   if (!ok) return;
   if (everything) {
@@ -466,13 +466,13 @@ function keepBox() {
   return h(
     'details',
     { class: 'calc-fold', id: 'calc-keep-box', open: ui.keepOpen, ontoggle: e => (ui.keepOpen = e.currentTarget.open) },
-    h('summary', {}, h('span', { class: 'calc-fold-title' }, 'Keep this scenario, or load one'), h('span', { class: 'small muted' }, 'Copy it as text to run the same case again later')),
+    h('summary', {}, h('span', { class: 'calc-fold-title' }, 'Copy or load a scenario')),
     h(
       'div',
       { class: 'calc-fold-body' },
       h('div', { class: 'actions' }, button({ label: 'Copy the scenario', icon: 'copy', attrs: { id: 'calc-copy' }, onclick: copyScenario })),
       ui.copied
-        ? h('div', { class: 'calc-copied' }, h('p', { class: 'small' }, 'The scenario could not be put on the clipboard. Select it and copy it:'), h('textarea', { id: 'calc-copied', class: 'calc-text', readonly: true, rows: '8', value: ui.copied }))
+        ? h('div', { class: 'calc-copied' }, h('p', { class: 'small' }, 'Copy it from here:'), h('textarea', { id: 'calc-copied', class: 'calc-text', readonly: true, rows: '8', value: ui.copied }))
         : null,
       h(
         'form',
@@ -484,7 +484,7 @@ function keepBox() {
             loadScenario(e.submitter);
           },
         },
-        h('label', { for: 'calc-paste', class: 'calc-label' }, 'Load a scenario copied from this page'),
+        h('label', { for: 'calc-paste', class: 'calc-label' }, 'Paste a scenario'),
         h('textarea', {
           id: 'calc-paste',
           class: 'calc-text',
@@ -668,7 +668,7 @@ function legend() {
         { class: 'legend' },
         item(mark({ kind: 'flow' }), cap(fill('{flow} or {stain}'))),
         item(mark({ kind: 'hefsek', title: '✓' }), cap(fill('{hefsek}'))),
-        item(mark({ kind: 'mikvah', title: '✓' }), cap(fill('{immersion} (optional)'))),
+        item(mark({ kind: 'mikvah', title: '✓' }), cap(fill('{immersion}'))),
       ),
     ),
     h(
@@ -678,12 +678,12 @@ function legend() {
       h(
         'ul',
         { class: 'legend' },
-        item(mark({ kind: 'hefsek', projected: true }), cap(fill('{hefsek} day, not entered'))),
-        item(mark({ kind: 'clean_day' }, { number: 1 }), cap(fill('{clean_days}, day 1 to 7'))),
+        item(mark({ kind: 'hefsek', projected: true }), cap(fill('{hefsek} due'))),
+        item(mark({ kind: 'clean_day' }, { number: 1 }), cap(fill('{clean_days}'))),
         item(mark({ kind: 'mikvah' }), cap(fill('{mikvah_night}'))),
-        item(h('span', { class: 'calc-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap(fill('{veset_onah}, day or night'))),
+        item(h('span', { class: 'calc-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap(fill('{veset_onah}'))),
         item(mark({ kind: 'onah', light: true }, { night: true }), cap(fill('{or_zarua} only'))),
-        item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), 'Dashed: expected'),
+        item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), 'Expected'),
       ),
     ),
   );
@@ -691,7 +691,7 @@ function legend() {
 
 function calendarCard() {
   const r = ui.result;
-  if (!r || !r.state.grid) return card({ title: 'Calendar', icon: 'calendar', className: 'calc-cal' }, h('p', { class: 'muted' }, ui.error ? 'Nothing to show until the calculation can be made.' : 'Working it out…'));
+  if (!r || !r.state.grid) return card({ title: 'Calendar', icon: 'calendar', className: 'calc-cal' }, h('p', { class: 'muted' }, ui.error ? 'Nothing to show.' : 'Working it out…'));
   const grid = r.state.grid;
   const i = index(grid);
   ensureMonth(i, grid);
@@ -705,7 +705,7 @@ function calendarCard() {
   const shown = [ui.month, next].filter(Boolean);
   return card(
     { title: 'Calendar', icon: 'calendar', className: 'calc-cal' + (ui.busy ? ' busy' : ''), headerAction: ui.busy ? h('span', { class: 'small muted', role: 'status' }, 'Working it out…') : null },
-    h('p', { class: 'calc-how', id: 'calc-how' }, h('strong', {}, 'Click a day'), ', then choose what happened on it.'),
+    h('p', { class: 'calc-how', id: 'calc-how' }, h('strong', {}, 'Click a day'), ', then what happened.'),
     h(
       'div',
       { class: 'month-nav' },
@@ -834,7 +834,7 @@ function dayPanel() {
     h(
       'details',
       { class: 'calc-more', id: 'calc-more', open: ui.moreOpen, ontoggle: e => (ui.moreOpen = e.currentTarget.open) },
-      h('summary', {}, 'Other things to add'),
+      h('summary', {}, 'Other entries'),
       h(
         'div',
         { class: 'calc-addgrid' },
@@ -937,7 +937,7 @@ function worksOutCard() {
   }
 
   return card(
-    { title: 'What the calendar works out', icon: 'clock', className: 'calc-works' },
+    { title: 'Worked out', icon: 'clock', className: 'calc-works' },
     h('p', { class: 'small muted' }, 'From the dates you entered, for the days from "today" on. Nothing in this box was entered by you.'),
     steps
       ? h(
@@ -954,13 +954,13 @@ function worksOutCard() {
       h('h3', {}, cap(fill('{onot} of separation'))),
       onot.length
         ? h('ul', { class: 'events' }, onot.map(e => eventRow(e, { date: true })))
-        : h('p', { class: 'muted' }, scenario.entries.length === 0 ? 'None yet. Click the day a period began and add it.' : 'None from "today" on, in the months the calendar shows.'),
+        : h('p', { class: 'muted' }, scenario.entries.length === 0 ? 'None yet.' : 'None ahead.'),
     ),
     r.state.reminders.length
       ? h(
           'details',
           { class: 'calc-reminders', id: 'calc-reminders', open: ui.remindersOpen, ontoggle: e => (ui.remindersOpen = e.currentTarget.open) },
-          h('summary', {}, 'Reminder texts that would be sent (' + r.state.reminders.length + ')'),
+          h('summary', {}, 'Reminder texts (' + r.state.reminders.length + ')'),
           h('ul', { class: 'up-list' }, r.state.reminders.map(rem => h('li', { class: 'up-row' }, h('div', { class: 'up-main' }, h('div', { class: 'up-when' }, rem.when), h('div', {}, rem.text))))),
         )
       : null,
@@ -995,7 +995,7 @@ function logCard() {
       className: 'calc-log',
       headerAction: scenario.entries.length ? button({ label: 'Remove every date', size: 'sm', variant: 'link', attrs: { id: 'calc-clear' }, onclick: e => clearAll(e.currentTarget, false) }) : null,
     },
-    h('p', { class: 'small muted', id: 'calc-log-title', tabindex: '-1' }, scenario.entries.length === 0 ? 'None yet. Click a day on the calendar to add one.' : 'Newest first, as an account’s Log shows them. Removing one works everything out again.'),
+    h('p', { class: 'small muted', id: 'calc-log-title', tabindex: '-1' }, scenario.entries.length === 0 ? 'None yet.' : 'Newest first.'),
     recorded.length
       ? h(
           'ul',
@@ -1057,7 +1057,7 @@ function customsBox() {
       'summary',
       {},
       h('span', { class: 'calc-fold-title' }, 'Customs'),
-      h('span', { class: 'small muted', id: 'calc-customs-state' }, changed ? changed + ' changed from a new account’s' : 'As a new account has them. Open to change one.'),
+      h('span', { class: 'small muted', id: 'calc-customs-state' }, changed ? changed + ' changed from a new account’s' : 'As a new account has them.'),
     ),
     h(
       'div',
@@ -1111,7 +1111,7 @@ function customsBox() {
         'div',
         { class: 'actions' },
         button({
-          label: 'Back to a new account’s customs',
+          label: 'Reset customs',
           size: 'sm',
           disabled: changed === 0,
           attrs: { id: 'calc-c-reset' },
@@ -1137,7 +1137,7 @@ export function calcPage() {
       'p',
       { class: 'calc-note', id: 'calc-note' },
       icon('info', { size: 'sm' }),
-      h('span', {}, 'This runs the same calculation as people’s accounts, and saves nothing.'),
+      h('span', {}, 'Same calculation as accounts. Nothing is saved.'),
     ),
     setupCard(),
     h('div', { class: 'calc-main' }, h('div', { class: 'calc-col calc-col-cal' }, calendarCard()), h('div', { class: 'calc-col calc-col-side' }, dayPanel(), statusCard(), worksOutCard(), logCard())),

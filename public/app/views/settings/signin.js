@@ -16,7 +16,7 @@ let pw = { a: '', b: '', errA: '', errB: '', error: '' };
 let pwOpen = false;
 
 /** The server's own sentence for a session that began with Google. */
-const GOOGLE_NO_PASSWORD = 'A password belongs to a phone number. Add a phone, sign in with it, and set the password there.';
+const GOOGLE_NO_PASSWORD = 'A password needs a phone number. Add a phone first.';
 
 /** How this account can be signed in to, as short parts: ['A code by text · no password', 'Google']. */
 function wayParts() {
@@ -75,7 +75,7 @@ function passwordForm() {
                 pwOpen = false;
                 adopt(r.state);
                 render();
-                toast((had ? 'The password is changed.' : 'The password is set.') + ' Other devices signed in with this phone were signed out.');
+                toast((had ? 'The password is changed.' : 'The password is set.') + ' Other devices were signed out.');
               },
               fail: message => {
                 pw.errA = message;
@@ -154,9 +154,9 @@ function passwordGroup() {
       blockRow(
         alert(
           { kind: 'info', title: 'Sign in again first' },
-          'To ' + (acc.hasPassword ? 'change or remove the password' : 'set a password') + ', sign out, sign in again and come back within 15 minutes.',
+          'Needed within 15 minutes of signing in.',
         ),
-        h('div', { class: 'actions' }, button({ label: 'Sign out to sign in again', icon: 'log-out', attrs: { id: 'pw-relogin' }, onclick: signOut })),
+        h('div', { class: 'actions' }, button({ label: 'Sign in again', icon: 'log-out', attrs: { id: 'pw-relogin' }, onclick: signOut })),
       ),
     );
   }
@@ -182,7 +182,7 @@ function passwordGroup() {
             }),
             S.sms.ready ? removeButton() : null,
           ),
-          !S.sms.ready ? h('p', { class: 'help' }, 'Texting is not available here yet, so the password cannot be removed.') : null,
+          !S.sms.ready ? h('p', { class: 'help' }, 'Removable once texting works.') : null,
           pw.error ? alert({ kind: 'bad', role: 'alert' }, pw.error) : null,
         ),
   );
@@ -238,7 +238,7 @@ function googleGroup() {
   if (!googleInfo().available) return null;
   return group(
     { title: 'Google', id: 'sec-google' },
-    infoRow({ icon: 'user', title: 'Add Google sign-in', summary: 'Sign in with a Google account as well as your phone.' }),
+    infoRow({ icon: 'user', title: 'Add Google sign-in', summary: 'As well as your phone.' }),
     blockRow(h('div', { class: 'actions' }, googleButton())),
   );
 }
@@ -248,7 +248,7 @@ function googleGroup() {
 function view() {
   const google = googleSession();
   return {
-    title: 'Sign-in and security',
+    title: 'Sign-in',
     parent: '',
     body: [
       group({ title: google ? 'This session' : 'This phone', id: 'sec-phone' }, infoRow({ icon: google ? 'user' : 'phone', title: 'Signed in with ' + signedInWith(), summary: waysSentence() })),
@@ -257,7 +257,6 @@ function view() {
       group(
         { title: 'Sessions', id: 'sec-sessions' },
         blockRow(
-          h('p', { class: 'help' }, 'After using a shared computer, sign out everywhere.'),
           h(
             'div',
             { class: 'actions' },
@@ -268,8 +267,8 @@ function view() {
               onclick: async e => {
                 const btn = e.currentTarget;
                 const body = google
-                  ? 'This signs out the Google sign-in on every device, this one included. Phones on the account stay signed in.'
-                  : 'This signs out this phone number on every device, this one included. Other phones on the account stay signed in.';
+                  ? 'Signs out this Google sign-in on every device, this one too. Phones on the account stay signed in.'
+                  : 'Signs out this number on every device, this one too. Other phones stay signed in.';
                 if (!(await confirmDialog({ title: 'Sign out everywhere?', body, confirmLabel: 'Sign out everywhere' }))) return;
                 attempt(() => api('POST', '/api/auth/logout-all'), {
                   button: btn,
@@ -289,7 +288,7 @@ function view() {
 
 export const signInSection = {
   id: 'security',
-  title: 'Sign-in and security',
+  title: 'Sign-in',
   icon: 'lock',
   summary: ways,
   flag: () => null,

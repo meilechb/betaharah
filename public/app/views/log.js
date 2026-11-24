@@ -3,13 +3,13 @@
  * messages sent and received, as a conversation.
  */
 import { api, button, card, confirmDialog, emptyState, h, icon } from '../lib.js';
-import { S, t, when } from '../store.js';
+import { S, when } from '../store.js';
 import { thread, tryTextCard } from './demo.js';
 import { entryMark } from './marks.js';
 import { recordCard } from './record.js';
 import { refresh, region, saveChange, saveStatus } from './shared.js';
 
-const sourceLabel = s => (s === 'dashboard' ? 'Recorded on the website' : s === 'sms' ? 'Recorded by text message' : s);
+const sourceLabel = s => (s === 'dashboard' ? 'On the website' : s === 'sms' ? 'By text' : s);
 
 /** The entry whose options are open, and how many messages are shown. */
 let openEntry = null;
@@ -61,7 +61,7 @@ function entryRow(e) {
             { class: 'entry-options', id: 'entry-options-' + e.id },
             h('p', { class: 'help when' }, sourceLabel(e.source) + ' · ' + when(e.createdAt)),
             button({
-              label: 'Remove this entry',
+              label: 'Remove',
               variant: 'danger',
               size: 'sm',
               icon: 'trash',
@@ -101,12 +101,12 @@ function entriesCard() {
   return card(
     { title: 'Entries', icon: 'list', headerAction: saveStatus('entries') },
     region('entries', () => {
-      if (S.entries.length === 0) return h('div', {}, emptyState({ icon: 'list', title: 'Nothing recorded yet.', body: t('Record a {flow} on Today, or add a past entry above.') }));
+      if (S.entries.length === 0) return h('div', {}, emptyState({ icon: 'list', title: 'Nothing recorded yet.' }));
       const groups = periods();
       return h(
         'div',
         {},
-        S.entryCount > S.entries.length ? h('p', { class: 'muted small' }, 'Showing the latest ' + S.entries.length + ' of ' + S.entryCount + '.') : null,
+        S.entryCount > S.entries.length ? h('p', { class: 'muted small' }, 'Latest ' + S.entries.length + ' of ' + S.entryCount) : null,
         groups.map((g, i) => {
           const first = g.entries[0];
           const m = CIVIL.exec(first.text);
@@ -133,7 +133,7 @@ function messagesCard() {
       { title: 'Text messages', icon: 'message', className: 'messages-card' },
       region('messages', () =>
         msgs.length === 0
-          ? h('div', {}, emptyState({ icon: 'message', title: 'No text messages yet.', body: S.sms.ready ? null : 'Text messaging is not available on this site yet.' }))
+          ? h('div', {}, emptyState({ icon: 'message', title: S.sms.ready ? 'No texts yet.' : 'Texting is not available yet.' }))
           : h(
               'div',
               {},

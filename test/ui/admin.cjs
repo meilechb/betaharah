@@ -106,7 +106,7 @@ async function seed() {
     if ((await page.locator('#overview .setup-card li.step').count()) !== 9) throw new Error('not nine steps');
     await page.waitForSelector('#overview .empty, #overview svg.chart');
     if ((await stepStatus('Contact details for the public pages')) !== 'Needs you') throw new Error('contact step');
-    if (!(await page.textContent('#overview')).includes('Text messaging is off or not set up')) throw new Error('status');
+    if (!(await page.textContent('#overview')).includes('Password sign-in and invitations only')) throw new Error('status');
     // on a phone the section switcher changes the page
     await page.selectOption('#section-switch', 'accounts');
     await page.waitForSelector('#page-title:text-is("Accounts")');
@@ -129,7 +129,7 @@ async function seed() {
     await page.waitForSelector('#usage p:has-text("New accounts in the last 30 days")');
     await page.focus('#usage .bar-hit >> nth=29');
     await page.waitForSelector('.chart-readout strong');
-    await page.click('#usage summary:has-text("Show the numbers as a table")');
+    await page.click('#usage summary:has-text("Show as a table")');
     await page.waitForSelector('#usage details[open] table');
     await noSideways();
   });
@@ -179,11 +179,11 @@ async function seed() {
     if ((await phones.count()) !== 2) throw new Error('not two phones');
     const first = await phones.nth(0).textContent();
     const second = await phones.nth(1).textContent();
-    for (const w of ['(732) 555-0100', 'Verified by a code', 'Agreed to reminder texts', 'Has not replied STOP']) if (!first.includes(w)) throw new Error('first phone: no "' + w + '"');
-    for (const w of ['(732) 555-0199', 'Replied STOP: nothing is sent to it']) if (!second.includes(w)) throw new Error('second phone: no "' + w + '"');
+    for (const w of ['(732) 555-0100', 'Verified', 'Reminders agreed', 'No STOP']) if (!first.includes(w)) throw new Error('first phone: no "' + w + '"');
+    for (const w of ['(732) 555-0199', 'Replied STOP']) if (!second.includes(w)) throw new Error('second phone: no "' + w + '"');
     // every fact has an icon next to its words
     if ((await page.locator('#accounts ul.flags li.flag svg').count()) !== 6) throw new Error('facts without icons');
-    if (!(await page.textContent('#accounts')).includes('This account does not sign in with Google.')) throw new Error('no Google line');
+    if (!(await page.textContent('#accounts')).includes('Not used.')) throw new Error('no Google line');
     const texts = page.locator('#accounts ul.messages > li');
     if ((await texts.count()) < 5) throw new Error('only ' + (await texts.count()) + ' texts');
     const newest = await texts.nth(0).textContent();
@@ -195,7 +195,7 @@ async function seed() {
       copy.querySelectorAll('ul.messages').forEach(n => n.remove());
       return copy.textContent;
     });
-    if (!rest.includes('It does not show the dates recorded')) throw new Error('no sentence about the dates');
+    if (!rest.includes('Recorded dates, customs and settings are not shown.')) throw new Error('no sentence about the dates');
     if (/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}\b|\b\d{1,2}\/\d{1,2}\b|\b20\d\d-\d\d-\d\d\b/.test(rest)) throw new Error('a date appears outside the texts');
     await noSideways();
     // Back returns to the list
@@ -231,7 +231,7 @@ async function seed() {
     await page.waitForSelector('#accounts dl.facts dd:text-is("someone@example.com")');
     await page.waitForSelector('#accounts dl.facts dd:text-is("Example Person")');
     const phone = await page.textContent('#accounts ul.phones > li');
-    for (const w of ['Not verified', 'Has not agreed to reminder texts', 'Has not replied STOP']) if (!phone.includes(w)) throw new Error('phone: no "' + w + '"');
+    for (const w of ['Not verified', 'Reminders not agreed', 'No STOP']) if (!phone.includes(w)) throw new Error('phone: no "' + w + '"');
     await page.waitForSelector('#accounts p:has-text("No texts to or from this account")');
     await page.unroute('**/api/admin/accounts/googleExample1');
     await page.click('#accounts p.back a');
@@ -302,7 +302,7 @@ async function seed() {
     await open('settings');
     await page.waitForSelector('#donate-card');
     const intro = await page.textContent('#donate-card');
-    for (const w of ['appear once at least one link or a note is saved', 'handled entirely by the service you link to', 'Nothing is saved yet, so there is no Donate page']) if (!intro.includes(w)) throw new Error('card: no "' + w + '"');
+    for (const w of ['appears once a link or note is saved', 'handled by the linked service', 'No Donate page yet']) if (!intro.includes(w)) throw new Error('card: no "' + w + '"');
     if ((await page.locator('#don-preview').count()) !== 0) throw new Error('a preview link before anything is saved');
     // two rows, filled wrongly first
     await page.click('#don-add');
@@ -340,7 +340,7 @@ async function seed() {
     // (an earlier "Settings saved" toast may still be on screen, so wait for this save's answer and the redraw)
     const [answer] = await Promise.all([page.waitForResponse(r => r.url().endsWith('/api/admin/config')), page.click('button:has-text("Save settings")')]);
     if (answer.status() !== 200) throw new Error('save answered ' + answer.status());
-    await page.waitForSelector('#don-status:has-text("The page is published")');
+    await page.waitForSelector('#don-status:has-text("Published")');
     if ((await page.locator('#donate-card .error').count()) !== 0) throw new Error('messages left after saving');
     if ((await status('/donate')) !== 200) throw new Error('/donate does not answer 200 after saving');
     if ((await publicDonate()) !== true) throw new Error('/api/public does not say donate after saving');
@@ -360,7 +360,7 @@ async function seed() {
     await page.click('#don-remove-1');
     await page.fill('#don-note', '');
     await page.click('button:has-text("Save settings")');
-    await page.waitForSelector('#don-status:has-text("Nothing is saved yet")');
+    await page.waitForSelector('#don-status:has-text("No Donate page yet")');
     if ((await status('/donate')) !== 404) throw new Error('/donate still answers after removing everything');
     if ((await publicDonate()) !== false) throw new Error('/api/public still says donate');
   });
@@ -386,7 +386,7 @@ async function seed() {
     if ((await page.locator('label[for="k-telnyxApiKey"] .tag').textContent()) !== 'saved') throw new Error('not marked saved');
     if ((await page.content()).includes('local-test-key')) throw new Error('the key is on the page');
     await open('overview');
-    if (!(await page.textContent('#overview')).includes('Text messaging is on')) throw new Error('status did not change');
+    if (!(await page.textContent('#overview')).includes('From (888) 444-0100')) throw new Error('status did not change');
     await open('keys');
     await page.click('button[aria-label="Clear the saved Telnyx API key"]');
     await page.click('dialog button:has-text("Clear it")');
@@ -395,7 +395,7 @@ async function seed() {
     await page.check('#note-tollFreeSubmitted');
     await toast('Noted');
     await open('overview');
-    await waitStep('Texting number: toll-free verification', 'Waiting on someone else');
+    await waitStep('Texting number: toll-free verification', 'Waiting');
     await open('keys');
     await page.check('#note-tollFreeVerified');
     await page.waitForFunction(() => document.querySelector('#note-tollFreeVerified').checked && !document.querySelector('[aria-busy=true]'));

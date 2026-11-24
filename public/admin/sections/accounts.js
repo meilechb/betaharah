@@ -60,15 +60,15 @@ export function loadAccountsPage(id) {
 /** The heading of the page when one account is open. */
 export function accountsTitle(id) {
   if (!id) return null;
-  return { label: 'One account', desc: 'Account ' + id + ': its phones, the Google email it signs in with, and its recent texts.' };
+  return { label: 'One account', desc: '' };
 }
 
 async function remove(a, btn, done) {
   const typed = await promptDialog({
-    title: a.test ? 'Delete the test account?' : 'Delete this account and all of its data?',
+    title: a.test ? 'Delete the test account?' : 'Delete this account?',
     body: a.test
-      ? 'The test account is made up. You can open a new one at any time.'
-      : 'Account ' + a.id + ' will be removed: its settings, entries, phones, messages and calendar link. Its Google Calendar connection is revoked. People on it can no longer sign in. This cannot be undone. Do this only when the person asked for it and cannot do it themselves.',
+      ? 'It is made up. A new one can be opened any time.'
+      : 'Account ' + a.id + ': all entries, settings, phones, messages and its calendar link. Its phones can no longer sign in. It cannot be undone.',
     label: 'Type DELETE to confirm',
     expect: 'DELETE',
     mismatchMessage: 'Type DELETE in capital letters. Nothing has been deleted.',
@@ -139,9 +139,9 @@ function phoneRow(p) {
     body: h(
       'ul',
       { class: 'flags', 'aria-label': 'About ' + pretty(p.number) },
-      flag(p.verified, 'Verified by a code', 'Not verified', 'ok', 'warn'),
-      flag(p.texts, 'Agreed to reminder texts', 'Has not agreed to reminder texts', 'ok', null),
-      flag(p.optedOut, 'Replied STOP: nothing is sent to it', 'Has not replied STOP', 'bad', null),
+      flag(p.verified, 'Verified', 'Not verified', 'ok', 'warn'),
+      flag(p.texts, 'Reminders agreed', 'Reminders not agreed', 'ok', null),
+      flag(p.optedOut, 'Replied STOP', 'No STOP', 'bad', null),
     ),
   });
 }
@@ -173,17 +173,14 @@ function accountPage(id) {
   const msgs = a.messages || [];
   return [
     backLink(),
-    alert(
-      { kind: 'info', title: 'This shows the account’s phones, the Google email it signs in with, and its last 15 texts.' },
-      h('p', {}, 'It does not show the dates recorded, the customs or the settings. Those stay in the encrypted record and are not sent to this console.'),
-    ),
+    h('p', { class: 'muted small' }, 'Recorded dates, customs and settings are not shown.'),
     card(
       { title: 'Account', icon: 'user', headerAction: a.test ? tag('test account', 'info') : null },
       h('p', { class: 'mono account-id' }, a.id),
     ),
     card(
       { title: 'Phones', icon: 'phone' },
-      a.phones.length ? list(a.phones.map(phoneRow), { className: 'phones' }) : h('p', { class: 'muted' }, 'This account has no phone.'),
+      a.phones.length ? list(a.phones.map(phoneRow), { className: 'phones' }) : h('p', { class: 'muted' }, 'No phone.'),
     ),
     card(
       { title: 'Sign in with Google', icon: 'lock' },
@@ -192,17 +189,17 @@ function accountPage(id) {
             'dl',
             { class: 'facts' },
             h('div', {}, h('dt', {}, 'Email'), h('dd', {}, a.googleEmail)),
-            h('div', {}, h('dt', {}, 'Name'), h('dd', {}, a.googleName || 'Google did not give a name.')),
+            h('div', {}, h('dt', {}, 'Name'), h('dd', {}, a.googleName || '—')),
           )
-        : h('p', { class: 'muted google-none' }, 'This account does not sign in with Google.'),
+        : h('p', { class: 'muted google-none' }, 'Not used.'),
     ),
     card(
-      { title: 'Recent texts', icon: 'message', intro: msgs.length ? 'Newest first. Texts the site received from the account’s phones and texts it sent to them.' : null },
-      msgs.length ? list(msgs.map(messageRow), { className: 'messages' }) : h('p', { class: 'muted' }, 'No texts to or from this account’s phones.'),
+      { title: 'Recent texts', icon: 'message', intro: null },
+      msgs.length ? list(msgs.map(messageRow), { className: 'messages' }) : h('p', { class: 'muted' }, 'No texts to or from this account.'),
     ),
     card(
       { title: 'Delete this account', icon: 'trash' },
-      h('p', {}, a.test ? 'The test account is made up. Deleting it removes it; you can open a new one under Test account.' : 'Do this only when the person asked for it and cannot do it themselves. It cannot be undone.'),
+      h('p', {}, a.test ? 'A new one can be opened under Test account.' : 'It cannot be undone.'),
       h(
         'div',
         { class: 'actions' },
@@ -235,7 +232,7 @@ export function accountsPage(id) {
       value: query,
       autocomplete: 'off',
       spellcheck: 'false',
-      help: 'Part of the id is enough. Accounts cannot be found by phone number: the numbers are not stored readably.',
+      help: 'Part of the id is enough. Not by phone number.',
       oninput: e => {
         query = e.target.value.replace(/[^A-Za-z0-9_-]/g, '');
         clearTimeout(timer);
@@ -249,7 +246,7 @@ export function accountsPage(id) {
       options: [
         { value: 'newest', label: 'Newest first' },
         { value: 'oldest', label: 'Oldest first' },
-        { value: 'changed', label: 'Changed most recently' },
+        { value: 'changed', label: 'Recently changed' },
         { value: 'phones', label: 'Most phones' },
       ],
       onchange: e => {
@@ -262,7 +259,7 @@ export function accountsPage(id) {
   if (error) body = h('div', { class: 'empty' }, h('p', {}, error), button({ label: 'Try again', size: 'sm', onclick: () => loadAccounts(true) }));
   else if (!data) body = skeleton({ lines: 5, label: 'Loading the accounts' });
   else if (data.accounts.length === 0)
-    body = emptyState({ icon: 'user', title: query ? 'No account id contains "' + query + '".' : 'There are no accounts yet.', body: query ? 'Check the id, or clear the search.' : 'Accounts appear here when people sign up, or when you make an invitation for one number.' });
+    body = emptyState({ icon: 'user', title: query ? 'No account id contains "' + query + '".' : 'There are no accounts yet.', body: null });
   else
     body = h(
       'div',
@@ -277,14 +274,11 @@ export function accountsPage(id) {
         ),
         h('tbody', {}, data.accounts.map(row)),
       ),
-      h('p', { class: 'table-foot', 'aria-live': 'polite' }, 'Showing ' + num(data.shown) + (query ? ' matching' : '') + (data.shown >= data.limit ? ', the first ' + num(data.limit) + '. Search by id to find others.' : '.')),
+      h('p', { class: 'table-foot', 'aria-live': 'polite' }, 'Showing ' + num(data.shown) + (query ? ' matching' : '') + (data.shown >= data.limit ? ', the first ' + num(data.limit) + '.' : '.')),
     );
   return [
-    alert(
-      { kind: 'info', title: 'The dates people record are encrypted. This console does not show them.' },
-      h('p', {}, 'The list shows each account by an internal id, its dates, how many phones it has, and whether a reminder is waiting. Open an account to see its phone numbers, the Google email it signs in with, and its recent texts. The dates recorded, the customs and the settings are not shown. To remove an account the person cannot delete themselves, use Delete. Accounts made in the text simulator are test accounts too.'),
-    ),
-    data ? card({ title: 'New accounts', icon: 'plus', intro: 'Not counting the test account.' }, periods(data.created)) : null,
+    h('p', { class: 'muted small' }, 'The dates people record are encrypted. This console does not show them.'),
+    data ? card({ title: 'New accounts', icon: 'plus', intro: 'Excl. test account.' }, periods(data.created)) : null,
     card({ title: 'All accounts', icon: 'user' }, controls, body),
   ];
 }

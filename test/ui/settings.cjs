@@ -249,7 +249,7 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('#add-number[aria-invalid="true"]');
     await page.fill('#add-number', '(732) 555-0150');
     await page.click('#add-send');
-    await page.waitForSelector('.st-add .alert:has-text("instead of being texted")');
+    await page.waitForSelector('.st-add .alert:has-text("instead of texted")');
     const code = ((await page.textContent('.st-add .alert-title')).match(/\d{6}/) || [])[0];
     if (!code) throw new Error('no code shown');
     await page.fill('#add-code', '000000'.replace(/./g, (c, i) => (code[i] === '0' ? '1' : '0')));
@@ -288,7 +288,7 @@ const H = { 'x-betaharah': '1' };
   });
 
   await step('reminders: a timing opens in its row, saves, and refuses a number out of range', async () => {
-    if ((await page.textContent('#rem-when-hefsek')) !== '2 hours before sunset, each day it can be done.') throw new Error('timing: ' + (await page.textContent('#rem-when-hefsek')));
+    if ((await page.textContent('#rem-when-hefsek')) !== '2 hours before sunset.') throw new Error('timing: ' + (await page.textContent('#rem-when-hefsek')));
     await page.click('#rem-open-hefsek');
     if ((await page.getAttribute('#rem-open-hefsek', 'aria-expanded')) !== 'true') throw new Error('not expanded');
     await page.fill('#rem-hefsek-min', '100');
@@ -380,11 +380,11 @@ const H = { 'x-betaharah': '1' };
 
   // ----- Language -----
 
-  await step('language: Hebrew terms, with the example and the summaries following', async () => {
+  await step('language: Hebrew terms, with the summaries following', async () => {
     await openSection('language', 'Language');
     await page.click('label[for="r-terms-he"]');
     await savedIn('language');
-    await page.waitForSelector('#lang-example .st-sample:has-text("הפסק")');
+    await page.waitForSelector('#r-terms-he:checked');
     await backToHome();
     if ((await summary('language')) !== 'Terms in Hebrew script') throw new Error('summary: ' + (await summary('language')));
     if (!(await summary('reminders')).includes('שבת')) throw new Error('reminders summary not in Hebrew terms: ' + (await summary('reminders')));
@@ -398,7 +398,7 @@ const H = { 'x-betaharah': '1' };
     await page.evaluate(() => (location.hash = '#settings/language'));
     await page.click('label[for="r-terms-en"]');
     await savedIn('language');
-    await page.waitForSelector('#lang-example .st-sample:has-text("hefsek taharah")');
+    await page.waitForSelector('#r-terms-en:checked');
   });
 
   await step('no sideways scrolling at 360 px in English terms', async () => {
@@ -423,7 +423,7 @@ const H = { 'x-betaharah': '1' };
   });
 
   await step('sign-in: password errors beside their fields; sign-out everywhere asks first', async () => {
-    await openSection('security', 'Sign-in and security');
+    await openSection('security', 'Sign-in');
     await page.fill('#npw1', 'short');
     await page.click('#pw-save');
     await page.waitForSelector('#npw1[aria-invalid="true"]');
@@ -573,7 +573,7 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('#sec-google:has-text("ada@example.com")');
     if (await page.locator('#google-signin-add').count()) throw new Error('offers to add Google again');
     if (await page.locator('#npw1, #pw-change, #pw-remove, #pw-relogin').count()) throw new Error('password controls shown');
-    await page.waitForSelector('#sec-password:has-text("A password belongs to a phone number. Add a phone, sign in with it, and set the password there.")');
+    await page.waitForSelector('#sec-password:has-text("A password needs a phone number. Add a phone first.")');
     await page.waitForSelector('#sign-out');
     await page.click('#sign-out-all');
     await page.waitForSelector('dialog:has-text("Google sign-in on every device")');
@@ -586,12 +586,12 @@ const H = { 'x-betaharah': '1' };
     await openSettings('phones');
     await page.waitForSelector('#phones-list .empty-title:has-text("No phone yet.")');
     const body = await page.textContent('#phones-list');
-    for (const w of ['reminders', 'recording by text', 'signing in']) if (!body.includes(w)) throw new Error('does not say ' + w);
+    for (const w of ['reminders', 'texting', 'sign-in']) if (!body.includes(w)) throw new Error('does not say ' + w);
     if (!(await page.getAttribute('#phone-add-first', 'class')).includes('primary')) throw new Error('adding is not the main action');
     await page.click('#phone-add-first');
     await expectHash('#settings/phones/add');
     await expectTitle('Add a phone');
-    await page.waitForSelector('.st-steps-intro:has-text("Enter the phone’s number.")');
+    await page.waitForSelector('.st-steps-intro:has-text("Code texted to it")');
     await noLeftovers('add a phone');
   });
 
@@ -604,7 +604,7 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('#txt-no-phone');
     await openSettings('data');
     if ((await page.textContent('#data-delete')).includes('(0)')) throw new Error('"(0)" phones');
-    await page.waitForSelector('#data-delete:has-text("Deletes the account: all dates")');
+    await page.waitForSelector('#data-delete:has-text("Delete my account")');
   });
 
   await step('google only, no phone: every section at 360 px, light and dark, without errors or sideways scrolling', async () => {
@@ -634,7 +634,7 @@ const H = { 'x-betaharah': '1' };
     if ((await page.textContent('.st-hero')).includes('this phone')) throw new Error('marked as this phone');
     await openSettings('security');
     await page.waitForSelector('#sec-google:has-text("ada@example.com")');
-    await page.waitForSelector('#sec-password:has-text("A password belongs to a phone number")');
+    await page.waitForSelector('#sec-password:has-text("A password needs a phone number")');
     for (const id of SECTIONS) {
       await openSettings(id);
       await noLeftovers((id || 'home') + ' (phone and Google)');
@@ -643,14 +643,14 @@ const H = { 'x-betaharah': '1' };
 
   await step('back from Google with ?google=signed-in: a toast, and the address loses the parameter', async () => {
     await page.goto(base + '/app/?google=signed-in#settings');
-    await page.waitForSelector('.toast:has-text("You can sign in with Google from now on.")');
+    await page.waitForSelector('.toast:has-text("Google sign-in added.")');
     if (await page.evaluate(() => location.search)) throw new Error('address: ' + page.url());
     await expectHash('#settings');
     await page.goto(base + '/app/?google_error=' + encodeURIComponent('Google said no.') + '#settings');
     await page.waitForSelector('.toast:has-text("Google said no.")');
     if (await page.evaluate(() => location.search)) throw new Error('address: ' + page.url());
     await page.goto(base + '/app/?google=connected#settings');
-    await page.waitForSelector('.toast:has-text("Google Calendar is connected")');
+    await page.waitForSelector('.toast:has-text("Google Calendar connected")');
   });
 
   await unshape();
@@ -684,7 +684,7 @@ const H = { 'x-betaharah': '1' };
   await step('new account: the home flags what is missing', async () => {
     if ((await summary('location')) !== 'Not chosen yet') throw new Error('location: ' + (await summary('location')));
     await page.waitForSelector('#st-nav-location .st-flag.warn');
-    await page.waitForSelector('.st-attention:has-text("customs are not confirmed")');
+    await page.waitForSelector('.st-attention:has-text("Customs not saved")');
     if ((await summary('texting')) !== 'Not available on this site yet') throw new Error('texting: ' + (await summary('texting')));
     if ((await summary('phones')) !== '1 phone · texting not available here') throw new Error('phones: ' + (await summary('phones')));
     if ((await summary('security')) !== 'Password') throw new Error('security: ' + (await summary('security')));
@@ -711,14 +711,14 @@ const H = { 'x-betaharah': '1' };
 
   await step('new account: disabled controls say why', async () => {
     await openSection('phones', 'Phones');
-    await page.waitForSelector('.muted-row:has-text("Not available until texting is")');
+    await page.waitForSelector('.muted-row:has-text("Texting is not available yet")');
     await page.click('#phone-row-17324440101');
     if (!(await page.isDisabled('#texts-17324440101'))) throw new Error('reminders switch enabled');
     if (!(await page.textContent('#texts-17324440101-help')).includes('not available')) throw new Error('no reason');
     if (!(await page.isDisabled('#test-17324440101'))) throw new Error('test text enabled');
     await page.waitForSelector('#phone-remove:has-text("only phone cannot be removed")');
     await openSection('reminders', 'Reminders');
-    await page.waitForSelector('.st-note:has-text("not available on this site")');
+    await page.waitForSelector('.st-note:has-text("not available yet")');
     await openSection('texting', 'Texting');
     await page.waitForSelector('.st-body:has-text("not available on this site yet")');
     await openSection('calendar', 'Calendar');
@@ -726,9 +726,9 @@ const H = { 'x-betaharah': '1' };
   });
 
   await step('new account: the password can be changed, not removed without texting', async () => {
-    await openSection('security', 'Sign-in and security');
+    await openSection('security', 'Sign-in');
     if (await page.locator('#pw-remove').count()) throw new Error('remove offered without texting');
-    await page.waitForSelector('#sec-password:has-text("cannot be removed")');
+    await page.waitForSelector('#sec-password:has-text("Removable once texting works")');
     await page.click('#pw-change');
     await page.waitForSelector('#npw1');
     await page.click('#pw-cancel');
@@ -738,7 +738,7 @@ const H = { 'x-betaharah': '1' };
   await step('new account, Google only and no texting: Phones says when a phone can be added', async () => {
     await reshape(GOOGLE_ONLY);
     await openSettings('phones');
-    await page.waitForSelector('#phones-list:has-text("Not available until texting is")');
+    await page.waitForSelector('#phones-list:has-text("Texting is not available yet")');
     if (await page.locator('#phone-add-first').count()) throw new Error('adding offered without texting');
     if ((await summary('phones')) !== 'No phone yet · texting not available here') throw new Error('phones: ' + (await summary('phones')));
     for (const id of SECTIONS) {

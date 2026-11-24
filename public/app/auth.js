@@ -92,8 +92,8 @@ export async function showSignIn(params) {
       dropParam('k');
       auth.linkProblem =
         e && e.status !== undefined
-          ? 'This link has expired or was already used. Sign in below instead.'
-          : 'The site could not be reached. Check the internet connection and open the link again, or sign in below.';
+          ? 'This sign-in link expired or was used.'
+          : 'The site could not be reached. Open the link again.';
     }
   }
   const invite = params.get('invite');
@@ -103,7 +103,7 @@ export async function showSignIn(params) {
       auth.invite = invite;
       auth.inviteKind = info.kind;
     } catch (e) {
-      auth.inviteProblem = e && e.status === 404 ? 'This invitation link is not valid any more: it was used or has expired. Ask for a new one.' : messageOf(e);
+      auth.inviteProblem = e && e.status === 404 ? 'This invitation is not valid any more.' : messageOf(e);
     }
   }
   const googleError = params.get('google_error');
@@ -216,7 +216,7 @@ export function renderAuth() {
   const passwordToggle = () =>
     checkRow({
       id: 'show-pw',
-      label: 'Show the password',
+      label: 'Show password',
       checked: a.showPassword,
       onchange: e => {
         a.showPassword = e.target.checked;
@@ -259,13 +259,12 @@ export function renderAuth() {
         const number = checkedNumber();
         if (!number) return;
         if (a.password.length < 10) return set({ errors: { pw1: 'A password needs at least 10 characters.' }, focus: 'pw1' });
-        if (a.password !== a.password2) return set({ errors: { pw2: 'The two passwords are not the same. Type the same password in both boxes.' }, focus: 'pw2' });
+        if (a.password !== a.password2) return set({ errors: { pw2: 'The passwords are not the same.' }, focus: 'pw2' });
         set({ busy: true, errors: {}, message: '' });
         api('POST', '/api/auth/setup', { invite: a.invite, number, password: a.password }).then(signedIn, fail('setup'));
       },
       h('h2', {}, 'Set up your account'),
       notes,
-      h('p', { class: 'muted' }, 'Use the number the invitation was made for.'),
       numberField(),
       textField({
         id: 'pw1',
@@ -285,7 +284,7 @@ export function renderAuth() {
       }),
       textField({
         id: 'pw2',
-        label: 'The same password again',
+        label: 'Password again',
         type: pwType(),
         class: 'pw',
         autocomplete: 'new-password',
@@ -318,17 +317,17 @@ export function renderAuth() {
         set({ busy: true, errors: {}, message: '' });
         api('POST', '/api/auth/password', { number, password: a.password }).then(signedIn, fail('password'));
       },
-      h('h2', {}, 'Sign in with a password'),
+      h('h2', {}, 'Sign in'),
       notes,
       signupInviteWithoutTexts
         ? alert(
             { kind: 'info' },
             P.google
-              ? 'This invitation needs a texted code, which this site cannot send yet. Continue with Google, or open the link again later.'
-              : 'This invitation needs a texted code, which this site cannot send yet. Open the link again later.',
+              ? 'This invitation needs a texted code. Texting is not available yet.'
+              : 'This invitation needs a texted code. Texting is not available yet.',
           )
         : !P.sms
-          ? alert({ kind: 'info' }, P.google ? 'Sign-in by text message is not available yet. Use your password or Google.' : 'Sign-in by text message is not available yet. Use your password.')
+          ? alert({ kind: 'info' }, 'Sign-in by text is not available yet.')
           : null,
       numberField(),
       textField({
@@ -348,7 +347,7 @@ export function renderAuth() {
       passwordToggle(),
       submit('Sign in', a.busy),
       googleChoice(a.inviteKind === 'signup' ? a.invite : null),
-      P.sms ? linkRow('Sign in with a texted code instead', () => set({ mode: 'code', step: 'number', errors: {}, message: '', focus: 'number' })) : null,
+      P.sms ? linkRow('Use a texted code', () => set({ mode: 'code', step: 'number', errors: {}, message: '', focus: 'number' })) : null,
       legal(),
     );
   } else if (a.step === 'number') {
@@ -364,13 +363,12 @@ export function renderAuth() {
           fail('number'),
         );
       },
-      h('h2', {}, signup ? 'Create your account' : P.signup === 'open' ? 'Sign in or sign up' : 'Sign in'),
+      h('h2', {}, signup ? 'Create your account' : P.signup === 'open' ? 'Sign in or join' : 'Sign in'),
       notes,
-      signup ? h('p', { class: 'muted' }, 'You were invited to Betaharah.') : null,
       numberField(true),
       submit('Text me a code', a.busy),
       googleChoice(signup ? a.invite : null),
-      linkRow('Sign in with a password instead', () => set({ mode: 'password', errors: {}, message: '', focus: 'number' })),
+      linkRow('Use a password', () => set({ mode: 'password', errors: {}, message: '', focus: 'number' })),
       legal(),
     );
     if (P.textingNumber && !a.invite) {
@@ -378,7 +376,7 @@ export function renderAuth() {
         'p',
         { class: 'auth-aside muted' },
         icon('message'),
-        h('span', {}, 'No internet? Text ', h('strong', {}, 'JOIN'), ' to ', h('a', { href: 'sms:' + P.textingNumber, class: 'nowrap' }, pretty(P.textingNumber)), ' to use it by text.'),
+        h('span', {}, 'No internet? Text ', h('strong', {}, 'JOIN'), ' to ', h('a', { href: 'sms:' + P.textingNumber, class: 'nowrap' }, pretty(P.textingNumber)), '.'),
       );
     }
   } else {
@@ -392,11 +390,10 @@ export function renderAuth() {
       },
       h('h2', {}, 'Enter the code'),
       notes,
-      h('p', {}, 'If this number can sign in here, a 6-digit code is on its way to ', h('strong', { class: 'nowrap' }, pretty(a.sentTo)), '.'),
-      h('p', { class: 'muted small' }, 'The code works for ' + minutes + ' minutes.'),
+      h('p', {}, 'If ', h('strong', { class: 'nowrap' }, pretty(a.sentTo)), ' can sign in, a code is on its way. It works for ' + minutes + ' minutes.'),
       codeField({
         id: 'code',
-        label: 'The 6-digit code',
+        label: '6-digit code',
         value: a.code,
         error: err('code'),
         onvalue: v => {
@@ -417,15 +414,15 @@ export function renderAuth() {
       h(
         'details',
         { class: 'auth-help' },
-        h('summary', {}, icon('chevron-right', { size: 'sm' }), 'I did not get a code'),
+        h('summary', {}, icon('chevron-right', { size: 'sm' }), 'No code?'),
         h(
           'ul',
           {},
-          h('li', {}, 'Wait a minute. Texts sometimes arrive late.'),
-          h('li', {}, 'Check the number above.'),
-          P.signup === 'open' ? null : h('li', {}, 'A code is sent only to a number with an account here' + (a.invite ? ', or with a valid invitation.' : '.')),
-          h('li', {}, 'If you set a password, sign in with it instead.'),
-          P.contactEmail ? h('li', {}, 'Still nothing? Write to ' + (P.contactName || 'us') + ' at ', h('a', { href: 'mailto:' + P.contactEmail }, P.contactEmail), '.') : null,
+          h('li', {}, 'Texts can arrive late.'),
+          h('li', {}, 'Check the number.'),
+          P.signup === 'open' ? null : h('li', {}, 'Codes go only to numbers with an account' + (a.invite ? ' or an invitation.' : '.')),
+          h('li', {}, 'Or sign in with your password.'),
+          P.contactEmail ? h('li', {}, 'Write to ', h('a', { href: 'mailto:' + P.contactEmail }, P.contactEmail), '.') : null,
         ),
       ),
     );
@@ -453,7 +450,7 @@ function startResendTicker() {
   const draw = () => {
     const left = Math.max(0, Math.ceil((a.sentAt + wait * 1000 - Date.now()) / 1000));
     if (left > 0) {
-      box.replaceChildren(h('p', { class: 'muted small countdown' }, icon('clock', { size: 'sm' }), h('span', {}, 'You can ask for a new code in ' + mmss(left) + '.')));
+      box.replaceChildren(h('p', { class: 'muted small countdown' }, icon('clock', { size: 'sm' }), h('span', {}, 'New code in ' + mmss(left))));
       return;
     }
     clearInterval(ticker);
@@ -471,7 +468,7 @@ function startResendTicker() {
             btn.disabled = true;
             api('POST', '/api/auth/code', { number: a.sentTo, invite: a.invite || undefined }).then(
               () => {
-                Object.assign(a, { sentAt: Date.now(), code: '', errors: {}, status: 'A new code was asked for. Use the newest code.', focus: 'code' });
+                Object.assign(a, { sentAt: Date.now(), code: '', errors: {}, status: 'New code asked for. Use the newest.', focus: 'code' });
                 renderAuth();
               },
               err => {

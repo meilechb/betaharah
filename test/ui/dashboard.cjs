@@ -136,9 +136,9 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('#legend-recorded h4:text-is("Recorded")', { state: 'visible' });
     await page.waitForSelector('#legend-worked-out h4:text-is("Worked out")', { state: 'visible' });
     const recorded = await page.textContent('#legend-recorded');
-    for (const p of ['Flow or stain', 'Hefsek taharah', 'Immersion (optional)']) if (!recorded.includes(p)) throw new Error('recorded group: no ' + p);
+    for (const p of ['Flow or stain', 'Hefsek taharah', 'Immersion']) if (!recorded.includes(p)) throw new Error('recorded group: no ' + p);
     const worked = await page.textContent('#legend-worked-out');
-    for (const p of ['Hefsek taharah day, not recorded', 'Seven clean days, day 1 to 7', 'Mikvah night', 'Veset onah, day or night', 'Or Zarua only', 'Dashed: expected']) if (!worked.includes(p)) throw new Error('worked-out group: no ' + p);
+    for (const p of ['Hefsek taharah due', 'Seven clean days', 'Mikvah night', 'Veset onah', 'Or Zarua only', 'Expected']) if (!worked.includes(p)) throw new Error('worked-out group: no ' + p);
     // how a day is drawn: one closed "More"
     if (await page.locator('#legend-more[open]').count()) throw new Error('"More" is open');
     if (await page.locator('#cal-legend .legend-days li:visible').count()) throw new Error('the notes on how a day is drawn are shown');
@@ -212,12 +212,12 @@ const H = { 'x-betaharah': '1' };
     const yesterday = new Date(Date.parse(today + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
     if (!(await page.locator('#day-' + yesterday).count())) await page.click('#cal-prev');
     await page.click('#day-' + yesterday);
-    await page.waitForSelector('#day-panel h4:text-is("What happened on this day?")');
+    await page.waitForSelector('#day-panel h4:text-is("What happened?")');
     for (const id of ['dp-add-flow-day', 'dp-add-flow-night', 'dp-add-hefsek']) await page.waitForSelector('#' + id);
     // the immersion is under "Other things to add"
     if (await page.locator('#dp-add-mikvah:visible').count()) throw new Error('the immersion is a one-click button');
     const note = await page.textContent('#day-panel .day-night-note');
-    if (note !== 'At night: after sunset on this date.') throw new Error('note: ' + note);
+    if (note !== 'Night: after sunset.') throw new Error('note: ' + note);
     const before = (await state()).entryCount;
     await page.click('#day-more summary');
     await page.click('#dp-add-mikvah');
@@ -244,7 +244,7 @@ const H = { 'x-betaharah': '1' };
     const row = page.locator('li.entry:has-text("checked by the browser test")');
     await row.waitFor();
     await row.locator('button[aria-label^="Options for"]').click();
-    await row.locator('button:has-text("Remove this entry")').click();
+    await row.locator('button:has-text("Remove")').click();
     await page.waitForSelector('dialog[open] h2:has-text("Remove this entry?")');
     await page.click('dialog button:has-text("Remove entry")');
     await page.waitForSelector('dialog', { state: 'detached' });
@@ -261,7 +261,7 @@ const H = { 'x-betaharah': '1' };
 
   await step('coming up: until the mikvah night, then each onah with its reasons shown', async () => {
     await tab('Today');
-    await page.waitForSelector('#up-steps h3:text-is("Until the mikvah night")');
+    await page.waitForSelector('#up-steps h3:text-is("Until mikvah night")');
     await page.waitForSelector('#up-steps .up-clean_day.group');
     await page.waitForSelector('#up-onot h3:text-is("Onot of separation")');
     const first = await page.textContent('#up-onot .up-row .up-desc');
@@ -309,15 +309,15 @@ const H = { 'x-betaharah': '1' };
   await step('customs: leaving with unsaved changes asks first', async () => {
     await page.locator('#cu-orZarua-body label.choice:has(input:not(:checked))').first().click();
     await page.click('nav.tabs button:has-text("Today")');
-    await page.waitForSelector('dialog[open] h2:has-text("Leave without saving your customs?")');
-    await page.click('dialog button:has-text("Stay and save")');
+    await page.waitForSelector('dialog[open] h2:has-text("Leave without saving?")');
+    await page.click('dialog button:has-text("Stay")');
     await page.waitForSelector('dialog', { state: 'detached' });
     if ((await page.getAttribute('nav.tabs button:has-text("Customs")', 'aria-selected')) !== 'true') throw new Error('left the tab');
   });
 
   await step('customs: save and confirm', async () => {
     await page.click('#cu-save');
-    await page.waitForSelector('.toast:has-text("Your customs are saved")');
+    await page.waitForSelector('.toast:has-text("Customs saved")');
     await page.waitForSelector('.save-bar', { state: 'detached' });
     await page.waitForSelector('p:has-text("Last saved:")');
   });
@@ -517,7 +517,7 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('.save-bar.dirty');
     await page.click('#top-sign-out');
     await page.waitForSelector('dialog[open]');
-    await page.click('dialog button:has-text("Stay and save")');
+    await page.click('dialog button:has-text("Stay")');
     await page.waitForSelector('dialog', { state: 'detached' });
     await page.click('#cu-discard');
     await page.waitForSelector('.save-bar.dirty', { state: 'detached' });
@@ -531,7 +531,7 @@ const H = { 'x-betaharah': '1' };
   // ----- a page that cannot be loaded -----
 
   for (const [label, fulfil, heading] of [
-    ['the site cannot be loaded', { status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'The site is being updated. Try again in a minute.' }) }, 'The page could not be loaded'],
+    ['the site cannot be loaded', { status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'The site is being updated. Try again in a minute.' }) }, 'Could not load'],
     ['the site is not set up', { status: 200, contentType: 'application/json', body: JSON.stringify({ configured: false }) }, 'Not set up yet'],
   ]) {
     await step('a failed load (' + label + '): the reason and "Back to the home page"', async () => {

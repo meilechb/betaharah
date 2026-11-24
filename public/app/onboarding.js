@@ -48,13 +48,8 @@ export function onboardingCard() {
 function welcomeView() {
   return screen({
     title: 'Welcome to Betaharah',
-    intro: [
-      'Betaharah keeps your calendar of family purity: from the dates you record, it works out what comes next, and it can remind you by text message.',
-      'The next few minutes cover where you live, your customs, and your most recent dates; then, if you like, your calendar app and text reminders.',
-    ],
     body: [
       h('p', { class: 'setup-account small' }, icon('user', { size: 'sm' }), h('span', {}, signedInWith())),
-      h('p', { class: 'muted small' }, 'Each answer is saved as soon as you give it. You can stop at any point and continue later from where you left off.'),
       termsSwitch(),
     ],
     back: null,
@@ -102,7 +97,7 @@ export function guidedSetupView() {
       'header',
       { class: 'top setup-top' },
       h('h1', {}, 'Betaharah'),
-      button({ label: step === 'done' ? 'Close the setup' : 'Leave the setup', variant: 'link', className: 'setup-leave', onclick: step === 'done' ? e => finish(e.currentTarget) : leave, attrs: { id: 'setup-leave' } }),
+      button({ label: step === 'done' ? 'Close setup' : 'Leave setup', variant: 'link', className: 'setup-leave', onclick: step === 'done' ? e => finish(e.currentTarget) : leave, attrs: { id: 'setup-leave' } }),
     ),
     h(
       'nav',

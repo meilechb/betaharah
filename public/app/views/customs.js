@@ -30,10 +30,10 @@ setLeaveGuard({
   dirty: () => currentTab() === 'customs' && isDirty(),
   ask: async () => {
     const ok = await confirmDialog({
-      title: 'Leave without saving your customs?',
-      body: 'Your changes on this tab will be lost.',
+      title: 'Leave without saving?',
+      body: 'Your changes will be lost.',
       confirmLabel: 'Leave without saving',
-      cancelLabel: 'Stay and save',
+      cancelLabel: 'Stay',
       danger: true,
     });
     if (ok) {
@@ -187,7 +187,7 @@ function save(btn) {
       adopt(r.state);
       saveError = '';
       render();
-      toast('Your customs are saved.');
+      toast('Customs saved.');
     },
     fail: message => {
       saveError = message;
@@ -213,7 +213,7 @@ function saveBar() {
           'div',
           { class: 'save-bar-text' },
           h('strong', {}, dirty ? 'Unsaved changes' + (n > 1 ? ' (' + n + ')' : '') : 'Not confirmed yet'),
-          dirty ? null : h('span', {}, 'The stricter options are in use until you save.'),
+          dirty ? null : h('span', {}, 'Stricter options in use.'),
           saveError ? h('span', { class: 'error', role: 'alert', id: 'cu-save-error', tabindex: '-1' }, icon('alert', { size: 'sm' }), saveError) : null,
         ),
         h(
@@ -227,7 +227,7 @@ function saveBar() {
                   draft.halachic = clone(S.halachic.settings);
                   saveError = '';
                   render();
-                  toast('Your changes were discarded.');
+                  toast('Changes discarded.');
                 },
               })
             : null,

@@ -7,7 +7,7 @@ import { chart, historyState, loadHistory, SERIES } from './usage.js';
 const STATUS_TAG = {
   done: ['Done', 'ok'],
   todo: ['Needs you', 'warn'],
-  waiting: ['Waiting on someone else', 'info'],
+  waiting: ['Waiting', 'info'],
   optional: ['Optional', null],
 };
 
@@ -24,7 +24,7 @@ function trend(key, noun) {
   const before = sum(history.days, key, 7, 14);
   const diff = last - before;
   const dir = diff > 0 ? 'up' : diff < 0 ? 'down' : 'same';
-  const text = num(last) + ' ' + noun + ' in 7 days' + (diff === 0 ? ' (same as the week before)' : ' (' + num(Math.abs(diff)) + (diff > 0 ? ' more' : ' fewer') + ' than the week before)');
+  const text = num(last) + ' ' + noun + ' in 7 days' + (diff === 0 ? '' : ' (' + (diff > 0 ? '+' : '−') + num(Math.abs(diff)) + ')');
   return h('div', { class: 'trend ' + dir }, icon(dir === 'up' ? 'chevron-up' : dir === 'down' ? 'chevron-down' : 'chevron-right', { size: 'sm' }), h('span', {}, text));
 }
 
@@ -32,7 +32,7 @@ function meter(value, max) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 100;
   const bar = h('div', { class: 'meter' + (pct >= 90 ? ' high' : '') }, h('span', {}));
   bar.firstChild.style.width = pct + '%';
-  return h('div', { class: 'meter-wrap' }, bar, h('span', { class: 'meter-text' }, pct + '% of the limit'));
+  return h('div', { class: 'meter-wrap' }, bar, h('span', { class: 'meter-text' }, pct + '%'));
 }
 
 function tile(o) {
@@ -52,10 +52,10 @@ function tiles() {
   return h(
     'div',
     { class: 'stats' },
-    tile({ icon: 'user', label: 'Accounts', value: num(S.counts.regularAccounts), note: S.demo.exists ? 'not counting the test account' : null, extra: trend('signups', 'new') }),
-    tile({ icon: 'message', label: 'Texts sent this month', value: num(S.usage.textsThisMonth), note: 'of at most ' + num(S.config.monthlyMessageLimit), extra: meter(S.usage.textsThisMonth, S.config.monthlyMessageLimit) }),
-    tile({ icon: 'lock', label: 'Sign-in codes today', value: num(S.usage.codesToday), note: 'of at most ' + num(S.config.dailyCodeLimit), extra: meter(S.usage.codesToday, S.config.dailyCodeLimit) }),
-    tile({ icon: 'download', label: 'Estimated cost this month', value: dollars(cost), note: num(m.textsSent + m.textsReceived) + ' texts at ' + S.notes.centsPerText + '¢ each', extra: trend('textsSent', 'texts sent') }),
+    tile({ icon: 'user', label: 'Accounts', value: num(S.counts.regularAccounts), note: S.demo.exists ? 'excl. test account' : null, extra: trend('signups', 'new') }),
+    tile({ icon: 'message', label: 'Texts sent this month', value: num(S.usage.textsThisMonth), note: 'of ' + num(S.config.monthlyMessageLimit), extra: meter(S.usage.textsThisMonth, S.config.monthlyMessageLimit) }),
+    tile({ icon: 'lock', label: 'Sign-in codes today', value: num(S.usage.codesToday), note: 'of ' + num(S.config.dailyCodeLimit), extra: meter(S.usage.codesToday, S.config.dailyCodeLimit) }),
+    tile({ icon: 'download', label: 'Cost this month', value: dollars(cost), note: S.notes.centsPerText + '¢ a text', extra: trend('textsSent', 'texts sent') }),
   );
 }
 
@@ -89,8 +89,7 @@ function setupCard() {
     bar,
     open.length
       ? h('ol', { class: 'steps-list' }, open.map((i, k) => stepRow(i, required.indexOf(i) + 1, k > 0)))
-      : h('p', { class: 'all-done' }, icon('check'), ' Setup is complete. Text messaging, sign-up and the public pages are in place.'),
-    open.length > 1 ? h('p', { class: 'small muted' }, 'Each step says what to do when it is next.') : null,
+      : h('p', { class: 'all-done' }, icon('check'), ' Setup is complete.'),
     h(
       'details',
       { class: 'more-steps' },
@@ -109,19 +108,17 @@ function chartCard() {
   else {
     const total = history.days.reduce((n, d) => n + d.textsSent, 0);
     body = total === 0
-      ? emptyState({ icon: 'message', title: 'No texts were sent in the last 30 days.', body: S.smsReady ? 'Texts appear here as they are sent.' : 'Texts are counted here once text messaging is set up.' })
-      : h('div', {}, h('p', { class: 'small muted' }, num(total) + ' ' + (total === 1 ? s.unit[0] : s.unit[1]) + ' in the last 30 days.'), chart(history.days, 'textsSent', s.unit));
+      ? emptyState({ icon: 'message', title: 'No texts in 30 days.' })
+      : h('div', {}, h('p', { class: 'small muted' }, num(total) + ' ' + (total === 1 ? s.unit[0] : s.unit[1]) + ' in 30 days.'), chart(history.days, 'textsSent', s.unit));
   }
-  return card({ title: 'Texts sent, last 30 days', icon: 'message', headerAction: h('a', { href: '#usage', class: 'small' }, 'All usage') }, body);
+  return card({ title: 'Texts, 30 days', icon: 'message', headerAction: h('a', { href: '#usage', class: 'small' }, 'All usage') }, body);
 }
 
 export function overviewPage() {
   loadHistory();
   const open = S.checklist.filter(i => !i.optional && i.status !== 'done');
   return [
-    open.length
-      ? h('p', { class: 'lead' }, plural(open.length, 'setup step') + ' left. ', open[0].status === 'todo' ? 'Next: ' + open[0].title + '.' : 'Waiting on someone else.')
-      : null,
+    open.length ? h('p', { class: 'lead' }, plural(open.length, 'setup step') + ' left.') : null,
     tiles(),
     h('div', { class: 'grid-2' }, setupCard(), statusCard()),
     chartCard(),

@@ -40,7 +40,7 @@ function customsFlag() {
     'div',
     { class: 'st-attention', role: 'note' },
     icon('alert'),
-    h('div', {}, h('strong', {}, 'Your customs are not confirmed yet.'), h('span', {}, ' The stricter options are in use.')),
+    h('div', {}, h('strong', {}, 'Customs not saved.'), h('span', {}, ' Stricter options in use.')),
     button({ label: 'Review customs', size: 'sm', onclick: () => go('customs'), attrs: { id: 'st-go-customs' } }),
   );
 }

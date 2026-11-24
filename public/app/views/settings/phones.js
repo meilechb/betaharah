@@ -5,7 +5,7 @@
  * two-step view (#settings/phones/add).
  */
 import { alert, api, button, confirmDialog, emptyState, h, icon, pretty, textField } from '../../lib.js';
-import { S, signOutLocally, t } from '../../store.js';
+import { S, signOutLocally } from '../../store.js';
 import { attempt, refresh, region } from '../shared.js';
 import { open, replace } from './route.js';
 import { andList, blockRow, group, infoRow, navRow, save, stTag, switchRow } from './ui.js';
@@ -57,7 +57,6 @@ function phoneSummary(p) {
 
 /** No phone on the account (an account that signs in with Google): what a phone is for, and adding one. */
 function emptyListView() {
-  const lead = 'For reminders, recording by text and signing in.';
   return {
     title: 'Phones',
     parent: '',
@@ -69,7 +68,7 @@ function emptyListView() {
         emptyState({
           icon: 'phone',
           title: 'No phone yet.',
-          body: S.sms.ready ? lead + ' Up to ' + S.maxPhones + ' phones can share the account.' : lead + ' Not available until texting is.',
+          body: S.sms.ready ? 'For reminders, texting and sign-in.' : 'Texting is not available yet.',
           action: S.sms.ready ? button({ label: 'Add a phone', variant: 'primary', icon: 'plus', attrs: { id: 'phone-add-first' }, onclick: () => open('phones/add') }) : null,
         }),
       ),
@@ -81,17 +80,16 @@ function listView() {
   if (S.phones.length === 0) return emptyListView();
   const full = S.phones.length >= S.maxPhones;
   let addRow;
-  if (!S.sms.ready) addRow = infoRow({ icon: 'plus', title: 'Add a phone', summary: 'Not available until texting is.', className: 'muted-row' });
-  else if (full) addRow = infoRow({ icon: 'plus', title: 'Add a phone', summary: 'This account has the most phones it can have (' + S.maxPhones + '). Remove one to add another.', className: 'muted-row' });
-  else addRow = navRow({ path: 'phones/add', id: 'phone-add-row', icon: 'plus', leadKind: 'accent', title: 'Add a phone', summary: 'For husband and wife to share this account.' });
+  if (!S.sms.ready) addRow = infoRow({ icon: 'plus', title: 'Add a phone', summary: 'Texting is not available yet.', className: 'muted-row' });
+  else if (full) addRow = infoRow({ icon: 'plus', title: 'Add a phone', summary: 'Limit reached (' + S.maxPhones + ').', className: 'muted-row' });
+  else addRow = navRow({ path: 'phones/add', id: 'phone-add-row', icon: 'plus', leadKind: 'accent', title: 'Add a phone', summary: 'Up to ' + S.maxPhones + ' phones' });
   return {
     title: 'Phones',
     parent: '',
     statusKey: 'phones',
-    lead: 'Up to ' + S.maxPhones + ' phones share this account.',
     body: [
       group(
-        { title: S.phones.length === 1 ? 'The phone on this account' : 'The ' + S.phones.length + ' phones on this account', id: 'phones-list' },
+        { title: S.phones.length === 1 ? '1 phone' : S.phones.length + ' phones', id: 'phones-list' },
         S.phones.map(p =>
           navRow({
             path: 'phones/' + keyOf(p.number),
@@ -161,7 +159,7 @@ function detailView(key) {
       title: 'Phone not found',
       parent: 'phones',
       backLabel: 'Phones',
-      body: [h('p', {}, 'This phone is not on the account (any more).'), button({ label: 'Show the phones', onclick: () => replace('phones') })],
+      body: [h('p', {}, 'Not on this account.'), button({ label: 'Show the phones', onclick: () => replace('phones') })],
     };
   }
   return {
@@ -184,14 +182,14 @@ function detailView(key) {
           h('span', { class: 'st-hero-icon' }, icon('phone')),
           h('div', { class: 'st-hero-main' }, h('p', { class: 'st-hero-title' }, pretty(p.number)), h('p', { class: 'st-tags' }, tagsOf(p), p.verified && !p.optedOut ? stTag(getsReminders(p) ? 'reminders on' : 'reminders off', getsReminders(p) ? 'ok' : null) : null)),
         ),
-        p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP. Text START to receive texts again.') : null,
+        p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP. Text START to resume.') : null,
         verify ? group({ title: 'Verification', id: 'phone-verify' }, verify) : null,
         group(
-          { title: 'What this phone may do', id: 'phone-may' },
+          { title: 'Texting', id: 'phone-may' },
           switchRow({
             id: 'can-update-' + key,
-            label: 'Record by text message',
-            help: S.sms.ready ? 'Texts from this phone, such as 1 or 2, are recorded.' : 'Texting is not available yet.',
+            label: 'Record by text',
+            help: S.sms.ready ? null : 'Texting is not available yet.',
             checked: p.canUpdate,
             onchange: e => {
               const on = e.target.checked;
@@ -201,7 +199,7 @@ function detailView(key) {
           switchRow({
             id: 'texts-' + key,
             label: 'Receive text reminders',
-            help: off || (p.texts ? null : 'The terms are shown first.'),
+            help: off || null,
             checked: p.texts || showConsent,
             disabled: Boolean(off) && !p.texts,
             onchange: e => {
@@ -220,15 +218,14 @@ function detailView(key) {
         p.texts
           ? group(
               {
-                title: 'Reminders it receives',
+                title: 'Reminders',
                 id: 'phone-kinds',
-                footer: 'Their times are set under Reminders.',
               },
               kinds.map(k =>
                 switchRow({
                   id: 'rem-' + key + '-' + k,
                   label: S.labels.reminders[k] || k,
-                  help: k === 'mikvah_book' ? t('The morning after the {hefsek} is recorded.') : null,
+                  help: null,
                   checked: p.reminders.includes(k),
                   onchange: e => {
                     const on = e.target.checked;
@@ -244,15 +241,14 @@ function detailView(key) {
             h(
               'div',
               { class: 'field' },
-              h('label', { for: 'name-' + key }, 'Name shown on this page'),
+              h('label', { for: 'name-' + key }, 'Name (optional)'),
               h('input', {
                 id: 'name-' + key,
                 type: 'text',
                 class: 'wide',
                 maxlength: 40,
-                placeholder: 'For example: Sarah',
+                placeholder: 'Sarah',
                 value: names[p.number] !== undefined ? names[p.number] : p.name,
-                'aria-describedby': 'name-help-' + key,
                 oninput: e => (names[p.number] = e.target.value),
                 onchange: e => {
                   const v = e.target.value.trim();
@@ -260,15 +256,13 @@ function detailView(key) {
                   if (v !== p.name) savePhone(p, b => (b.name = v), v ? 'Saved: ' + v : 'Name removed');
                 },
               }),
-              h('p', { class: 'help', id: 'name-help-' + key }, 'Optional. Saved when you leave the box.'),
             ),
           ),
         ),
         group(
           { title: 'Test', id: 'phone-test' },
           blockRow(
-            h('p', { class: 'help' }, S.demo ? 'Simulated in the test account.' : 'One short text, to check that texts arrive.'),
-            h(
+                        h(
               'div',
               { class: 'actions' },
               button({
@@ -279,7 +273,7 @@ function detailView(key) {
                 onclick: () => save('phones', () => api('POST', '/api/phones/test', { number: p.number }), { message: S.demo ? 'A test text was simulated' : 'A test text was sent' }),
               }),
             ),
-            !S.sms.ready || !p.verified || p.optedOut ? h('p', { class: 'help' }, !S.sms.ready ? 'Text messaging is not available on this site yet.' : !p.verified ? 'Verify the number first.' : 'This phone replied STOP; nothing can be sent to it.') : null,
+            !S.sms.ready || !p.verified || p.optedOut ? h('p', { class: 'help' }, !S.sms.ready ? 'Texting is not available yet.' : !p.verified ? 'Verify the number first.' : 'This phone replied STOP.') : null,
           ),
         ),
         group(
@@ -291,7 +285,7 @@ function detailView(key) {
                     'p',
                     { class: 'help' },
                     p.me
-                      ? 'This is the phone you are signed in with. Removing it signs you out here.'
+                      ? 'You are signed in with it. Removing it signs you out.'
                       : S.phones.length > 1
                         ? 'It can no longer sign in or get texts.'
                         : 'It can no longer sign in or get texts. You still sign in with Google.',
@@ -300,7 +294,7 @@ function detailView(key) {
                     'div',
                     { class: 'actions' },
                     button({
-                      label: 'Remove this phone',
+                      label: 'Remove phone',
                       variant: 'danger',
                       icon: 'trash',
                       attrs: { id: 'remove-' + key },
@@ -308,7 +302,7 @@ function detailView(key) {
                         const btn = e.currentTarget;
                         const ok = await confirmDialog({
                           title: 'Remove ' + pretty(p.number) + ' from this account?',
-                          body: p.me ? 'This is the phone you are signed in with. You will be signed out.' : 'It can no longer sign in or get texts.',
+                          body: p.me ? 'This is the phone you are signed in with. You will be signed out.' : 'It can no longer sign in or get texts. You still sign in with Google.',
                           confirmLabel: 'Remove phone',
                           danger: true,
                         });
@@ -366,7 +360,7 @@ function codeForm() {
       onsubmit: e => {
         e.preventDefault();
         if (!/^\d{6}$/.test(adding.code)) {
-          adding.error = 'Enter the 6 digits of the code.';
+          adding.error = 'Enter all 6 digits.';
           refresh(existing ? 'phone-detail' : 'phone-add');
           document.getElementById('add-code')?.focus();
           return;
@@ -391,7 +385,7 @@ function codeForm() {
     existing ? null : h('p', { class: 'st-step' }, 'Step 2 of 2'),
     h('p', { class: 'st-block-title' }, 'Enter the code'),
     adding.demoCode
-      ? alert({ kind: 'info', title: 'The code is ' + adding.demoCode }, 'In the test account the code is shown here instead of being texted.')
+      ? alert({ kind: 'info', title: 'The code is ' + adding.demoCode }, 'Test account: shown here instead of texted.')
       : h('p', { class: 'help' }, 'A 6-digit code was texted to ' + pretty(adding.number) + '. It is valid for a few minutes.'),
     textField({
       id: 'add-code',
@@ -410,7 +404,7 @@ function codeForm() {
       { class: 'actions' },
       button({ label: existing ? 'Verify' : 'Add this phone', variant: 'primary', type: 'submit', attrs: { id: 'add-confirm' } }),
       button({
-        label: existing ? 'Cancel' : 'Use another number',
+        label: existing ? 'Cancel' : 'Other number',
         attrs: { id: 'add-cancel' },
         onclick: () => {
           const keep = existing ? '' : adding.number;
@@ -430,9 +424,9 @@ function addView() {
     parent: 'phones',
     backLabel: 'Phones',
     body: region('phone-add', () => {
-      if (!S.sms.ready) return h('div', {}, h('p', {}, (S.phones.length ? 'A second phone' : 'A phone') + ' can be added once text messaging is available on this site.'));
+      if (!S.sms.ready) return h('div', {}, h('p', {}, 'Texting is not available yet.'));
       if (adding.forNumber !== null) adding = idle();
-      if (adding.step !== 'code' && S.phones.length >= S.maxPhones) return h('div', {}, h('p', {}, 'This account has the most phones it can have (' + S.maxPhones + '). Remove one first.'));
+      if (adding.step !== 'code' && S.phones.length >= S.maxPhones) return h('div', {}, h('p', {}, 'Limit reached (' + S.maxPhones + '). Remove one first.'));
       if (adding.step === 'code') return h('div', { class: 'st-group' }, h('div', { class: 'st-rows' }, codeForm()));
       return h(
         'div',
@@ -440,8 +434,8 @@ function addView() {
         h(
           'ol',
           { class: 'st-steps-intro' },
-          h('li', {}, (S.phones.length ? 'Enter the other phone’s number.' : 'Enter the phone’s number.') + ' A 6-digit code is texted to it.'),
-          h('li', {}, 'Enter that code here.'),
+          h('li', {}, 'Number'),
+          h('li', {}, 'Code texted to it'),
         ),
         h(
           'div',
@@ -458,7 +452,7 @@ function addView() {
                   e.preventDefault();
                   const digits = adding.number.replace(/\D/g, '');
                   if (digits.length < 10) {
-                    adding.error = 'Enter the full mobile number, with its area code.';
+                    adding.error = 'Enter all 10 digits, with the area code.';
                     refresh('phone-add');
                     document.getElementById('add-number')?.focus();
                     return;
@@ -469,17 +463,17 @@ function addView() {
               h('p', { class: 'st-step' }, 'Step 1 of 2'),
               textField({
                 id: 'add-number',
-                label: 'Mobile number to add',
+                label: 'Mobile number',
                 type: 'tel',
                 autocomplete: 'off',
                 inputmode: 'tel',
                 placeholder: S.demo ? '(732) 555-0150' : '(732) 555-0123',
-                help: S.demo ? 'The test account takes only made-up numbers, from 555-0100 to 555-0199.' : 'Add only a phone whose owner has agreed.',
+                help: S.demo ? 'Test account: 555-0100 to 555-0199 only.' : 'Only with its owner’s agreement.',
                 value: adding.number,
                 error: adding.error,
                 oninput: e => (adding.number = e.target.value),
               }),
-              h('div', { class: 'actions' }, button({ label: 'Text a code to it', type: 'submit', variant: 'primary', icon: 'message', attrs: { id: 'add-send' } })),
+              h('div', { class: 'actions' }, button({ label: 'Text a code', type: 'submit', variant: 'primary', icon: 'message', attrs: { id: 'add-send' } })),
             ),
           ),
         ),

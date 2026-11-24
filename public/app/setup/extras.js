@@ -39,17 +39,16 @@ export function calendarView() {
   const cal = S.calendar;
   const done = cal.google.connected || Boolean(cal.link);
   return screen({
-    title: 'See the dates in your calendar app',
-    intro: 'Optional. Show the dates in your own calendar app.',
+    title: 'Calendar app',
     body: [
       cal.google.available
         ? h(
             'div',
             { class: 'setup-option' },
             h('h3', {}, icon('calendar'), 'Google Calendar'),
-            h('p', { class: 'muted' }, 'One new calendar in your Google account; nothing else there is seen.'),
+            h('p', { class: 'muted' }, 'Adds one calendar. Sees nothing else.'),
             cal.google.connected
-              ? alert({ kind: 'ok' }, 'Connected. The calendar is named “' + S.app.calendar.name + '” in your Google Calendar.')
+              ? alert({ kind: 'ok' }, 'Connected: “' + S.app.calendar.name + '”.')
               : h('div', { class: 'actions' }, linkButton({ href: '/api/google/start', label: 'Connect Google Calendar', attrs: { id: 'sc-google' } })),
           )
         : null,
@@ -62,18 +61,18 @@ export function calendarView() {
               'div',
               {},
               copyField({ value: cal.link }),
-              h('p', { class: 'help' }, 'Add it in your calendar app as a subscribed calendar. Keep it private.'),
-              h('div', { class: 'actions' }, linkButton({ href: cal.link.replace(/^https?:/, 'webcal:'), label: 'Open in my calendar app', icon: 'calendar' })),
+              h('p', { class: 'help' }, 'Anyone with this link can read the calendar.'),
+              h('div', { class: 'actions' }, linkButton({ href: cal.link.replace(/^https?:/, 'webcal:'), label: 'Open in calendar', icon: 'calendar' })),
             )
           : h(
               'div',
               {},
-              h('p', { class: 'muted' }, 'For Apple Calendar, Outlook or Google Calendar.'),
+              h('p', { class: 'muted' }, 'Apple, Outlook or Google.'),
               h(
                 'div',
                 { class: 'actions' },
                 button({
-                  label: 'Create a subscription link',
+                  label: 'Create link',
                   attrs: { id: 'sc-link' },
                   onclick: e =>
                     withBusy(e.currentTarget, () => api('POST', '/api/calendar-link')).then(
@@ -96,7 +95,7 @@ export function calendarView() {
       ),
     ],
     back,
-    skip: done ? null : { label: 'Skip this step', onclick: next },
+    skip: done ? null : { label: 'Skip', onclick: next },
     main: done ? { label: 'Continue', onclick: next } : null,
   });
 }
@@ -145,7 +144,7 @@ function sendCode(state, number, btn, focusId) {
 /** Checks the code (POST /api/phones/verify); the phone is then on the account and verified. */
 function verifyCode(state, btn, focusId, onDone) {
   if (state.code.length !== 6) {
-    state.error = 'Type all 6 digits of the code.';
+    state.error = 'Enter all 6 digits.';
     flow.focus = focusId;
     render();
     return;
@@ -177,11 +176,11 @@ function codeForm(state, idPrefix, onDone) {
         verifyCode(state, e.submitter || document.getElementById(idPrefix + '-confirm'), codeId, onDone);
       },
     },
-    state.demoCode ? alert({ kind: 'info' }, 'Test account: nothing is sent. The code is ' + state.demoCode + '.') : null,
+    state.demoCode ? alert({ kind: 'info' }, 'Test account: the code is ' + state.demoCode + '.') : null,
     codeField({
       id: codeId,
-      label: 'The 6-digit code',
-      help: 'A code was texted to ' + pretty(state.sentTo) + '. It works for a few minutes.',
+      label: '6-digit code',
+      help: 'Sent to ' + pretty(state.sentTo) + '.',
       value: state.code,
       error: state.error,
       onvalue: v => (state.code = v),
@@ -193,8 +192,8 @@ function codeForm(state, idPrefix, onDone) {
     h(
       'div',
       { class: 'actions' },
-      button({ label: 'Confirm the code', variant: 'primary', type: 'submit', attrs: { id: idPrefix + '-confirm' } }),
-      button({ label: 'Use a different number', onclick: () => (Object.assign(state, idle(), { number: state === mine ? '' : state.number }), (flow.focus = numberFocus(state)), render()) }),
+      button({ label: 'Confirm code', variant: 'primary', type: 'submit', attrs: { id: idPrefix + '-confirm' } }),
+      button({ label: 'Other number', onclick: () => (Object.assign(state, idle(), { number: state === mine ? '' : state.number }), (flow.focus = numberFocus(state)), render()) }),
     ),
   );
 }
@@ -226,7 +225,7 @@ function numberForm(state, ids, label) {
       help: smsConsent(),
       onvalue: v => (state.number = v),
     }),
-    h('div', { class: 'actions' }, button({ label: 'Text a code to it', type: 'submit', icon: 'message', variant: 'primary', attrs: { id: ids.send } })),
+    h('div', { class: 'actions' }, button({ label: 'Text a code', type: 'submit', icon: 'message', variant: 'primary', attrs: { id: ids.send } })),
   );
 }
 
@@ -235,7 +234,6 @@ function addOwnPhoneView(toSpouse) {
   return screen({
     count: 'Phones, part 1 of 2',
     title: 'Your phone',
-    intro: 'Optional. For reminders and recording by text.',
     body: [
       own.step === 'code'
         ? codeForm(own, 'sp-own', () => {
@@ -255,7 +253,7 @@ function turnOnReminders(e) {
   const btn = e.currentTarget;
   remError = '';
   if (!picks.length) {
-    remError = 'Choose at least one reminder, or choose “Not now”.';
+    remError = 'Choose at least one reminder.';
     render();
     return;
   }
@@ -294,8 +292,8 @@ function remindersView() {
       count: 'Phones, part 1 of 2',
       title: 'Text reminders',
       body: [
-        h('div', { id: 'sp-on', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Text reminders are on for ' + pretty(p.number) + '.')),
-        p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP. Text START to receive texts again.') : null,
+        h('div', { id: 'sp-on', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Reminders are on for ' + pretty(p.number) + '.')),
+        p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP. Text START to resume.') : null,
       ],
       back,
       main: { label: 'Continue', onclick: toSpouse },
@@ -304,8 +302,8 @@ function remindersView() {
   if (!p.verified) {
     return screen({
       count: 'Phones, part 1 of 2',
-      title: 'Text reminders to this phone',
-      intro: 'Confirm ' + pretty(p.number) + ' with a code texted to it.',
+      title: 'Text reminders',
+      intro: 'First confirm ' + pretty(p.number) + '.',
       body: [
         mine.step === 'code'
           ? codeForm(mine, 'sp-mine', () => {
@@ -319,7 +317,7 @@ function remindersView() {
               h(
                 'div',
                 { class: 'actions' },
-                button({ label: 'Text a code to this phone', variant: 'primary', icon: 'message', attrs: { id: 'sp-mine-send' }, onclick: e => sendCode(mine, p.number, e.currentTarget, 'sp-mine-code') }),
+                button({ label: 'Text me a code', variant: 'primary', icon: 'message', attrs: { id: 'sp-mine-send' }, onclick: e => sendCode(mine, p.number, e.currentTarget, 'sp-mine-code') }),
               ),
               mine.error ? h('p', { class: 'setup-error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, mine.error)) : null,
             ),
@@ -331,14 +329,14 @@ function remindersView() {
   if (!picks) picks = [...p.reminders];
   return screen({
     count: 'Phones, part 1 of 2',
-    title: p.me ? 'Text reminders to this phone' : 'Text reminders to your phone',
+    title: 'Text reminders',
     intro: 'Sent to ' + pretty(p.number) + '.',
     body: [
       h('p', { class: 'help consent' }, 'By saving, the owner of this phone agrees to receive the reminders chosen below by text message from Betaharah. Message frequency varies. Message and data rates may apply. Reply STOP to stop, HELP for help.'),
       h(
         'fieldset',
         { class: 'plain' },
-        h('legend', {}, 'Reminders this phone receives'),
+        h('legend', {}, 'Reminders'),
         h(
           'div',
           { class: 'checks' },
@@ -358,7 +356,7 @@ function remindersView() {
     ],
     back,
     skip: { label: 'Not now', onclick: toSpouse },
-    main: { label: 'Save and turn on reminders', icon: 'bell', onclick: turnOnReminders, id: 'sp-turn-on' },
+    main: { label: 'Turn on reminders', icon: 'bell', onclick: turnOnReminders, id: 'sp-turn-on' },
   });
 }
 
@@ -370,20 +368,20 @@ function spouseView() {
     part = 'reminders';
     render();
   };
-  const head = { count: 'Phones, part 2 of 2', title: 'Your spouse’s phone' };
+  const head = { count: 'Phones, part 2 of 2', title: 'Spouse’s phone' };
   if (!sms.ready) {
     return screen({
       ...head,
-      body: [alert({ kind: 'info' }, 'Not available until texting is.')],
+      body: [alert({ kind: 'info' }, 'Texting is not available yet.')],
       back: backToReminders,
       main: { label: 'Continue', onclick: next },
     });
   }
   const list = others.length
-    ? h('div', { id: 'sp-added', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Also on this account: ' + others.map(p => pretty(p.number)).join(', ') + '.'))
+    ? h('div', { id: 'sp-added', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'On this account: ' + others.map(p => pretty(p.number)).join(', ') + '.'))
     : null;
   if (S.phones.length >= S.maxPhones) {
-    return screen({ ...head, body: [list, h('p', { class: 'muted' }, 'This account has the most phones it can have (' + S.maxPhones + ').')], back: backToReminders, main: { label: 'Continue', onclick: next } });
+    return screen({ ...head, body: [list, h('p', { class: 'muted' }, 'Phone limit reached (' + S.maxPhones + ').')], back: backToReminders, main: { label: 'Continue', onclick: next } });
   }
   let body;
   if (spouse.step === 'code') {
@@ -393,16 +391,13 @@ function spouseView() {
       render();
     });
   } else {
-    body = numberForm(spouse, { number: 'sp-number', send: 'sp-send', code: 'sp-code' }, 'Mobile number to add');
+    body = numberForm(spouse, { number: 'sp-number', send: 'sp-send', code: 'sp-code' }, 'Spouse’s number');
   }
   return screen({
     ...head,
-    intro: others.length
-      ? null
-      : 'For husband and wife. Only a phone whose owner agreed.',
     body: [list, others.length ? h('h3', {}, 'Add another phone') : null, body],
     back: backToReminders,
-    skip: others.length ? null : { label: 'Skip this step', onclick: next },
+    skip: others.length ? null : { label: 'Skip', onclick: next },
     main: others.length ? { label: 'Continue', onclick: next } : null,
   });
 }
@@ -417,7 +412,7 @@ export function doneView() {
   const todo = [];
   if (!S.app.place) todo.push({ text: 'Choose the location', step: 'place' });
   if (!S.halachic.confirmedAt) todo.push({ text: 'Save your customs', step: 'customs' });
-  if (S.app.place && S.entryCount === 0) todo.push({ text: t('Record the most recent {flow}'), step: 'dates' });
+  if (S.app.place && S.entryCount === 0) todo.push({ text: t('Record the last {flow}'), step: 'dates' });
 
   const sms = S.sms;
   let texting = null;
@@ -425,15 +420,15 @@ export function doneView() {
     texting = h(
       'div',
       { class: 'setup-texting' },
-      h('h3', {}, icon('message'), 'Recording by text message'),
-      viaGoogle() && !S.phones.length ? h('p', { class: 'muted' }, 'Add your phone in Settings to record by text.') : null,
-      h('p', {}, 'Text one of these to ', h('strong', { class: 'nowrap' }, pretty(sms.number)), ':'),
+      h('h3', {}, icon('message'), 'Record by text'),
+      viaGoogle() && !S.phones.length ? h('p', { class: 'muted' }, 'Add your phone in Settings first.') : null,
+      h('p', {}, 'Text to ', h('strong', { class: 'nowrap' }, pretty(sms.number)), ':'),
       commandsTable(sms),
     );
   }
 
   return screen({
-    title: todo.length ? 'The setup is finished for now' : 'The setup is finished',
+    title: todo.length ? 'Setup done for now' : 'Setup done',
     body: [
       todo.length
         ? alert(
@@ -445,17 +440,9 @@ export function doneView() {
             ),
           )
         : null,
-      h(
-        'ul',
-        { class: 'setup-tour' },
-        h('li', {}, h('strong', {}, 'Today: '), 'where things stand, and buttons to record.'),
-        h('li', {}, h('strong', {}, 'Log: '), 'everything recorded.'),
-        h('li', {}, h('strong', {}, 'Customs: '), S.halachic.confirmedAt ? 'the customs chosen here.' : 'the stricter defaults, until confirmed.'),
-        h('li', {}, h('strong', {}, 'Settings: '), 'location, calendar, phones and reminders.'),
-      ),
       texting,
     ],
     back,
-    main: { label: 'Go to my calendar', icon: 'calendar', onclick: e => finish(e.currentTarget), id: 'setup-finish' },
+    main: { label: 'Open my calendar', icon: 'calendar', onclick: e => finish(e.currentTarget), id: 'setup-finish' },
   });
 }

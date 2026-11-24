@@ -113,7 +113,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
   // ----- sign-in: the number -----
   await step('number screen: wording, consent, links, texting sign-up', async () => {
     await page.goto(base + '/app/');
-    await heading('Sign in or sign up');
+    await heading('Sign in or join');
     // the consent wording is the phone field's own help text, right under the input
     const help = await page.textContent('#number-help');
     if (help !== CONSENT_CODE) throw new Error('consent wording: ' + help);
@@ -122,7 +122,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     for (const href of ['/terms', '/privacy', '/help']) if ((await page.locator(`form.login .legal a[href="${href}"]`).count()) !== 1) throw new Error('no link to ' + href);
     if (/google/i.test(await page.innerHTML('#root'))) throw new Error('Google is mentioned while it is not offered');
     const aside = await page.textContent('.auth-aside');
-    if (!aside.includes('No internet? Text JOIN to (732) 999-0000 to use it by text.')) throw new Error('aside: ' + aside);
+    if (!aside.includes('No internet? Text JOIN to (732) 999-0000.')) throw new Error('aside: ' + aside);
     const input = page.locator('#number');
     if ((await input.getAttribute('inputmode')) !== 'tel' || (await input.getAttribute('autocomplete')) !== 'tel' || (await input.getAttribute('type')) !== 'tel') throw new Error('keyboard attributes');
     if ((await page.evaluate(() => document.activeElement.id)) !== 'number') throw new Error('focus is not on the number');
@@ -152,15 +152,14 @@ async function variant(browser, name, width, scheme, offset, shots) {
     if (codeRequests.length !== 1 || codeRequests[0].number !== signInNumber) throw new Error('code request: ' + JSON.stringify(codeRequests));
     const t = await page.textContent('form.login');
     const pretty = '(' + local(signInNumber).slice(0, 3) + ') ' + local(signInNumber).slice(3, 6) + '-' + local(signInNumber).slice(6);
-    if (!t.includes('If this number can sign in here, a 6-digit code is on its way to ' + pretty + '.')) throw new Error('wording: ' + t.slice(0, 200));
-    if (!t.includes('The code works for 10 minutes.')) throw new Error('code lifetime missing');
+    if (!t.includes('If ' + pretty + ' can sign in, a code is on its way. It works for 10 minutes.')) throw new Error('wording: ' + t.slice(0, 200));
     if (/google/i.test(await page.innerHTML('#root'))) throw new Error('Google is mentioned while it is not offered');
-    if (!/You can ask for a new code in 0:0[1-4]\./.test(t)) throw new Error('countdown missing');
+    if (!/New code in 0:0[1-4]/.test(t)) throw new Error('countdown missing');
     const code = page.locator('#code');
     if ((await code.getAttribute('autocomplete')) !== 'one-time-code' || (await code.getAttribute('inputmode')) !== 'numeric') throw new Error('code attributes');
     if ((await page.evaluate(() => document.activeElement.id)) !== 'code') throw new Error('focus is not on the code');
     await page.click('details.auth-help summary');
-    await expectText('details.auth-help', 'Wait a minute.');
+    await expectText('details.auth-help', 'Texts can arrive late.');
     await expectText('details.auth-help', 'owner@example.com');
     await shot('03-code');
     await page.click('details.auth-help summary');
@@ -191,15 +190,15 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.waitForSelector('#resend-button', { timeout: 8000 });
     codeRequests = [];
     await page.click('#resend-button');
-    await expectText('#resend-status', 'A new code was asked for');
+    await expectText('#resend-status', 'New code asked for');
     if (codeRequests.length !== 1) throw new Error('no new request');
-    await expectText('.resend', 'You can ask for a new code in');
+    await expectText('.resend', 'New code in');
     await shot('05-code-resent');
   });
 
   await step('code screen: "Use a different number" goes back with the number kept', async () => {
     await page.click('text=Use a different number');
-    await heading('Sign in or sign up');
+    await heading('Sign in or join');
     if ((await page.inputValue('#number')) === '') throw new Error('the number was lost');
   });
 
@@ -222,7 +221,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
   // ----- sign-in by link -----
   await step('link sign-in: an unknown link is explained, with the normal sign-in below', async () => {
     await page.goto(base + '/app/?k=' + 'z'.repeat(40));
-    await expectText('.alert.bad', 'This link has expired or was already used');
+    await expectText('.alert.bad', 'This sign-in link expired or was used');
     if (page.url().includes('k=')) throw new Error('the token is still in the address');
     if ((await page.locator('#number').count()) !== 1) throw new Error('no sign-in form');
     await shot('06-link-failed');
@@ -246,8 +245,8 @@ async function variant(browser, name, width, scheme, offset, shots) {
   // ----- password -----
   await step('password sign-in: a wrong password is explained under the field', async () => {
     await page.goto(base + '/app/');
-    await page.click('text=Sign in with a password instead');
-    await heading('Sign in with a password');
+    await page.click('text=Use a password');
+    await heading('Sign in');
     await page.fill('#number', local(signInNumber));
     await page.fill('#pw', 'not the password');
     await page.click('button[type=submit]');
@@ -269,7 +268,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
   // ----- invitations -----
   await step('invitation: a used or unknown one is explained', async () => {
     await page.goto(base + '/app/?invite=' + 'x'.repeat(32));
-    await expectText('.alert.bad', 'This invitation link is not valid any more');
+    await expectText('.alert.bad', 'This invitation is not valid any more');
     await shot('08-invite-invalid');
   });
 
@@ -283,7 +282,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.fill('#pw1', ACCOUNT_PASSWORD);
     await page.fill('#pw2', 'something else entirely');
     await page.click('button[type=submit]');
-    await expectText('.field .error', 'The two passwords are not the same.');
+    await expectText('.field .error', 'The passwords are not the same.');
     await page.fill('#pw2', ACCOUNT_PASSWORD);
     await page.click('button[type=submit]');
     await heading('Welcome to Betaharah');
@@ -311,7 +310,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await expectText('#setup-chosen', 'Lakewood, NJ 08701');
     await shot('22-setup-place-chosen');
     await page.click('#setup-save-place');
-    await heading('Your location is saved');
+    await heading('Location saved');
     await expectText('.setup .alert.ok', 'Today’s sunset there: ');
     const st = (await api('GET', '/api/state')).state;
     if (!st.app.place || st.app.place.name !== 'Lakewood, NJ 08701') throw new Error('not saved');
@@ -323,7 +322,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.click('#setup-main');
     await heading('Your customs');
     const t = await page.textContent('.setup-card');
-    for (const phrase of ['Until saved, the stricter option of each is used.']) {
+    for (const phrase of ['Default: the stricter option of each.']) {
       if (!t.includes(phrase)) throw new Error('missing: ' + phrase);
     }
     if (/\brav\b/i.test(t)) throw new Error('the screen tells people to ask a rav');
@@ -341,7 +340,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.click('#setup-terms-en');
     await termsNow('en');
     await page.click('#setup-skip');
-    await heading('When did the last period begin?');
+    await heading('Last period');
     const st = (await api('GET', '/api/state')).state;
     if (st.halachic.confirmedAt !== null) throw new Error('confirmed by "keep defaults"');
   });
@@ -367,7 +366,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     for (const c of st.halachic.choices) if (!titles.includes(c.title)) throw new Error('choice not shown: ' + c.title);
     if (!titles.includes(st.halachic.tzeitTitle)) throw new Error('nightfall not shown');
     await page.click('#setup-confirm-customs');
-    await heading('When did the last period begin?');
+    await heading('Last period');
     const after = (await api('GET', '/api/state')).state;
     if (!after.halachic.confirmedAt || after.halachic.settings.minWaitDays !== '4') throw new Error('not confirmed or not saved');
   });
@@ -378,10 +377,10 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await expectText('.field .error', 'Choose the date.');
     await page.fill('#sd-date', isoDaysAgo(20));
     await page.click('#sd-record');
-    await expectText('.setup-error', 'Choose whether it began by day or at night.');
+    await expectText('.setup-error', 'Choose day or night.');
     await page.check('#r-sd-part-day');
     await page.click('#sd-record');
-    await heading('Was the hefsek taharah done?');
+    await heading('Hefsek taharah done?');
     await expectText('#sd-recorded', 'Recorded');
     await shot('27-setup-hefsek');
     await page.fill('#sd-date', isoDaysAgo(15));
@@ -389,7 +388,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     // the immersion is not asked for
     await heading('Your recent dates');
     await page.click('#sd-undo');
-    await heading('Was the hefsek taharah done?');
+    await heading('Hefsek taharah done?');
     await expectText('#sd-note', 'Removed.');
     await page.fill('#sd-date', isoDaysAgo(15));
     await page.click('#sd-record');
@@ -401,7 +400,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
 
   await step('setup: dates, the server’s refusal is shown at the field', async () => {
     await page.click('#setup-back');
-    await heading('Was the hefsek taharah done?');
+    await heading('Hefsek taharah done?');
     await page.fill('#sd-date', isoDaysAgo(30));
     await page.click('#sd-record');
     await page.waitForSelector('.field .error');
@@ -412,7 +411,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
 
   await step('setup: calendar, a subscription link', async () => {
     await page.click('#setup-main');
-    await heading('See the dates in your calendar app');
+    await heading('Calendar app');
     await shot('31-setup-calendar');
     await page.click('#sc-link');
     await expectText('code.copy', '/cal/');
@@ -421,12 +420,11 @@ async function variant(browser, name, width, scheme, offset, shots) {
   });
 
   await step('setup: phones, this phone must be confirmed first; the spouse’s phone', async () => {
-    await heading('Text reminders to this phone');
-    await expectText('.setup-card', 'with a code texted to it');
+    await heading('Text reminders');
+    await expectText('.setup-card', 'First confirm');
     await shot('33-setup-phone-confirm');
     await page.click('#setup-skip');
-    await heading('Your spouse’s phone');
-    await expectText('.setup-card', 'Only a phone whose owner agreed.');
+    await heading('Spouse’s phone');
     if ((await page.textContent('#sp-number-help')) !== CONSENT_CODE) throw new Error('consent wording missing under the spouse’s number');
     let calls = 0;
     await page.route('**/api/phones/code', async route => {
@@ -446,12 +444,12 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await shot('35-setup-spouse-code');
     await page.unroute('**/api/phones/code');
     await page.unroute('**/api/phones/verify');
-    await page.click('text=Use a different number');
+    await page.click('text=Other number');
     await page.click('#setup-skip');
   });
 
   await step('setup: the last screen, the text commands, and into the dashboard', async () => {
-    await heading('The setup is finished');
+    await heading('Setup done');
     const rows = await page.$$eval('table.commands tbody tr', trs => trs.map(tr => tr.textContent));
     if (rows.length < 5 || !rows[0].startsWith('1')) throw new Error('commands: ' + rows.join(' | '));
     await expectText('.setup-texting', '(732) 999-0000');
@@ -485,7 +483,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
       await route.fulfill({ response: r, json });
     });
     await page.goto(base + '/app/');
-    await page.click('text=Sign in with a password instead');
+    await page.click('text=Use a password');
     await page.fill('#number', local(signInNumber));
     await page.fill('#pw', ACCOUNT_PASSWORD);
     await page.click('button[type=submit]');
@@ -494,11 +492,11 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.click('#setup-skip'); // location
     await heading('Your customs');
     await page.click('#setup-skip'); // keep defaults
-    await heading('Your most recent dates');
+    await heading('Your recent dates');
     await page.click('#setup-skip'); // dates need a location
-    await heading('See the dates in your calendar app');
+    await heading('Calendar app');
     await page.click('#setup-skip');
-    await heading('Text reminders to this phone');
+    await heading('Text reminders');
     const t = await page.textContent('.setup-card');
     if (!t.includes(CONSENT_REMINDERS)) throw new Error('consent wording missing');
     if ((await page.locator('.setup-card input[type=checkbox]').count()) < 3) throw new Error('no reminder choices');
@@ -535,7 +533,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.click('#setup-zip-go');
     await expectText('#setup-chosen', 'Lakewood, NJ 08701');
     await page.click('#setup-save-place');
-    await heading('Your location is saved');
+    await heading('Location saved');
     await page.reload();
     await heading('Your customs');
     await signOut();
@@ -546,7 +544,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
   await step('Google: "Continue with Google" under the phone form, with its link', async () => {
     await api('PUT', '/api/admin/secrets', { googleClientId: 'stand-in.apps.example', googleClientSecret: 'stand-in' });
     await page.goto(base + '/app/');
-    await heading('Sign in or sign up');
+    await heading('Sign in or join');
     const g = page.locator('form.login a#google-start');
     if ((await g.count()) !== 1) throw new Error('no Google button');
     if ((await g.getAttribute('href')) !== '/api/auth/google/start') throw new Error('href: ' + (await g.getAttribute('href')));
@@ -565,8 +563,8 @@ async function variant(browser, name, width, scheme, offset, shots) {
     if (box.height < 44) throw new Error('Google button is ' + box.height + 'px high');
     if ((await page.textContent('#number-help')) !== CONSENT_CODE) throw new Error('consent wording missing');
     await shot('13-google');
-    await page.click('text=Sign in with a password instead');
-    await heading('Sign in with a password');
+    await page.click('text=Use a password');
+    await heading('Sign in');
     if ((await page.locator('a#google-start[href="/api/auth/google/start"]').count()) !== 1) throw new Error('no Google button on the password form');
     await shot('14-google-password');
   });
@@ -583,13 +581,13 @@ async function variant(browser, name, width, scheme, offset, shots) {
   await step('Google: an error from Google is shown on the form and taken out of the address', async () => {
     const message = 'This Google account is not linked to an account here.';
     await page.goto(base + '/app/?google_error=' + encodeURIComponent(message));
-    await heading('Sign in or sign up');
+    await heading('Sign in or join');
     await expectText('form.login .alert.bad', message);
     if (page.url().includes('google_error')) throw new Error('still in the address: ' + page.url());
     await shot('15-google-error');
     // gone once something else is done on the form
-    await page.click('text=Sign in with a password instead');
-    await heading('Sign in with a password');
+    await page.click('text=Use a password');
+    await heading('Sign in');
     if ((await page.locator('form.login .alert.bad').count()) !== 0) throw new Error('the error stayed');
   });
 
@@ -646,14 +644,13 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.click('#setup-skip');
     await heading('Your customs');
     await page.click('#setup-skip');
-    await heading('Your most recent dates');
+    await heading('Your recent dates');
     await clean('42-google-dates');
     await page.click('#setup-skip');
-    await heading('See the dates in your calendar app');
+    await heading('Calendar app');
     await clean('43-google-calendar');
     await page.click('#setup-skip');
     await heading('Your phone');
-    await expectText('.setup-card', 'For reminders and recording by text');
     if ((await page.textContent('#sp-own-number-help')) !== CONSENT_CODE) throw new Error('consent wording missing under the number');
     await clean('44-google-phone');
     await page.fill('#sp-own-number', local(added));
@@ -661,23 +658,23 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.waitForSelector('#sp-own-code');
     await clean('45-google-phone-code');
     await page.locator('#sp-own-code').pressSequentially('135790');
-    await heading('Text reminders to your phone');
+    await heading('Text reminders');
     await clean('46-google-reminders');
     await page.click('#sp-turn-on');
-    await expectText('#sp-on', 'Text reminders are on for (732) 555-');
+    await expectText('#sp-on', 'Reminders are on for (732) 555-');
     await page.click('#setup-main');
-    await heading('Your spouse’s phone');
+    await heading('Spouse’s phone');
     await clean('47-google-spouse');
     await page.click('#setup-skip');
-    await heading('The setup is finished');
+    await heading('Setup done');
     await clean('48-google-done');
     // without any phone, after a reload: resumes at the last screen, and going back reaches the phone step again
     phones = [];
     await page.reload();
-    await heading('The setup is finished');
+    await heading('Setup done');
     await clean('49-google-done-no-phone');
     await page.click('#setup-back');
-    await heading('Your spouse’s phone');
+    await heading('Spouse’s phone');
     await page.click('#setup-back');
     await heading('Your phone');
     await clean('50-google-phone-again');
@@ -700,8 +697,8 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await shot('11-note-closed');
     await config({ signup: 'open', smsEnabled: false });
     await page.goto(base + '/app/');
-    await heading('Sign in with a password');
-    await expectText('.alert.info', 'Sign-in by text message is not available yet');
+    await heading('Sign in');
+    await expectText('.alert.info', 'Sign-in by text is not available yet');
     await shot('12-note-no-texting');
     await config({ signup: 'open', smsEnabled: true });
   });

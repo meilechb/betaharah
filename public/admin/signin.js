@@ -11,10 +11,9 @@ export function showSignIn(notice, onSignedIn) {
   const formAlert = h('div', { class: 'signin-alert' }, notice ? alert({ kind: 'info' }, notice) : null);
   const pw = textField({
     id: 'pw',
-    label: 'Operator password',
+    label: 'Password',
     type: 'password',
     autocomplete: 'current-password',
-    help: 'The DASHBOARD_PASSWORD secret of the Worker. After eight wrong passwords from one network, sign-in is locked for 15 minutes.',
     oninput: e => {
       password = e.target.value;
       setFieldError(pw, '');
@@ -43,7 +42,7 @@ export function showSignIn(notice, onSignedIn) {
               alert(
                 { kind: 'bad', role: 'alert', title: locked ? 'Sign-in is locked for now' : null },
                 err.message,
-                locked ? h('p', {}, 'The lock applies to the network you are on. It ends by itself after 15 minutes. Nothing else needs to be done.') : null,
+                locked ? h('p', {}, 'It ends after 15 minutes.') : null,
               ),
             );
             pw.control.select();
@@ -55,11 +54,10 @@ export function showSignIn(notice, onSignedIn) {
     },
     h('a', { class: 'login-brand', href: '/' }, h('img', { class: 'mark', src: '/favicon.svg', width: '32', height: '32', alt: '' }), 'Betaharah'),
     h('h1', { class: 'login-title' }, 'Operator console'),
-    h('p', { class: 'muted' }, 'For the person who runs this site. To use the calendar, go to the ', h('a', { href: '/app/' }, 'sign-in page'), '.'),
     formAlert,
     pw,
     submit,
-    h('p', { class: 'small muted' }, 'A session lasts 12 hours. The console shows totals and the site’s own settings, never an account’s data.'),
+    h('p', { class: 'small muted' }, h('a', { href: '/app/' }, 'Calendar sign-in')),
   );
   mount([form]);
   pw.control.focus();

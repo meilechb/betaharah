@@ -137,7 +137,7 @@ function showFatal(e) {
     h(
       'div',
       { class: 'card login fatal' },
-      h('h2', {}, 'The page could not be loaded'),
+      h('h2', {}, 'Could not load'),
       alert({ kind: 'bad', role: 'alert' }, fatalReason(e)),
       h('div', { class: 'actions' }, button({ label: 'Try again', variant: 'primary', icon: 'refresh', attrs: { id: 'fatal-retry' }, onclick: () => restart() })),
       homeLink(),
@@ -158,8 +158,8 @@ async function start() {
     adopt((await api('GET', '/api/state')).state);
     wasSignedIn = true;
     if (params.get('google_error')) toast(params.get('google_error'), true);
-    if (params.get('google') === 'connected') toast('Google Calendar is connected. It fills in within a minute.');
-    if (params.get('google') === 'signed-in') toast('You can sign in with Google from now on.');
+    if (params.get('google') === 'connected') toast('Google Calendar connected.');
+    if (params.get('google') === 'signed-in') toast('Google sign-in added.');
     if (location.search) history.replaceState(null, '', location.pathname + location.hash);
     render();
     return;
@@ -176,8 +176,8 @@ async function start() {
 
 /** Notes the sign-in page can be opened with (/app/?note=...), after a full reload. */
 const NOTES = {
-  deleted: 'The account was deleted: all dates, settings and phones. You are signed out.',
-  left: 'This phone is no longer on the account. You are signed out.',
+  deleted: 'The account was deleted.',
+  left: 'This phone left the account.',
 };
 
 /** Whether this page has shown an account. After signing out, the page is loaded afresh, so that nothing of it stays in memory or on screen. */

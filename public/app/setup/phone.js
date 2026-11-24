@@ -32,16 +32,16 @@ export function readNumber(text, prefixes) {
   let number = null;
   if (trimmed.startsWith('+')) {
     const d = digitsOf(trimmed);
-    if (d.length < 8 || d.length > 15) return { error: 'That number does not look complete. Check it and try again.' };
+    if (d.length < 8 || d.length > 15) return { error: 'That number is not complete.' };
     number = '+' + d;
   } else if (allowed.includes('+1')) {
     const d = digitsOf(trimmed);
     if (d.length === 10) number = '+1' + d;
     else if (d.length === 11 && d[0] === '1') number = '+' + d;
-    else if (d.length < 10) return { error: 'Enter the whole number with its area code: 10 digits, such as (732) 555-0123.' };
-    else return { error: 'That is too many digits for a US mobile number.' };
+    else if (d.length < 10) return { error: 'Enter all 10 digits, with the area code.' };
+    else return { error: 'Too many digits for a US number.' };
   } else {
-    return { error: 'Enter the number with its country code, starting with +.' };
+    return { error: 'Start with + and the country code.' };
   }
   if (!allowed.some(p => number.startsWith(p))) return { error: 'Only numbers beginning with ' + allowed.join(' or ') + ' can be used here.' };
   return { number };
@@ -125,7 +125,7 @@ export function codeField(opts) {
 export function messageOf(err) {
   if (!err) return 'Something went wrong. Try again.';
   if (err.status === undefined && (err.name === 'TypeError' || /fetch|network/i.test(err.message || ''))) {
-    return 'The site could not be reached. Check the internet connection and try again.';
+    return 'No connection. Try again.';
   }
   return err.message || 'Something went wrong. Try again.';
 }

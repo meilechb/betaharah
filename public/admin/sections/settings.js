@@ -3,29 +3,29 @@ import { alert, button, card, cardSection, checkRow, confirmDialog, field, h, ic
 import { call, draft, num, render, run, S, saved } from '../state.js';
 
 const SIGNUP_HELP = {
-  open: 'Anyone with a mobile number that begins with an allowed prefix can create an account with a texted code.',
-  invite: 'Only people you send an invitation link to can create an account. Use this if sign-ups you did not expect appear.',
-  closed: 'Nobody can create an account. Existing accounts keep working, and invitations for one phone number still work.',
+  open: 'Any number with an allowed prefix.',
+  invite: 'Only with an invitation.',
+  closed: 'One-number invitations still work.',
 };
 
 const LIMITS = [
   {
     key: 'dailyCodeLimit',
-    label: 'Most sign-in codes in one day, everyone together',
+    label: 'Sign-in codes a day, all',
     max: 100000,
-    why: 'Protects against someone requesting codes for many numbers to run up the bill. Past it, sign-in by text pauses until the next day; passwords still work.',
+    why: 'Past it, code sign-in pauses until tomorrow.',
   },
   {
     key: 'monthlyMessageLimit',
-    label: 'Most texts in one month, everyone together',
+    label: 'Texts a month, all',
     max: 1000000,
-    why: 'The ceiling on the whole bill. Past it, nothing is sent until the next month: no codes, no replies, no reminders.',
+    why: 'Past it, nothing is sent until next month.',
   },
   {
     key: 'householdMonthlyLimit',
-    label: 'Most texts in one month to one account',
+    label: 'Texts a month, one account',
     max: 10000,
-    why: 'Stops one account (or a fault in it) from using the whole budget. Past it, that account gets no texts until the next month.',
+    why: 'Past it, that account gets nothing until next month.',
   },
 ];
 
@@ -48,10 +48,10 @@ function touch() {
 function validate(c) {
   const errors = {};
   if (c.contactName.length > 80) errors.contactName = 'At most 80 characters.';
-  if (c.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.contactEmail.trim())) errors.contactEmail = 'This is not an email address. Leave it empty if you do not want one shown.';
+  if (c.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.contactEmail.trim())) errors.contactEmail = 'Not an email address.';
   const prefixes = (prefixText ?? c.allowedPrefixes.join(', ')).split(',').map(s => s.trim()).filter(Boolean);
-  if (prefixes.length === 0) errors.allowedPrefixes = 'Write at least one prefix, for example +1.';
-  else if (prefixes.some(p => !/^\+[1-9]\d{0,5}$/.test(p))) errors.allowedPrefixes = 'Each prefix is a + and the country code, for example +1 or +44, separated by commas.';
+  if (prefixes.length === 0) errors.allowedPrefixes = 'At least one prefix, like +1.';
+  else if (prefixes.some(p => !/^\+[1-9]\d{0,5}$/.test(p))) errors.allowedPrefixes = 'Each prefix is a + and a country code, separated by commas.';
   else if (prefixes.length > 20) errors.allowedPrefixes = 'At most 20 prefixes.';
   for (const l of LIMITS) {
     const v = c[l.key];
@@ -134,12 +134,12 @@ function donateCard(e) {
         maxlength: 40,
         value: l.label,
         error: plain(e['donate.links.' + n + '.label']),
-        help: n === 1 ? 'For example "PayPal" or "Card, through Stripe". At most 40 characters.' : null,
+        help: n === 1 ? 'Like "PayPal".' : null,
         oninput: ev => ((l.label = ev.target.value), touch()),
       }),
       textField({
         id: 'don-url-' + n,
-        label: 'Address of your payment page',
+        label: 'Payment page address',
         inputmode: 'url',
         autocomplete: 'off',
         spellcheck: 'false',
@@ -147,7 +147,7 @@ function donateCard(e) {
         placeholder: 'https://',
         value: l.url,
         error: plain(e['donate.links.' + n + '.url']),
-        help: n === 1 ? 'Copy it from your account at the payment service. It must begin with https://.' : null,
+        help: n === 1 ? 'Begins with https://.' : null,
         oninput: ev => ((l.url = ev.target.value), touch()),
       }),
       button({
@@ -177,7 +177,7 @@ function donateCard(e) {
     {
       title: 'Donations',
       icon: 'link',
-      intro: 'The Donate page and the links to it appear once at least one link or a note is saved. The payment is handled entirely by the service you link to.',
+      intro: 'The Donate page appears once a link or note is saved. Payment is handled by the linked service.',
       attrs: { id: 'donate-card' },
     },
     general ? alert({ kind: 'bad', role: 'alert' }, general) : null,
@@ -205,14 +205,14 @@ function donateCard(e) {
       control: note,
       className: 'give-note-field',
       error: plain(e['donate.note']),
-      help: 'For ways to give that have no link, such as Zelle or an address for cheques. Shown as written, at most 400 characters.',
+      help: 'Ways with no link, like Zelle or cheques.',
     }),
     h(
       'p',
       { class: 'help', id: 'don-status' },
       published
-        ? ['The page is published. ', h('a', { href: '/donate', target: '_blank', rel: 'noopener', id: 'don-preview' }, 'Open the Donate page'), ' (it shows what is saved).']
-        : 'Nothing is saved yet, so there is no Donate page.',
+        ? ['Published. ', h('a', { href: '/donate', target: '_blank', rel: 'noopener', id: 'don-preview' }, 'Open the Donate page'), '.']
+        : 'No Donate page yet.',
     ),
   );
 }
@@ -223,9 +223,9 @@ function lockouts(c) {
   const out = [];
   if (c.signup === 'closed' && saved.signup !== 'closed') out.push('Nobody will be able to create an account.');
   if (c.signup === 'invite' && saved.signup === 'open') out.push('People without an invitation link will not be able to create an account.');
-  if (!c.smsEnabled && saved.smsEnabled) out.push('No text will be sent: no sign-in codes, replies or reminders. People who have not set a password cannot sign in until texting is on again.');
+  if (!c.smsEnabled && saved.smsEnabled) out.push('No text will be sent. People without a password cannot sign in.');
   const removed = saved.allowedPrefixes.filter(p => !c.allowedPrefixes.includes(p));
-  if (removed.length) out.push('Numbers beginning with ' + removed.join(' or ') + ' will not get sign-in codes, including people who already have an account with such a number.');
+  if (removed.length) out.push('Numbers beginning with ' + removed.join(' or ') + ' will get no sign-in codes, existing accounts included.');
   if (c.dailyCodeLimit === 0 && saved.dailyCodeLimit !== 0) out.push('With 0 sign-in codes a day, nobody can sign in by text.');
   if (c.monthlyMessageLimit === 0 && saved.monthlyMessageLimit !== 0) out.push('With 0 texts a month, nothing will be sent at all.');
   return out;
@@ -290,7 +290,7 @@ function save(form, btn) {
   if (warnings.length === 0) return go();
   confirmDialog({
     title: 'Save settings that keep people out?',
-    body: h('div', {}, h('ul', {}, warnings.map(w => h('li', {}, w))), h('p', {}, 'You can change this back at any time.')),
+    body: h('div', {}, h('ul', {}, warnings.map(w => h('li', {}, w)))),
     confirmLabel: 'Save settings',
     danger: true,
   }).then(ok => {
@@ -304,18 +304,18 @@ function textCaps() {
   return h(
     'div',
     { class: 'caps' },
-    h('p', { class: 'help' }, 'Fixed limits on texts with numbers that have no account. They keep wrong numbers and strangers from costing much:'),
+    h('p', { class: 'help' }, 'Fixed caps for numbers without an account:'),
     h(
       'ul',
       { class: 'small' },
-      h('li', {}, 'At most ' + num(t.strangerRepliesPerNumber) + ' reply in 24 hours to one number without an account.'),
-      h('li', {}, 'At most ' + num(t.strangerRepliesPerDay) + ' such replies a day for the whole site. Today: ' + num(t.strangerRepliesToday) + '.'),
-      h('li', {}, 'At most ' + num(t.textSignupsPerDay) + ' accounts created by text a day. Today: ' + num(t.textSignupsToday) + '.'),
+      h('li', {}, num(t.strangerRepliesPerNumber) + ' reply per number per 24 hours.'),
+      h('li', {}, num(t.strangerRepliesPerDay) + ' replies a day in all. Today: ' + num(t.strangerRepliesToday) + '.'),
+      h('li', {}, num(t.textSignupsPerDay) + ' sign-ups by text a day. Today: ' + num(t.textSignupsToday) + '.'),
     ),
     h(
       'p',
       { class: 'help' },
-      'While sign-up is closed, or sign-up by text is off, a number without an account gets no reply, except to HELP and START. Those two always get the fixed replies filed with the toll-free verification, within their own daily limits.',
+      'With sign-up by text off, no reply except to HELP and START.',
     ),
   );
 }
@@ -336,20 +336,20 @@ export function settingsPage() {
     },
     e._form ? alert({ kind: 'bad', role: 'alert' }, e._form) : null,
     card(
-      { title: 'Contact on the public pages', icon: 'user', intro: 'Shown on the Help, Privacy and Terms pages.' },
-      textField({ id: 'cname', label: 'Your name, or a name for the site', maxlength: 80, value: c.contactName, error: e.contactName, help: 'Shown as the person who runs the site. The toll-free verification reviewers read these pages.', oninput: ev => ((c.contactName = ev.target.value), touch()) }),
-      textField({ id: 'cemail', label: 'Contact email (public, optional)', type: 'email', maxlength: 120, value: c.contactEmail, error: e.contactEmail, help: 'Anyone can read it on those pages. Leave it empty to show none.', oninput: ev => ((c.contactEmail = ev.target.value), touch()) }),
+      { title: 'Contact on the public pages', icon: 'user', intro: 'On Help, Privacy and Terms.' },
+      textField({ id: 'cname', label: 'Name', maxlength: 80, value: c.contactName, error: e.contactName, help: 'Toll-free reviewers read these pages.', oninput: ev => ((c.contactName = ev.target.value), touch()) }),
+      textField({ id: 'cemail', label: 'Email (public, optional)', type: 'email', maxlength: 120, value: c.contactEmail, error: e.contactEmail, help: null, oninput: ev => ((c.contactEmail = ev.target.value), touch()) }),
     ),
     card(
-      { title: 'Who may create an account', icon: 'link' },
+      { title: 'Sign-up', icon: 'link' },
       selectField({
         id: 'signup',
         label: 'Sign-up',
         value: c.signup,
         options: [
-          { value: 'open', label: 'Anyone with a phone number' },
-          { value: 'invite', label: 'Only people with an invitation link' },
-          { value: 'closed', label: 'Nobody (existing accounts keep working)' },
+          { value: 'open', label: 'Open' },
+          { value: 'invite', label: 'By invitation' },
+          { value: 'closed', label: 'Closed' },
         ],
         help: SIGNUP_HELP[c.signup],
         onchange: ev => {
@@ -360,8 +360,8 @@ export function settingsPage() {
       }),
       checkRow({
         id: 'textSignup',
-        label: 'People can create an account by texting JOIN to the number',
-        help: 'The account is made by text and set up by text (ZIP code, customs, recent dates); no website is needed. It follows the sign-up rule above: with "Nobody" it does nothing, and with invitations only the person texts JOIN and an invitation word (see Invitations). While it is on, the number is shown on the sign-in page.',
+        label: 'Sign-up by texting JOIN',
+        help: 'Follows the sign-up rule above.',
         checked: c.textSignup,
         onchange: ev => ((c.textSignup = ev.target.checked), touch()),
       }),
@@ -369,7 +369,7 @@ export function settingsPage() {
         'p',
         { class: 'help text-signup-note', id: 'textSignup-note' },
         icon('info', { size: 'sm' }),
-        ' Off at first. Leave it off until the toll-free verification covers signing up by text: the verification filed with Telnyx describes signing up on the website only. What to add to it is in the operator guide (docs/OPERATOR.md), in the table after “Suggested answers for the toll-free verification form”.',
+        ' Leave it off until the toll-free verification covers signing up by text (docs/OPERATOR.md, after “Suggested answers for the toll-free verification form”).',
       ),
       textCaps(),
     ),
@@ -378,7 +378,7 @@ export function settingsPage() {
       checkRow({
         id: 'smsEnabled',
         label: 'Send text messages',
-        help: 'One switch that stops all sending at once. Reminders that come due while it is off wait a few hours and are then dropped.',
+        help: 'Off stops all sending. Reminders due meanwhile are dropped.',
         checked: c.smsEnabled,
         onchange: ev => {
           c.smsEnabled = ev.target.checked;
@@ -388,10 +388,10 @@ export function settingsPage() {
       }),
       textField({
         id: 'prefixes',
-        label: 'Phone numbers must begin with',
+        label: 'Allowed prefixes',
         value: prefixText ?? c.allowedPrefixes.join(', '),
         error: e.allowedPrefixes,
-        help: 'Separate with commas, for example +1, +44. Texts to other countries cost more; keeping this to +1 also stops codes being requested for foreign numbers.',
+        help: 'Like +1, +44. Abroad costs more.',
         oninput: ev => {
           prefixText = ev.target.value;
           c.allowedPrefixes = prefixText.split(',').map(s => s.trim()).filter(Boolean);
@@ -399,11 +399,11 @@ export function settingsPage() {
         },
       }),
     ),
-    card({ title: 'Limits that cap the bill', icon: 'alert', intro: 'Every text costs you about a cent. Past a limit, nothing is sent.' }, LIMITS.map(l => limitRow(l, e[l.key]))),
+    card({ title: 'Limits', icon: 'alert' }, LIMITS.map(l => limitRow(l, e[l.key]))),
     donateCard(e),
     warnings.length
       ? alert({ kind: 'warn', title: 'These changes keep people out' }, h('ul', {}, warnings.map(w => h('li', {}, w))))
       : null,
-    h('div', { class: 'save-bar' }, h('span', { class: 'small muted' }, draft.configDirty ? 'You have changes that are not saved.' : 'Nothing here is saved until you press Save settings.'), button({ label: 'Save settings', variant: 'primary', type: 'submit' })),
+    h('div', { class: 'save-bar' }, h('span', { class: 'small muted' }, draft.configDirty ? 'Not saved.' : ''), button({ label: 'Save settings', variant: 'primary', type: 'submit' })),
   );
 }

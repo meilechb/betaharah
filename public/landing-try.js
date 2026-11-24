@@ -230,7 +230,7 @@ function placeField() {
         },
       },
       places.map(p => el('option', { value: p, selected: !T.byPostal && p === T.place }, p)),
-      el('option', { value: '', selected: T.byPostal }, 'Another place: a US ZIP or Canadian postal code'),
+      el('option', { value: '', selected: T.byPostal }, 'Other (ZIP or postal code)'),
     ),
     T.byPostal
       ? el(
@@ -269,11 +269,10 @@ function moreChoices() {
   return el(
     'details',
     { class: 'try-more', id: 'try-more' },
-    el('summary', {}, 'Customs, and today’s date'),
+    el('summary', {}, 'Customs and today'),
     el(
       'div',
       { class: 'try-more-body' },
-      el('p', { class: 'try-small' }, 'Three of the twelve customs.'),
       info.customs.map(c =>
         el(
           'div',
@@ -308,7 +307,6 @@ function moreChoices() {
             if (T.result) calculate();
           },
         }),
-        el('small', { class: 'try-small' }, 'Move it forward to see the count go on.'),
       ),
     ),
   );
@@ -328,7 +326,7 @@ function startForm() {
           return;
         }
         if (T.byPostal && !T.postal) {
-          T.formError = 'Type a ZIP or postal code, or choose a place from the list.';
+          T.formError = 'Enter a ZIP or postal code.';
           draw();
           return;
         }
@@ -341,13 +339,13 @@ function startForm() {
     el(
       'div',
       { class: 'try-field' },
-      el('label', { for: 'try-start' }, 'The period began on'),
+      el('label', { for: 'try-start' }, 'Period began'),
       el('input', { id: 'try-start', type: 'date', value: T.start, max: T.today, required: true, oninput: e => (T.start = e.target.value) }),
     ),
     partChoice('try-start-part', T.startPart, v => (T.startPart = v)),
     moreChoices(),
     formError(),
-    el('div', { class: 'try-actions' }, el('button', { type: 'submit', class: 'btn btn-primary btn-lg', id: 'try-go', disabled: T.busy }, T.busy ? 'Working it out…' : 'Show the calendar')),
+    el('div', { class: 'try-actions' }, el('button', { type: 'submit', class: 'btn btn-primary btn-lg', id: 'try-go', disabled: T.busy }, T.busy ? 'Working…' : 'Show calendar')),
   );
 }
 
@@ -385,7 +383,7 @@ function resultView() {
     el(
       'div',
       { class: 'try-cta' },
-      el('p', {}, 'Nothing here was saved.'),
+      el('p', {}, 'Nothing was saved.'),
       el(
         'div',
         { class: 'try-actions' },
@@ -421,7 +419,7 @@ function nextStep(s) {
   const kind = 'hefsek';
   const full = T.entries.length >= (T.info ? T.info.maxEntries : 12);
   const ahead = T.next.date > T.today;
-  if (full) return el('div', { class: 'try-card try-next' }, el('p', { class: 'try-small' }, 'That is as many dates as can be tried here.'));
+  if (full) return el('div', { class: 'try-card try-next' }, el('p', { class: 'try-small' }, 'No more dates here.'));
   return el(
     'form',
     {
@@ -442,7 +440,7 @@ function nextStep(s) {
     el(
       'div',
       { class: 'try-field' },
-      el('label', { for: 'try-next-date' }, 'The day it was done'),
+      el('label', { for: 'try-next-date' }, 'Date done'),
       el('input', {
         id: 'try-next-date',
         type: 'date',
@@ -458,7 +456,7 @@ function nextStep(s) {
     el(
       'div',
       { class: 'try-actions' },
-      el('button', { type: 'submit', class: 'btn btn-primary', id: 'try-add', disabled: T.busy }, 'Add the hefsek taharah'),
+      el('button', { type: 'submit', class: 'btn btn-primary', id: 'try-add', disabled: T.busy }, 'Add hefsek taharah'),
       ahead
         ? el(
             'button',
@@ -568,12 +566,12 @@ function calendar(s) {
       { class: 'cal-legend' },
       [
         [mark({ kind: 'flow' }), 'Flow'],
-        [mark({ kind: 'hefsek' }), 'Hefsek taharah, done'],
-        [mark({ kind: 'hefsek', projected: true }), 'The day it can be done'],
+        [mark({ kind: 'hefsek' }), 'Hefsek taharah'],
+        [mark({ kind: 'hefsek', projected: true }), 'Hefsek due'],
         [mark({ kind: 'clean_day', key: ':1' }), 'Clean days'],
         [mark({ kind: 'mikvah' }), 'Mikvah night'],
         [[mark({ kind: 'onah', title: '' }), mark({ kind: 'onah', title: '(night)' })], 'Veset onah'],
-        [mark({ kind: 'clean_day', key: ':3', projected: true }), 'Dashed: expected, not entered'],
+        [mark({ kind: 'clean_day', key: ':3', projected: true }), 'Expected'],
       ].map(([m, text]) => el('span', {}, m, text)),
     ),
     dayDetail(i, grid),
@@ -672,7 +670,7 @@ function dayDetail(i, grid) {
           {},
           events.map(e => el('li', {}, mark(e), el('span', {}, el('b', {}, plainTitle(e), expectedLabel(e)), el('small', {}, eventTime(e)), e.description ? el('span', { class: 'try-desc' }, e.description) : null))),
         )
-      : el('p', { class: 'try-small' }, 'Nothing is marked on this day.'),
+      : el('p', { class: 'try-small' }, 'Nothing marked.'),
   );
 }
 

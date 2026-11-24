@@ -50,8 +50,8 @@ function record(e, kind) {
   fieldError = '';
   partError = '';
   if (!form.date) fieldError = 'Choose the date.';
-  else if (form.date > todayIso()) fieldError = 'The date cannot be later than today.';
-  if (!fieldError && kind === 'flow' && !form.part) partError = 'Choose whether it began by day or at night.';
+  else if (form.date > todayIso()) fieldError = 'The date cannot be in the future.';
+  if (!fieldError && kind === 'flow' && !form.part) partError = 'Choose day or night.';
   if (fieldError || partError) {
     flow.focus = fieldError ? 'sd-date' : 'r-sd-part-day';
     render();
@@ -103,7 +103,7 @@ function recordedBox() {
     alert(
       { kind: 'ok', role: 'status' },
       h('p', {}, last.message),
-      last.id ? h('p', { class: 'link-row' }, button({ label: 'Undo: remove this date', variant: 'link', attrs: { id: 'sd-undo' }, onclick: undo })) : null,
+      last.id ? h('p', { class: 'link-row' }, button({ label: 'Undo', variant: 'link', attrs: { id: 'sd-undo' }, onclick: undo })) : null,
     ),
   );
 }
@@ -132,26 +132,28 @@ function dateField(label, help) {
   });
 }
 
+const capFirst = x => x.charAt(0).toUpperCase() + x.slice(1);
+
 function questionCount() {
   return 'Question ' + (QUESTIONS.indexOf(q) + 1) + ' of ' + QUESTIONS.length;
 }
 
 function noPlaceView() {
   return screen({
-    title: 'Your most recent dates',
+    title: 'Your recent dates',
     body: [
       alert({ kind: 'warn' }, 'Choose the location first.'),
     ],
     back,
-    skip: { label: 'Skip this step', onclick: next },
-    main: { label: 'Choose the location', icon: 'map', onclick: () => goTo('place', 'back'), id: 'sd-to-place' },
+    skip: { label: 'Skip', onclick: next },
+    main: { label: 'Choose location', icon: 'map', onclick: () => goTo('place', 'back'), id: 'sd-to-place' },
   });
 }
 
 function flowView() {
   return screen({
     count: questionCount(),
-    title: 'When did the last period begin?',
+    title: 'Last period',
     body: [
       recordedBox(),
       noteBox(),
@@ -159,12 +161,12 @@ function flowView() {
       h(
         'fieldset',
         { class: 'plain' + (partError ? ' has-error' : '') },
-        h('legend', {}, 'By day or at night?'),
+        h('legend', {}, 'Day or night?'),
         radioRow({ name: 'sd-part', value: 'day', label: 'By day', checked: form.part === 'day', onchange: () => ((form.part = 'day'), (partError = '')) }),
         radioRow({
           name: 'sd-part',
           value: 'night',
-          label: t('At night (after {sunset} on that date)'),
+          label: t('At night (after {sunset})'),
           checked: form.part === 'night',
           onchange: () => ((form.part = 'night'), (partError = '')),
         }),
@@ -172,19 +174,19 @@ function flowView() {
       ),
     ],
     back,
-    skip: { label: 'Nothing to record now', onclick: () => (S.entries.length ? ask('summary') : next()) },
-    main: { label: 'Record this date', onclick: e => record(e, 'flow'), id: 'sd-record' },
+    skip: { label: 'Skip', onclick: () => (S.entries.length ? ask('summary') : next()) },
+    main: { label: 'Record date', onclick: e => record(e, 'flow'), id: 'sd-record' },
   });
 }
 
 function hefsekView() {
   return screen({
     count: questionCount(),
-    title: t('Was the {hefsek} done?'),
-    body: [recordedBox(), noteBox(), dateField(t('Date of the {hefsek}'))],
+    title: capFirst(t('{hefsek} done?')),
+    body: [recordedBox(), noteBox(), dateField('Date done')],
     back: () => ((last = null), (note = ''), ask('flow')),
     skip: { label: 'Not yet', onclick: () => ask('summary') },
-    main: { label: t('Record the {hefsek}'), onclick: e => record(e, 'hefsek'), id: 'sd-record' },
+    main: { label: 'Record date', onclick: e => record(e, 'hefsek'), id: 'sd-record' },
   });
 }
 
@@ -200,8 +202,7 @@ function summaryView() {
             { class: 'list setup-entries' },
             rows.map(x => h('li', {}, h('span', { class: 'dot ' + x.kind, 'aria-hidden': 'true' }), h('div', { class: 'main' }, h('div', { class: 'title' }, x.text)))),
           )
-        : h('p', { class: 'muted' }, 'Nothing has been recorded yet.'),
-      h('p', { class: 'muted small' }, 'Earlier dates can be added in the Log.'),
+        : h('p', { class: 'muted' }, 'Nothing recorded.'),
     ],
     back: () => ((last = null), (note = ''), ask(rows.length ? questionAfterEntriesForBack() : 'flow')),
     main: { label: 'Continue', onclick: next },

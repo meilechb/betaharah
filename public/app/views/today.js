@@ -25,9 +25,9 @@ export function viewToday() {
       { class: 'narrow' },
       onboardingCard(),
       card(
-        { title: 'Choose your location first', icon: 'map', className: 'status-card empty-status' },
+        { title: 'No location', icon: 'map', className: 'status-card empty-status' },
         h('p', { id: 'no-location' }, 'Nothing can be calculated until a location is chosen.'),
-        linkButton({ href: '#settings/location', label: 'Choose your location', variant: 'primary', icon: 'map', attrs: { id: 'choose-location' } }),
+        linkButton({ href: '#settings/location', label: 'Choose location', variant: 'primary', icon: 'map', attrs: { id: 'choose-location' } }),
       ),
       alertsBlock(),
       textCard(),
@@ -87,13 +87,6 @@ function textCard() {
 
 // ---------- where things stand ----------
 
-/** The lines of an event's description, without blanks. */
-function detailLines(e) {
-  return describe(e)
-    .split('\n')
-    .filter(x => x.trim() !== '');
-}
-
 /**
  * The events that belong to now. By day: those of today's date (without a
  * night that ended at sunrise). At night: the Hebrew date has already moved
@@ -136,7 +129,7 @@ function nowBox() {
       'h3',
       {},
       night ? icon('moon', { size: 'sm' }) : null,
-      night ? 'Tonight: the night of ' + S.today.hebrew.replace(/ \d{4}$/, '') : 'Today, ' + shortDate(S.today.civilDate),
+      night ? 'Tonight, ' + S.today.hebrew.replace(/ \d{4}$/, '') : 'Today, ' + shortDate(S.today.civilDate),
     ),
     items.length
       ? h(
@@ -152,14 +145,11 @@ function nowBox() {
                 {},
                 titled(e, 'ti-title'),
                 eventWhen(e) ? h('div', { class: 'ti-when' }, eventWhen(e)) : null,
-                detailLines(e)
-                  .slice(0, e.kind === 'onah' ? 0 : 3)
-                  .map(line => h('div', { class: 'ti-line' }, line)),
               ),
             ),
           ),
         )
-      : h('p', { class: 'muted small' }, 'Nothing is marked for tonight.'),
+      : h('p', { class: 'muted small' }, 'Nothing tonight.'),
   );
 }
 
@@ -189,7 +179,7 @@ function nextStep() {
     links.push(link('It began earlier', 'next-earlier', { kind: 'flow', mode: 'other', date: today() }));
   } else if (phase === 'before_hefsek') {
     const hefsek = hefsekDay();
-    if (S.today.part === 'day' && hefsek && hefsek.startDate <= civil) main = primary(cap(t('The {hefsek} was done today')), { kind: 'hefsek', when: 'now' });
+    if (S.today.part === 'day' && hefsek && hefsek.startDate <= civil) main = primary(cap(t('{hefsek} done')), { kind: 'hefsek', when: 'now' });
   }
   links.push(link('Record something else', 'next-else', {}));
   return h('div', { class: 'next' + (main ? ' has-main' : '') }, notice('status'), main, h('div', { class: 'next-links' }, links));
@@ -212,7 +202,6 @@ function statusCard() {
   return h(
     'section',
     { class: 'card status status-card', 'aria-labelledby': 'status-headline' },
-    h('p', { class: 'eyebrow' }, 'Where things stand'),
     h('p', { class: 'headline', id: 'status-headline' }, S.status.headline),
     S.status.detail ? h('p', { class: 'detail', id: 'status-detail' }, S.status.detail) : null,
     nextStep(),
@@ -297,7 +286,7 @@ function upcomingCard() {
       const mikvah = items.filter(u => u.kind === 'mikvah');
       const onot = items.filter(u => u.kind === 'onah');
       const steps = [...hefsek, ...clean, ...mikvah];
-      if (steps.length === 0 && onot.length === 0) return h('div', {}, emptyState({ icon: 'calendar', title: 'Nothing coming up.', body: t('Dates appear here once a {flow} is recorded.') }));
+      if (steps.length === 0 && onot.length === 0) return h('div', {}, emptyState({ icon: 'calendar', title: 'Nothing coming up.' }));
       const note = steps.map(assumption).find(Boolean) || '';
       const shown = showAll ? onot : onot.slice(0, ONOT_SHOWN);
       return h(
@@ -307,7 +296,7 @@ function upcomingCard() {
           ? h(
               'section',
               { class: 'up-group', id: 'up-steps', 'aria-labelledby': 'up-steps-title' },
-              h('h3', { id: 'up-steps-title' }, cap(t('until the {mikvah_night}'))),
+              h('h3', { id: 'up-steps-title' }, cap(t('until {mikvah_night}'))),
               note ? h('p', { class: 'up-assume small', id: 'up-assume' }, note) : null,
               h('ul', { class: 'up-list' }, hefsek.map(x => itemRow(x)), clean.length ? cleanRow(clean) : null, mikvah.map(x => itemRow(x))),
             )

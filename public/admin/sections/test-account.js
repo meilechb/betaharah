@@ -9,11 +9,9 @@ export function testPage() {
     h(
       'p',
       {},
-      'A made-up household for trying every feature on the live site, text commands and reminders included, before Telnyx is set up. It is fully set up in Lakewood, NJ, with four past cycles, and opens in the seven clean days. Its phones are ' +
-        pretty(S.demo.number) +
-        ' and (732) 555-0199, numbers reserved for fiction. No text is ever sent for it: replies, reminders and codes appear in its Log as "simulated", and nothing counts against the limits.',
+      'Lakewood, NJ, 4 past cycles. Phones ' + pretty(S.demo.number) + ' and (732) 555-0199. Nothing is sent or counted.',
     ),
-    h('p', { class: 'small muted' }, 'Opening it signs this browser in to it in the calendar (/app/). Your operator session stays signed in. Opening or resetting it replaces it with a fresh one.'),
+    h('p', { class: 'small muted' }, 'Opening or resetting it makes a fresh one.'),
     h(
       'div',
       { class: 'actions' },
@@ -29,14 +27,14 @@ export function testPage() {
             icon: 'refresh',
             onclick: async e => {
               const btn = e.currentTarget;
-              const ok = await confirmDialog({ title: 'Reset the test account?', body: 'It is replaced by a fresh one. Anything you changed in it is lost.', confirmLabel: 'Reset it' });
+              const ok = await confirmDialog({ title: 'Reset the test account?', body: 'Changes made in it are lost.', confirmLabel: 'Reset it' });
               if (!ok) return;
               run(
                 () => call('POST', '/api/admin/demo'),
                 () =>
                   run(() => call('GET', '/api/admin/state'), state => {
                     saved()(state);
-                    toast('The test account was reset. This browser is now signed in to it in the calendar.');
+                    toast('The test account was reset.');
                   }),
                 btn,
               );
@@ -50,7 +48,7 @@ export function testPage() {
             icon: 'trash',
             onclick: async e => {
               const btn = e.currentTarget;
-              const ok = await confirmDialog({ title: 'Delete the test account?', body: 'It is made up; you can open a new one at any time.', confirmLabel: 'Delete it', danger: true });
+              const ok = await confirmDialog({ title: 'Delete the test account?', body: 'A new one can be opened any time.', confirmLabel: 'Delete it', danger: true });
               if (ok) run(() => call('DELETE', '/api/admin/demo'), saved('The test account was deleted.'), btn);
             },
           })

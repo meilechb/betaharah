@@ -267,7 +267,7 @@ function addButton(id, body, label) {
 function dayActions(date) {
   const kinds = S.labels.kinds;
   return [
-    h('h4', { class: 'day-q', id: 'day-add-title' }, 'What happened on this day?'),
+    h('h4', { class: 'day-q', id: 'day-add-title' }, 'What happened?'),
     h(
       'div',
       { class: 'addgrid', role: 'group', 'aria-labelledby': 'day-add-title' },
@@ -275,12 +275,12 @@ function dayActions(date) {
       addButton('dp-add-flow-night', { kind: 'flow', date, part: 'night' }, kinds.flow + ', at night'),
       addButton('dp-add-hefsek', { kind: 'hefsek', date }, kinds.hefsek),
     ),
-    h('p', { class: 'small muted day-night-note' }, t('At night: after {sunset} on this date.')),
+    h('p', { class: 'small muted day-night-note' }, t('Night: after {sunset}.')),
     h('div', { class: 'day-result', id: 'day-result' }, notice('day')),
     h(
       'details',
       { class: 'day-more', id: 'day-more' },
-      h('summary', {}, 'Other things to add'),
+      h('summary', {}, 'Other entries'),
       h(
         'div',
         { class: 'addgrid' },
@@ -307,9 +307,9 @@ function dayActions(date) {
             recordNow(body, e.submitter || document.getElementById('dp-add-time'), 'day');
           },
         },
-        selectField({ id: 'dp-time-kind', label: 'At a time I know', value: dayUi.timeKind, wide: false, options: ['flow', 'stain', 'broken'].map(k => ({ value: k, label: kinds[k] })), onchange: e => (dayUi.timeKind = e.target.value) }),
+        selectField({ id: 'dp-time-kind', label: 'At a time', value: dayUi.timeKind, wide: false, options: ['flow', 'stain', 'broken'].map(k => ({ value: k, label: kinds[k] })), onchange: e => (dayUi.timeKind = e.target.value) }),
         textField({ id: 'dp-time', label: 'Time', type: 'time', wide: false, value: dayUi.time, oninput: e => (dayUi.time = e.target.value) }),
-        button({ label: 'Record at this time', type: 'submit', size: 'sm', attrs: { id: 'dp-add-time' } }),
+        button({ label: 'Record', type: 'submit', size: 'sm', attrs: { id: 'dp-add-time' } }),
       ),
       checkRow({ id: 'dp-veset', label: t('Counts for the {vesatot}'), checked: dayUi.veset, onchange: e => (dayUi.veset = e.target.checked) }),
     ),
@@ -344,7 +344,7 @@ function dayDetail(i) {
     h('h4', { class: 'day-q', id: 'day-events-title' }, 'On this day'),
     events.length || continuing.length
       ? h('ul', { class: 'events', id: 'day-events', 'aria-labelledby': 'day-events-title' }, continuing.map(e => eventRow(e, true)), events.map(e => eventRow(e, false)))
-      : h('p', { class: 'muted', id: 'day-events' }, 'Nothing is marked on this day.'),
+      : h('p', { class: 'muted', id: 'day-events' }, 'Nothing marked.'),
   );
 }
 

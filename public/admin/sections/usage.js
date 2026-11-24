@@ -58,7 +58,7 @@ export function chart(days, key, unit) {
   const plotH = H - top - bottom;
   const slot = (W - left) / days.length;
   const barW = Math.max(2, slot - 2); // a 2px gap between bars
-  const readout = h('p', { class: 'chart-readout', 'aria-live': 'polite' }, 'Point at a bar, or move to it with the Tab key, to see its number.');
+  const readout = h('p', { class: 'chart-readout', 'aria-live': 'polite' }, 'Point at a bar for its number.');
   const show = d => readout.replaceChildren(h('strong', {}, dayLabel(d.day, true) + ': '), num(d[key]) + ' ' + (d[key] === 1 ? unit[0] : unit[1]));
   const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': `${unit[1]} per day for the last ${days.length} days; the most on one day was ${num(max)}.` });
   // recessive grid: the baseline, the middle and the top
@@ -100,7 +100,7 @@ function table(days) {
   return h(
     'details',
     { class: 'chart-table' },
-    h('summary', {}, 'Show the numbers as a table'),
+    h('summary', {}, 'Show as a table'),
     h(
       'div',
       { class: 'table-scroll' },
@@ -124,7 +124,7 @@ function historyPart() {
     {},
     selectField({
       id: 'series',
-      label: 'What the chart shows',
+      label: 'Show',
       value: series,
       options: SERIES.map(s => ({ value: s.value, label: s.label })),
       onchange: e => {
@@ -135,19 +135,19 @@ function historyPart() {
     h('p', { class: 'small muted' }, chosen.label + ' in the last 30 days: ' + num(total) + '.'),
     chart(history.days, series, chosen.unit),
     table(history.days),
-    S.counts.since ? h('p', { class: 'help' }, 'Daily counts began today. Earlier days show only the accounts that still exist, on the days they were made.') : null,
+    S.counts.since ? h('p', { class: 'help' }, 'Daily counts began today.') : null,
   );
 }
 
 function priceForm() {
   const f = textField({
     id: 'price',
-    label: 'Price of one text, in cents',
+    label: 'Cents per text',
     type: 'text',
     inputmode: 'decimal',
     wide: false,
     value: draft.price,
-    help: 'Used only for the estimate. Telnyx charges about 1 cent for each text, sent or received. See your Telnyx invoice for the real amount.',
+    help: 'For the estimate only.',
     oninput: e => {
       draft.price = e.target.value;
       setFieldError(f, '');
@@ -162,7 +162,7 @@ function priceForm() {
         e.preventDefault();
         const v = Number(String(draft.price).replace(',', '.').replace('¢', '').trim());
         if (!Number.isFinite(v) || v < 0 || v > 100 || String(draft.price).trim() === '') {
-          setFieldError(f, 'Write a number of cents from 0 to 100, for example 1 or 0.8.');
+          setFieldError(f, 'A number of cents from 0 to 100.');
           f.control.focus();
           return;
         }
@@ -194,22 +194,22 @@ export function usagePage() {
             'tbody',
             {},
             row('Texts sent', num(t.textsSent), num(m.textsSent) + ' of ' + num(S.config.monthlyMessageLimit)),
-            row('Of those, sign-in codes', num(S.usage.codesToday) + ' of ' + num(S.config.dailyCodeLimit), num(m.codesSent)),
+            row('Sign-in codes', num(S.usage.codesToday) + ' of ' + num(S.config.dailyCodeLimit), num(m.codesSent)),
             row('Texts received', num(t.textsReceived), num(m.textsReceived)),
             row('New accounts', num(t.signups), num(m.signups)),
             row('Deleted accounts', num(t.deletions), num(m.deletions)),
           ),
         ),
-        h('p', { class: 'help' }, 'Days and months begin at midnight UTC (7 PM in New York in winter, 8 PM in summer), as the limits do.'),
+        h('p', { class: 'help' }, 'Days start at midnight UTC.'),
       ),
       card(
         { title: 'Cost', icon: 'download' },
         h('div', { class: 'big-number' }, dollars(cost)),
-        h('p', { class: 'muted' }, 'Estimated cost of texts this month: ' + num(m.textsSent + m.textsReceived) + ' texts sent and received, at ' + price + (price === 1 ? ' cent' : ' cents') + ' each. Telnyx also charges about $1 a month for the number.'),
-        h('p', { class: 'muted' }, 'At the monthly limit of ' + num(S.config.monthlyMessageLimit) + ' texts, sending alone would cost about ' + dollars(S.config.monthlyMessageLimit * price) + '.'),
+        h('p', { class: 'muted' }, num(m.textsSent + m.textsReceived) + ' texts this month at ' + price + (price === 1 ? ' cent' : ' cents') + ' each, plus about $1 for the number.'),
+        h('p', { class: 'muted' }, 'At the limit of ' + num(S.config.monthlyMessageLimit) + ': about ' + dollars(S.config.monthlyMessageLimit * price) + '.'),
         priceForm(),
       ),
     ),
-    card({ title: 'The last 30 days', icon: 'list' }, historyPart()),
+    card({ title: 'Last 30 days', icon: 'list' }, historyPart()),
   ];
 }
