@@ -278,7 +278,7 @@ function scheduledView() {
     return h(
       'div',
       {},
-      h('p', { class: 'st-lead-text' }, who.length ? 'Sent to the phones that receive that kind: ' + who.map(p => p.name || pretty(p.number)).join(', ') + '.' : S.phones.length === 0 ? 'No phone is on this account yet, so these are not sent.' : 'No phone receives reminders now, so these are not sent.'),
+      h('p', { class: 'st-lead-text' }, who.length ? 'Sent to the phones that receive that kind: ' + who.map(p => p.name || pretty(p.number)).join(', ') + '.' : S.phones.length === 0 ? 'No phone yet; nothing is sent.' : 'No phone gets reminders; nothing is sent.'),
       h(
         'ol',
         { class: 'st-timeline' },

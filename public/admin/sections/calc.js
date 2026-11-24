@@ -844,7 +844,6 @@ function dayPanel() {
         addButton('calc-add-broken-night', 'broken', 'night', labelOf('broken') + ', at night', date),
         addButton('calc-add-mikvah', 'mikvah', null, labelOf('mikvah') + ', that evening', date),
       ),
-      h('p', { class: 'small muted' }, fill('A {stain} only when a {rav} said it makes her {niddah}.')),
       h(
         'form',
         {
@@ -867,7 +866,7 @@ function dayPanel() {
         button({ label: 'Add at this time', type: 'submit', size: 'sm', attrs: { id: 'calc-add-time' } }),
       ),
       h('p', { class: 'small muted' }, 'With a time, the calendar works out whether it was day or night.'),
-      checkRow({ id: 'calc-veset', label: fill('A {flow} added here counts for the {vesatot}'), help: fill('Leave this on unless a {rav} said it does not count.'), checked: a.veset, onchange: e => (ui.add.veset = e.target.checked) }),
+      checkRow({ id: 'calc-veset', label: fill('Counts for the {vesatot}'), checked: a.veset, onchange: e => (ui.add.veset = e.target.checked) }),
     ),
     h('h3', { class: 'calc-q' }, 'On this day'),
     events.length || continuing.length

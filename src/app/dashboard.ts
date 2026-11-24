@@ -107,7 +107,7 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
     for (const p of t.patterns) alerts.push({ level: 'warn', text: patternText(p, lang) });
     for (const n of t.vesatotNotes) alerts.push({ level: 'info', text: noteText(n, lang) });
     if (t.onot.some(o => o.onMikvahNight && o.end > now)) {
-      alerts.push({ level: 'warn', text: f('The {mikvah_night} falls on an {onat_perishah}. Ask a {rav}.') });
+      alerts.push({ level: 'warn', text: f('The {mikvah_night} falls on an {onat_perishah}.') });
     }
     const civilToday = localAbs(now, tz);
     today = {
@@ -206,7 +206,7 @@ export function dashboardState(args: StateArgs) {
   const texting = data.phones.some(canText);
   const setup = [
     { key: 'place', done: data.app.place !== null, text: 'Choose your location', tab: 'settings' },
-    { key: 'customs', done: data.halachicConfirmedAt !== null, text: f('Review your customs, ideally with your {rav}, and save them'), tab: 'customs' },
+    { key: 'customs', done: data.halachicConfirmedAt !== null, text: 'Save your customs', tab: 'customs' },
     { key: 'entry', done: data.entries.length > 0, text: f('Record when the last period began, and its {hefsek}'), tab: 'today' },
     { key: 'calendar', done: data.google !== null || data.calendarLinkToken !== null, text: 'Optional: show it in your calendar app', tab: 'settings' },
     { key: 'texts', done: texting, text: 'Optional: turn on text reminders', tab: 'settings' },

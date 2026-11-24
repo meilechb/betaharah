@@ -94,8 +94,8 @@ rest stays in this order on the right (`.today-layout` in `dashboard.css`).
    immersion and the mikvah night have no button: nothing asks about the
    immersion (once the mikvah night is over she is tehorah). Links open the
    full form preset: "It began earlier", "Record something else". Then
-   today's items, the next onat perishah while tehorah, today's sunset, and
-   the alerts.
+   today's items, the next onat perishah while tehorah, and the alerts
+   (today's sunset is in the header).
 2. **The full form** (`recordPanel` in `record.js`), only after a link opened
    it, with Close. It keeps every choice: any kind, another date, by day, at
    night or a clock time, a note, the vesatot switch.

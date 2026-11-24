@@ -288,7 +288,7 @@ const H = { 'x-betaharah': '1' };
   });
 
   await step('reminders: a timing opens in its row, saves, and refuses a number out of range', async () => {
-    if ((await page.textContent('#rem-when-hefsek')) !== '2 hours before sunset, on each day it can be done.') throw new Error('timing: ' + (await page.textContent('#rem-when-hefsek')));
+    if ((await page.textContent('#rem-when-hefsek')) !== '2 hours before sunset, each day it can be done.') throw new Error('timing: ' + (await page.textContent('#rem-when-hefsek')));
     await page.click('#rem-open-hefsek');
     if ((await page.getAttribute('#rem-open-hefsek', 'aria-expanded')) !== 'true') throw new Error('not expanded');
     await page.fill('#rem-hefsek-min', '100');
@@ -586,7 +586,7 @@ const H = { 'x-betaharah': '1' };
     await openSettings('phones');
     await page.waitForSelector('#phones-list .empty-title:has-text("No phone yet.")');
     const body = await page.textContent('#phones-list');
-    for (const w of ['reminders by text', 'record dates by text', 'sign in with a code']) if (!body.includes(w)) throw new Error('does not say ' + w);
+    for (const w of ['reminders', 'recording by text', 'signing in']) if (!body.includes(w)) throw new Error('does not say ' + w);
     if (!(await page.getAttribute('#phone-add-first', 'class')).includes('primary')) throw new Error('adding is not the main action');
     await page.click('#phone-add-first');
     await expectHash('#settings/phones/add');
@@ -597,7 +597,7 @@ const H = { 'x-betaharah': '1' };
 
   await step('google only, no phone: Reminders, Texting and Your data word it for no phone', async () => {
     await openSettings('reminders');
-    await page.waitForSelector('.st-note:has-text("No phone is on this account yet")');
+    await page.waitForSelector('.st-note:has-text("No phone yet")');
     await openSettings('reminders/scheduled');
     await noLeftovers('scheduled');
     await openSettings('texting');
@@ -629,8 +629,8 @@ const H = { 'x-betaharah': '1' };
     if ((await summary('security')) !== 'Google · a code by text') throw new Error('security: ' + (await summary('security')));
     await openSettings('phones/17325550100');
     await page.waitForSelector('#remove-17325550100');
-    if ((await page.textContent('#phone-remove')).includes('only phone on the account')) throw new Error('refuses to remove the last phone');
-    await page.waitForSelector('#phone-remove:has-text("you sign in to it with Google")');
+    if ((await page.textContent('#phone-remove')).includes('only phone cannot be removed')) throw new Error('refuses to remove the last phone');
+    await page.waitForSelector('#phone-remove:has-text("You still sign in with Google")');
     if ((await page.textContent('.st-hero')).includes('this phone')) throw new Error('marked as this phone');
     await openSettings('security');
     await page.waitForSelector('#sec-google:has-text("ada@example.com")');
@@ -711,12 +711,12 @@ const H = { 'x-betaharah': '1' };
 
   await step('new account: disabled controls say why', async () => {
     await openSection('phones', 'Phones');
-    await page.waitForSelector('.muted-row:has-text("once text messaging is available")');
+    await page.waitForSelector('.muted-row:has-text("Not available until texting is")');
     await page.click('#phone-row-17324440101');
     if (!(await page.isDisabled('#texts-17324440101'))) throw new Error('reminders switch enabled');
-    if (!(await page.textContent('#texts-17324440101-help')).includes('not available on this site')) throw new Error('no reason');
+    if (!(await page.textContent('#texts-17324440101-help')).includes('not available')) throw new Error('no reason');
     if (!(await page.isDisabled('#test-17324440101'))) throw new Error('test text enabled');
-    await page.waitForSelector('#phone-remove:has-text("only phone on the account")');
+    await page.waitForSelector('#phone-remove:has-text("only phone cannot be removed")');
     await openSection('reminders', 'Reminders');
     await page.waitForSelector('.st-note:has-text("not available on this site")');
     await openSection('texting', 'Texting');
@@ -738,7 +738,7 @@ const H = { 'x-betaharah': '1' };
   await step('new account, Google only and no texting: Phones says when a phone can be added', async () => {
     await reshape(GOOGLE_ONLY);
     await openSettings('phones');
-    await page.waitForSelector('#phones-list:has-text("once text messaging is available")');
+    await page.waitForSelector('#phones-list:has-text("Not available until texting is")');
     if (await page.locator('#phone-add-first').count()) throw new Error('adding offered without texting');
     if ((await summary('phones')) !== 'No phone yet · texting not available here') throw new Error('phones: ' + (await summary('phones')));
     for (const id of SECTIONS) {

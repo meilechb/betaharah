@@ -83,6 +83,8 @@ async function console_(browser) {
     await showMonth(date);
     await page.click('#calc-day-' + date);
     await page.waitForSelector('#calc-day-title:has-text("' + new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric' }) + '")');
+    // the immersion is under "Other things to add"
+    if (!(await page.isVisible('#calc-add-' + button))) await page.click('#calc-more summary');
     await page.click('#calc-add-' + button);
     await settled();
     await page.waitForSelector('.calc-recorded, .calc-refused');
@@ -100,7 +102,7 @@ async function console_(browser) {
     if (!(await page.textContent('.calc-note')).includes('This runs the same calculation as people’s accounts, and saves nothing.')) throw new Error('no note');
     if (!(await page.textContent('#calc-how')).includes('Click a day, then choose what happened on it.')) throw new Error('no instruction');
     // without scrolling: the first week of the calendar, and the four buttons
-    for (const sel of ['table.month button.day', '#calc-add-flow-day', '#calc-add-flow-night', '#calc-add-hefsek', '#calc-add-mikvah']) {
+    for (const sel of ['table.month button.day', '#calc-add-flow-day', '#calc-add-flow-night', '#calc-add-hefsek']) {
       const box = await page.locator(sel).first().boundingBox();
       if (!box || box.y + box.height > 900) throw new Error(sel + ' is not on the first screen');
     }
@@ -127,7 +129,7 @@ async function console_(browser) {
     if (!(await page.getAttribute('#calc-day-2026-11-14', 'aria-label')).includes('not entered: the day it can be done')) throw new Error('the day does not say the hefsek was not entered');
     const steps = await page.textContent('#calc-steps');
     if (!/Hefsek taharah \(by \d+:\d\d PM\)\s*not entered/.test(steps)) throw new Error('"What the calendar works out" does not say not entered: ' + steps.slice(0, 120));
-    if ((await page.textContent('#calc-assume')) !== 'This assumes the hefsek taharah is done on the first day it can be.') throw new Error('the assumption is not stated');
+    if ((await page.textContent('#calc-assume')) !== 'If the hefsek taharah is done on the first day it can be.') throw new Error('the assumption is not stated');
     if (!/Seven clean days: day 1 to day 7\s*expected/.test(steps)) throw new Error('the clean days are not one row marked expected');
     if (/\(projected\)/.test(await page.textContent('.calc'))) throw new Error('the word "projected" is still used in a title');
     // onah beinonit, day 30 and 31 from Nov 10, in the month below
@@ -193,7 +195,7 @@ async function console_(browser) {
     await add('2027-01-05', 'flow-day');
     await add('2027-02-02', 'flow-day');
     await waitToday('Tuesday, February 2, 2027, by day');
-    await page.waitForSelector('#calc-alerts .alert:has-text("Three intervals in a row of 29 days, by day. A veset kavua for the interval may have been established. Ask a rav.")');
+    await page.waitForSelector('#calc-alerts .alert:has-text("Three intervals in a row of 29 days, by day. A veset kavua for the interval may have been established.")');
     if ((await logCount()) !== 6) throw new Error('not six dates listed');
   });
 
@@ -308,7 +310,7 @@ async function home(browser) {
     const page = await context.newPage();
     const errors = watch(page);
     const step = (name, fn) => run(`home ${width}px: ${name}`, page, fn);
-    await step('a period, then the hefsek taharah and the immersion', async () => {
+    await step('a period, then the hefsek taharah; the walk ends there with the sign-up button', async () => {
       await page.goto(base + '/#try');
       await page.waitForSelector('#try-start');
       if (await page.locator('#try-fallback').count()) throw new Error('the fallback sentence stayed');
@@ -322,11 +324,10 @@ async function home(browser) {
       await page.click('#try-add');
       await page.waitForFunction(() => /after the hefsek taharah|Seven clean days/.test(document.querySelector('.try-headline').textContent));
       if ((await page.locator('.try-cal .mk.clean').count()) === 0) throw new Error('no clean days on the calendar');
-      // the immersion is after today: make that day today, then add it
-      await page.click('#try-jump');
-      await page.waitForSelector('#try-add:not([disabled])');
-      await page.click('#try-add');
-      await page.waitForFunction(() => document.querySelector('.try-headline').textContent === 'Tehorah');
+      if ((await page.locator('.try-cal .mk.mikvah').count()) === 0) throw new Error('no mikvah night on the calendar');
+      // nothing asks for the immersion: the walk ends with the sign-up button
+      if (await page.locator('#try-add, #try-jump').count()) throw new Error('a next step after the hefsek');
+      if (/immers/i.test(await page.textContent('.try-side'))) throw new Error('the immersion is mentioned');
       if (!(await page.isVisible('#try-signup'))) throw new Error('no button to sign up');
       const text = await page.textContent('#try');
       for (const word of [/\bserver\b/i, /\bengine\b/i, /\bAPI\b/, /algorithm/i]) if (word.test(text)) throw new Error('technical wording: ' + word);
@@ -339,6 +340,11 @@ async function home(browser) {
       }
     });
     await step('a date in the future is refused with the sentence a person gets', async () => {
+      await page.click('#try-again');
+      const start = await page.getAttribute('#try-start', 'max');
+      await page.fill('#try-start', new Date(Date.parse(start + 'T00:00:00Z') - 2 * 86400000).toISOString().slice(0, 10));
+      await page.click('#try-go');
+      await page.waitForSelector('#try-next-date');
       const today = await page.inputValue('#try-next-date');
       const later = new Date(Date.parse(today + 'T00:00:00Z') + 40 * 86400000).toISOString().slice(0, 10);
       await page.fill('#try-next-date', later);

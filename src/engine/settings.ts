@@ -1,6 +1,6 @@
 /**
  * Halachic settings: every point on which customs differ and the couple
- * (with their rav) chooses.
+ * chooses.
  *
  * The explanations are English sentences; the halachic terms inside them
  * are written as {key} and shown in English letters or Hebrew script
@@ -77,45 +77,45 @@ function spec<K extends ChoiceKey>(s: ChoiceSpec<K>): ChoiceSpec {
 export const HALACHIC_CHOICES: ChoiceSpec[] = [
   spec({
     key: 'minWaitDays',
-    title: 'Days to wait before the {hefsek}',
-    help: 'Counted from the day she became {niddah} (the day of the {flow}, or of finding the {stain}), which is day 1. For those who count four days from the last relations, ask a {rav}.',
+    title: 'Days before the {hefsek}',
+    help: 'The day she became {niddah} is day 1.',
     options: [
-      { value: '5', label: 'Five days (Ashkenazi custom, and some Sephardi communities)' },
-      { value: '4', label: 'Four days (some Sephardi communities)' },
+      { value: '5', label: 'Five (Ashkenazi, some Sephardi)' },
+      { value: '4', label: 'Four (some Sephardi)' },
     ],
   }),
   spec({
     key: 'beinonitDays',
-    title: '{onah_beinonit}: which day',
+    title: '{onah_beinonit}: day',
     help: 'The day of the {flow} is day 1.',
     options: [
-      { value: '30', label: 'Day 30 only' },
-      { value: '31', label: 'Day 31 only' },
-      { value: '30_31', label: 'Day 30 and day 31' },
+      { value: '30', label: 'Day 30' },
+      { value: '31', label: 'Day 31' },
+      { value: '30_31', label: 'Days 30 and 31' },
     ],
   }),
   spec({
     key: 'beinonitLength',
-    title: '{onah_beinonit}: how long',
+    title: '{onah_beinonit}: length',
     help: '',
     options: [
-      { value: 'onah', label: 'One {onah}, the same as that of the {flow} (day or night)' },
-      { value: 'full', label: 'The {full_day}: the night and the day of that date' },
+      { value: 'onah', label: 'The {onah} of the {flow}' },
+      { value: 'full', label: 'The {full_day}' },
     ],
   }),
   spec({
     key: 'chodeshLength',
-    title: '{veset_hachodesh}: how long',
+    title: '{veset_hachodesh}: length',
     help: '',
     options: [
-      { value: 'onah', label: 'One {onah}, the same as that of the {flow} (day or night)' },
-      { value: 'full', label: 'The {full_day}: the night and the day of that date' },
+      { value: 'onah', label: 'The {onah} of the {flow}' },
+      { value: 'full', label: 'The {full_day}' },
     ],
   }),
   spec({
     key: 'orZarua',
-    title: 'The {onah} of the {or_zarua}',
-    help: 'Separation also on the {onah} before each {veset_onah}.',
+    title: '{or_zarua}',
+    help: 'The {onah} before each {veset_onah}.',
     options: [
       { value: 'yes', label: 'Observed' },
       { value: 'no', label: 'Not observed' },
@@ -123,49 +123,49 @@ export const HALACHIC_CHOICES: ChoiceSpec[] = [
   }),
   spec({
     key: 'haflagahMethod',
-    title: 'How the {veset_haflagah} is counted',
-    help: 'When counting in {onot}, record the {hefsek} every month: the count starts from it.',
+    title: '{veset_haflagah}: counted',
+    help: '',
     options: [
-      { value: 'days', label: 'In days, from the start of one {flow} to the start of the next' },
-      { value: 'onot_from_hefsek', label: 'In {onot}, from the {hefsek} to the next {flow} (Shulchan Aruch HaRav; Chabad custom)' },
+      { value: 'days', label: 'In days, {flow} to {flow}' },
+      { value: 'onot_from_hefsek', label: 'In {onot}, {hefsek} to {flow} (Chabad)' },
     ],
   }),
   spec({
     key: 'longerHaflagah',
-    title: 'A longer {haflagah} that was never passed',
-    help: 'A {flow} came after a shorter interval, before the day of the earlier, longer one arrived.',
+    title: 'Longer {haflagah} not yet passed',
+    help: '',
     options: [
-      { value: 'latest_only', label: 'Only the latest {haflagah} is observed' },
-      { value: 'keep_unsurpassed', label: 'Every longer {haflagah} not yet passed without a {flow} is observed too' },
+      { value: 'latest_only', label: 'Only the latest' },
+      { value: 'keep_unsurpassed', label: 'Kept too' },
     ],
   }),
   spec({
     key: 'chodesh30',
-    title: 'A {flow} on the 30th, when the next month has 29 days',
+    title: '{flow} on the 30th, next month of 29 days',
     help: '',
     options: [
-      { value: 'first_of_following', label: 'The 1st of the month after is observed' },
-      { value: 'day29', label: 'The 29th is observed' },
-      { value: 'both', label: 'Both the 29th and the 1st of the month after are observed' },
-      { value: 'none', label: 'No {veset_hachodesh} that month' },
+      { value: 'first_of_following', label: 'The 1st of the month after' },
+      { value: 'day29', label: 'The 29th' },
+      { value: 'both', label: 'Both' },
+      { value: 'none', label: 'Neither' },
     ],
   }),
   spec({
     key: 'longCycle',
-    title: 'Cycles that regularly run past day 31',
-    help: 'Three times in a row the {flow} began after day 31 from the one before.',
+    title: 'Cycles past day 31',
+    help: 'Three in a row.',
     options: [
-      { value: 'observe', label: '{onah_beinonit} and {veset_hachodesh} are observed as usual' },
-      { value: 'exempt', label: 'They are not observed, as long as a {flow} does not come earlier again' },
+      { value: 'observe', label: '{onah_beinonit} and {veset_hachodesh} as usual' },
+      { value: 'exempt', label: 'Not observed until a shorter cycle' },
     ],
   }),
   spec({
     key: 'vesatot',
-    title: 'Calculating {vesatot}',
-    help: 'Pregnancy, nursing, or on the instruction of a {rav}.',
+    title: '{vesatot}',
+    help: '',
     options: [
-      { value: 'active', label: '{vesatot} are calculated' },
-      { value: 'paused', label: 'No {vesatot} are calculated for now' },
+      { value: 'active', label: 'Calculated' },
+      { value: 'paused', label: 'Paused' },
     ],
   }),
   spec({
@@ -173,7 +173,7 @@ export const HALACHIC_CHOICES: ChoiceSpec[] = [
     title: '{yom_tov}',
     help: '',
     options: [
-      { value: 'diaspora', label: 'Outside Israel (two days)' },
+      { value: 'diaspora', label: 'Outside Israel' },
       { value: 'israel', label: 'Israel' },
     ],
   }),
@@ -181,13 +181,13 @@ export const HALACHIC_CHOICES: ChoiceSpec[] = [
 
 /** Presets offered for nightfall; any other value can be typed in. */
 export const TZEIT_PRESETS: Array<{ rule: TzeitRule; label: string }> = [
-  { rule: { kind: 'degrees', value: 8.5 }, label: 'The sun 8.5 degrees below the horizon' },
-  { rule: { kind: 'degrees', value: 7.083 }, label: 'The sun 7.083 degrees below the horizon' },
+  { rule: { kind: 'degrees', value: 8.5 }, label: 'Sun 8.5° below the horizon' },
+  { rule: { kind: 'degrees', value: 7.083 }, label: 'Sun 7.083° below the horizon' },
   { rule: { kind: 'minutes', value: 50 }, label: '50 minutes after {sunset}' },
   { rule: { kind: 'minutes', value: 72 }, label: '72 minutes after {sunset} (Rabbeinu Tam)' },
 ];
 
-export const TZEIT_TITLE = '{nightfall}, for the time of {immersion}';
+export const TZEIT_TITLE = '{nightfall}';
 
 /** The choices with every term filled in for one language. */
 export function choicesFor(lang: TermLanguage): ChoiceSpec[] {

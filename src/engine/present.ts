@@ -308,7 +308,7 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
         if (m.restNight) notes.push('Shabbat or Yom Tov night, prepare before');
         else if (m.afterRestDay) notes.push('after Shabbat or Yom Tov');
         const clash = t.onot.some(o => o.onMikvahNight && o.onah.abs === m.nightAbs);
-        if (clash) notes.push('it is also an onah, ask a rav');
+        if (clash) notes.push('also an onah');
         const tail = notes.length ? ` (${notes.join('; ')})` : '';
         push(
           `mikvah:${open.startId}:${open.hefsekAbs}:${m.nightAbs}`,
@@ -331,7 +331,7 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
       const to = `${clock12(b.end, tz, 'ceil')} ${toDay}`;
       const why = reasonsEnglish(b.reasons);
       const orZaruaOnly = b.reasons.every(r => r.kind === 'or_zarua') ? 'Or Zarua of ' : '';
-      const clash = b.onMikvahNight ? ' Mikvah night too, ask a rav.' : '';
+      const clash = b.onMikvahNight ? ' Mikvah night too.' : '';
       push(
         `onah:${b.firstIndex}:${Math.round((b.end - b.start) / MINUTE)}`,
         'onah',

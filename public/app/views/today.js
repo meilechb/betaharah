@@ -209,7 +209,6 @@ function statusCard() {
   // The next onat perishah is shown here only while she is tehorah; during a niddah period it is
   // in "Coming up", so that it does not stand next to the task of the day.
   const nextOnah = S.status.phase === 'tehorah' ? S.upcoming.find(x => x.kind === 'onah') : null;
-  const sunToday = S.grid ? S.grid.days.find(d => d.date === today()) : null;
   return h(
     'section',
     { class: 'card status status-card', 'aria-labelledby': 'status-headline' },
@@ -226,7 +225,6 @@ function statusCard() {
           h('span', {}, h('strong', {}, cap(t('Next {onat_perishah}: '))), plainTitle(nextOnah) + ', ' + nextOnah.when + '.'),
         )
       : null,
-    sunToday && sunToday.sunset ? h('p', { class: 'sun-line' }, icon('moon', { size: 'sm' }), cap(t('{sunset} today: ')) + sunToday.sunset + '.') : null,
     alertsPart(),
   );
 }

@@ -14,7 +14,7 @@ import type { HalachicSettings } from './settings';
 import type { FlowRecord } from './vesatot';
 
 export type LogEntry =
-  /** A flow began in this onah. `veset: false` records a flow that a rav said not to count for vesatot. */
+  /** A flow began in this onah. `veset: false` records a flow that is not counted for vesatot. */
   | { id: string; kind: 'flow'; onah: Onah; veset: boolean }
   /** Became niddah without a flow (a stain, a bedikah). Does not create vesatot. */
   | { id: string; kind: 'stain'; onah: Onah }
@@ -30,7 +30,7 @@ export type LogWarningCode =
   | 'hefsek_without_niddah'
   /** Hefsek dated before the period began; ignored. */
   | 'hefsek_before_start'
-  /** Hefsek before the minimum wait was over; the clean days start only after the wait. Ask a rav. */
+  /** Hefsek before the minimum wait was over; the clean days start only after the wait. */
   | 'hefsek_early'
   /** "Count broken" recorded when there was no count; ignored. */
   | 'broken_without_count'

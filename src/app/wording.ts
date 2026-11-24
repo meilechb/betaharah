@@ -73,40 +73,39 @@ export function warningText(code: LogWarningCode, lang: TermLanguage): string {
   const f = (s: string): string => fill(s, lang);
   switch (code) {
     case 'hefsek_without_niddah':
-      return f('A {hefsek} is recorded at a time when she was not {niddah}; it is not counted.');
+      return f('A {hefsek} when she was not {niddah} is not counted.');
     case 'hefsek_before_start':
-      return f('A {hefsek} is recorded before the period began; it is not counted.');
+      return f('A {hefsek} before the period began is not counted.');
     case 'hefsek_early':
-      return f('The {hefsek} was done before the days of waiting were over; the {clean_days} begin only after them. Ask a {rav}.');
+      return f('The {hefsek} was before the days of waiting ended; the {clean_days} begin after them.');
     case 'broken_without_count':
-      return 'A broken count is recorded when there was no count; it is not counted.';
+      return 'A broken count with no count is not counted.';
     case 'mikvah_without_niddah':
-      return f('An {immersion} is recorded at a time when she was not {niddah}; it is not counted.');
+      return f('An {immersion} when she was not {niddah} is not counted.');
     case 'mikvah_without_hefsek':
-      return f('An {immersion} is recorded with no {hefsek}; it is not counted.');
+      return f('An {immersion} with no {hefsek} is not counted.');
     case 'mikvah_too_early':
-      return f('An {immersion} is recorded before the {clean_days} were complete; it is not counted.');
+      return f('An {immersion} before the {clean_days} ended is not counted.');
     case 'mikvah_on_fast_night':
-      return f('An {immersion} is recorded on the night of {yom_kippur} or {tisha_bav}.');
+      return f('An {immersion} on the night of {yom_kippur} or {tisha_bav}.');
     case 'count_cancelled_by_flow':
       return f('A {flow} after the {hefsek}: the count is void and a new {hefsek} is needed.');
     case 'period_began_without_hefsek':
-      return f('No {hefsek} was recorded for the period before, so this is counted as a new period.');
+      return f('No {hefsek} was recorded for the period before; this is counted as a new period.');
   }
 }
 
 export function patternText(p: PatternAlert, lang: TermLanguage): string {
-  const ask = fill('Ask a {rav}.', lang);
   const step = (n: number): string => `${Math.abs(n)} ${Math.abs(n) === 1 ? 'day' : 'days'}`;
   switch (p.kind) {
     case 'kavua_chodesh':
-      return fill(`Three times in a row the {flow} began on day ${dayOfMonth(p.dayOfMonth, lang)} of the month, by ${p.part}. A {veset_kavua} for the date may have been established. ${ask}`, lang);
+      return fill(`Three times in a row the {flow} began on day ${dayOfMonth(p.dayOfMonth, lang)} of the month, by ${p.part}. A {veset_kavua} for the date may have been established.`, lang);
     case 'kavua_haflagah':
-      return fill(`Three intervals in a row of ${p.days} days, by ${p.part}. A {veset_kavua} for the interval may have been established. ${ask}`, lang);
+      return fill(`Three intervals in a row of ${p.days} days, by ${p.part}. A {veset_kavua} for the interval may have been established.`, lang);
     case 'dilug_haflagah':
-      return fill(`Three intervals in a row changing by the same step (${step(p.step)}). A {veset_hadilug} may have been established. ${ask}`, lang);
+      return fill(`Three intervals in a row changing by the same step (${step(p.step)}). A {veset_hadilug} may have been established.`, lang);
     case 'dilug_chodesh':
-      return fill(`Three times in a row the date in the month moved by the same step (${step(p.step)}). A {veset_hadilug} may have been established. ${ask}`, lang);
+      return fill(`Three times in a row the date in the month moved by the same step (${step(p.step)}). A {veset_hadilug} may have been established.`, lang);
   }
 }
 
@@ -114,9 +113,9 @@ export function noteText(n: VesatotNote, lang: TermLanguage): string {
   const f = (s: string): string => capital(fill(s, lang));
   switch (n) {
     case 'paused':
-      return f('{vesatot} are not being calculated (see the settings).');
+      return f('{vesatot} are paused.');
     case 'long_cycle_exempt':
-      return f('{onah_beinonit} and {veset_hachodesh} are not observed for now: three times in a row the {flow} began after day 31.');
+      return f('{onah_beinonit} and {veset_hachodesh} are not observed: three cycles in a row past day 31.');
     case 'haflagah_previous_hefsek_missing':
       return f('The {veset_haflagah} cannot be counted in {onot}: no {hefsek} is recorded for the previous period.');
     case 'haflagah_awaits_hefsek':

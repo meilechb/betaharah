@@ -31,12 +31,12 @@ describe('from the first text to a finished setup', () => {
     p.chat = started.chat;
 
     // Step 1: location.
-    expect(lines(p.send('08701'))).toEqual(['Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it.', T.CUSTOMS_INTRO]);
+    expect(lines(p.send('08701'))).toEqual([`Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it. ${T.CUSTOMS_INTRO}`]);
     expect(p.last!.changed).toBe(true);
 
     // Step 2: customs, by text.
     p.wait(1);
-    expect(lines(p.send('B'))[0]).toMatch(/^Custom 1 of 12: Days to wait before the hefsek/);
+    expect(lines(p.send('B'))[0]).toMatch(/^Custom 1 of 12: Days before the hefsek/);
     const answers = ['A', 'KEEP', 'A', 'A', 'A', 'A', 'A', 'B', 'A', 'A', 'A', 'A'];
     let last: ConverseOutput | null = null;
     for (const a of answers) {

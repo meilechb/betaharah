@@ -300,8 +300,8 @@ function boundaryNote(resolved: ResolvedOnah, timeZone: string): string {
   if (resolved.nearBoundary.boundary !== resolved.window.start) return '';
   const t = clock12(resolved.nearBoundary.boundary, timeZone, 'floor');
   return resolved.onah.part === 'night'
-    ? ` Counted as night (sunset was ${t}). If it began before sunset send 0, then the same with: day. If unsure ask a rav.`
-    : ` Counted as day (sunrise was ${t}). If it began before sunrise send 0, then the same with: night. If unsure ask a rav.`;
+    ? ` Counted as night (sunset was ${t}). If it began before sunset send 0, then the same with: day.`
+    : ` Counted as day (sunrise was ${t}). If it began before sunrise send 0, then the same with: night.`;
 }
 
 /**
@@ -376,7 +376,7 @@ export function confirmationText(result: Extract<RecordResult, { ok: true }>, re
         const m = own.planMikvah;
         text += ` Clean days ${englishDate(own.cleanDays[0] as number)} - ${englishDate(own.cleanDays[6] as number)}. Mikvah ${englishDate(m.eveningAbs)} after ${clock12(m.tzeit, tz, 'ceil')}.`;
       }
-      if (notes.includes('hefsek_early')) text += ' It was before the wait ended; ask a rav.';
+      if (notes.includes('hefsek_early')) text += ' It was before the wait ended.';
       return text + undo;
     }
     case 'mikvah': {

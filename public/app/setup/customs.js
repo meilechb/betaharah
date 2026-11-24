@@ -134,10 +134,7 @@ function introView() {
       h(
         'ul',
         { class: 'setup-points' },
-        h('li', {}, t('Customs differ on several points, such as how many days to wait before the {hefsek}. The calendar follows the customs chosen here.')),
-        h('li', {}, 'Until they are confirmed, it uses the stricter option of each.'),
-        h('li', {}, 'They can be changed at any time, in the Customs tab.'),
-        h('li', {}, t('Go over them with your {rav}.')),
+        h('li', {}, 'Until saved, the stricter option of each is used.'),
       ),
       confirmed ? alert({ kind: 'ok' }, 'Your customs were confirmed on ' + when(confirmed) + '.') : null,
       termsSwitch(),
@@ -158,7 +155,7 @@ export function customsView() {
   return screen({
     count: 'Customs, part ' + part + ' of ' + groups.length,
     title: g.title(),
-    intro: S.halachic.confirmedAt ? null : h('p', { class: 'muted small' }, '“Used now” marks the option the calendar uses until the customs are confirmed.'),
+    intro: S.halachic.confirmedAt ? null : h('p', { class: 'muted small' }, '“Used now”: the option used until saved.'),
     body: [
       g.keys.map(k => (k === 'tzeit' ? tzeitGroup() : byKey[k] ? choiceGroup(byKey[k]) : null)),
       last ? h('p', { class: 'muted small setup-confirm-note' }, 'They can be changed later in the Customs tab.') : null,

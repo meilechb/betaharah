@@ -28,17 +28,18 @@ describe('the customs as texted', () => {
 
   it('keep the meaning words of each dashboard option (spot checks of what must not be lost)', () => {
     const text = (key: string, i: number): string => SMS_CUSTOMS.find(c => c.key === key)!.options[i]!.text;
-    expect(text('minWaitDays', 0)).toMatch(/five days.*Ashkenazi.*Sephardi/);
-    expect(text('minWaitDays', 1)).toMatch(/four days.*Sephardi/);
-    expect(text('beinonitDays', 2)).toBe('day 30 and day 31');
-    expect(text('beinonitLength', 1)).toMatch(/night and the day of that date/);
-    expect(text('haflagahMethod', 1)).toMatch(/onot.*hefsek.*Shulchan Aruch HaRav.*Chabad/);
-    expect(text('longerHaflagah', 1)).toMatch(/every longer haflagah not yet passed without a flow/);
-    expect(text('chodesh30', 2)).toMatch(/both the 29th and the 1st/);
-    expect(text('longCycle', 1)).toMatch(/not observed, as long as a flow does not come earlier again/);
-    expect(text('vesatot', 1)).toMatch(/no vesatot are calculated for now/);
+    expect(text('minWaitDays', 0)).toMatch(/five.*Ashkenazi.*Sephardi/);
+    expect(text('minWaitDays', 1)).toMatch(/four.*Sephardi/);
+    expect(text('beinonitDays', 2)).toBe('days 30 and 31');
+    expect(text('beinonitLength', 1)).toBe('the full day');
+    expect(text('haflagahMethod', 1)).toMatch(/onot.*hefsek.*Chabad/);
+    expect(text('longerHaflagah', 1)).toBe('kept too');
+    expect(text('chodesh30', 2)).toBe('both');
+    expect(text('longCycle', 1)).toMatch(/not observed until a shorter cycle/);
+    expect(text('vesatot', 1)).toBe('paused');
     expect(text('tzeit', 3)).toMatch(/72 minutes after sunset \(Rabbeinu Tam\)/);
-    expect(SMS_CUSTOMS[0]!.note).toMatch(/last relations, ask a rav/);
+    // nothing tells anyone to ask anyone
+    for (const c of SMS_CUSTOMS) expect(c.question + c.note + c.options.map(o => o.text).join()).not.toMatch(/\brav\b/i);
   });
 
   it('labels: letter and short words fit an RCS button (20 characters); all GSM-7', () => {
@@ -164,10 +165,10 @@ describe('the customs as texted', () => {
     expect(p.say('NO')).toBe('Nothing was changed.');
     expect(data.halachic.vesatot).toBe('active');
     p.say('PAUSE VESATOT');
-    expect(p.say('YES')).toMatch(/^Changed: no vesatot are calculated for now, as you selected\./);
+    expect(p.say('YES')).toMatch(/^Changed: vesatot are paused\./);
     expect(data.halachic.vesatot).toBe('paused');
     expect(p.say('PAUSE VESATOT')).toMatch(/already paused/);
-    expect(p.say('RESUME VESATOT')).toBe('Changed: vesatot are calculated again, as you selected.');
+    expect(p.say('RESUME VESATOT')).toBe('Changed: vesatot are calculated again.');
     expect(data.halachic.vesatot).toBe('active');
     expect(p.say('RESUME VESATOT')).toMatch(/already calculated/);
     expect(p.say('PAUSE')).toMatch(/^Not understood; nothing was changed\. Write PAUSE VESATOT\.$/);

@@ -70,8 +70,8 @@ describe('terms', () => {
       for (const text of texts) expect(text).not.toMatch(/[{}]/);
       expect(texts.some(text => HEBREW.test(text))).toBe(lang === 'he');
     }
-    expect(choicesFor('en')[0]!.title).toBe('Days to wait before the hefsek taharah');
-    expect(choicesFor('he')[0]!.title).toBe('Days to wait before the הפסק טהרה');
+    expect(choicesFor('en')[0]!.title).toBe('Days before the hefsek taharah');
+    expect(choicesFor('he')[0]!.title).toBe('Days before the הפסק טהרה');
     // the values the engine reads are never touched by the wording
     expect(choicesFor('he').map(c => c.options.map(o => o.value))).toEqual(HALACHIC_CHOICES.map(c => c.options.map(o => o.value)));
   });
@@ -221,8 +221,8 @@ describe('calendar events', () => {
     const b: LogEntry = { id: 'b', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: true };
     const events = buildCalendar(timeline([a, b, hefsek], at(2026, 11, 30, 10)), EN);
     // the second flow comes twelve days after the first with nothing recorded between them, so it begins the period the hefsek belongs to
-    expect(events.find(e => e.key === 'mikvah:b')!.description).toContain('It falls on an onat perishah. Ask a rav.');
-    expect(events.find(e => e.kind === 'onah' && e.description.includes('It falls on the mikvah night. Ask a rav.'))).toBeDefined();
+    expect(events.find(e => e.key === 'mikvah:b')!.description).toContain('It falls on an onat perishah.');
+    expect(events.find(e => e.kind === 'onah' && e.description.includes('It falls on the mikvah night.'))).toBeDefined();
   });
 });
 
@@ -287,12 +287,13 @@ describe('wording for the dashboard', () => {
         patternText({ kind: 'dilug_chodesh', step: -2, part: 'night' }, lang),
       ];
       for (const text of texts) {
-        expect(text.length).toBeGreaterThan(20);
+        expect(text.length).toBeGreaterThan(15);
+        expect(text).not.toMatch(/Ask a|רב\b/);
         expect(text).not.toMatch(/[{}]|undefined/);
       }
     }
     expect(patternText({ kind: 'kavua_chodesh', dayOfMonth: 12, part: 'day' }, 'en')).toBe(
-      'Three times in a row the flow began on day 12 of the month, by day. A veset kavua for the date may have been established. Ask a rav.',
+      'Three times in a row the flow began on day 12 of the month, by day. A veset kavua for the date may have been established.',
     );
     expect(patternText({ kind: 'dilug_chodesh', step: -2, part: 'night' }, 'en')).toContain('moved by the same step (2 days)');
     expect(patternText({ kind: 'dilug_haflagah', step: 1, part: 'day' }, 'en')).toContain('(1 day)');

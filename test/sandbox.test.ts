@@ -310,7 +310,7 @@ describe('the same picture as an account', () => {
     ]);
     expect(r.outcomes.every(o => o.ok)).toBe(true);
     expect(r.message).toBe('Recorded: flow Tue Nov 24 by day. No hefsek was recorded before it, so it is a new period. Hefsek from Sat Nov 28.');
-    expect(r.state.alerts.map(a => a.text)).toEqual(['No hefsek taharah was recorded for the period before, so this is counted as a new period.']);
+    expect(r.state.alerts.map(a => a.text)).toEqual(['No hefsek taharah was recorded for the period before; this is counted as a new period.']);
     expect(r.state.status!.detail).toBe('Hefsek taharah from Sat, Nov 28, before 4:32 PM.');
   });
 
@@ -322,7 +322,7 @@ describe('the same picture as an account', () => {
     expect(broken!.outcomes.every(o => o.ok)).toBe(true);
     expect(pattern!.outcomes.every(o => o.ok)).toBe(true);
     expect(pattern!.state.alerts.some(a => /Three intervals in a row of 29 days/.test(a.text))).toBe(true);
-    expect(long!.state.alerts.some(a => /after day 31/.test(a.text))).toBe(true);
+    expect(long!.state.alerts.some(a => /past day 31/.test(a.text))).toBe(true);
     expect(refusals!.outcomes.map(o => (o.ok ? 'ok' : o.error))).toEqual([
       'Not recorded: no period is open. Record when the period began first.',
       'ok',
@@ -335,7 +335,7 @@ describe('the same picture as an account', () => {
       'ok',
     ]);
     // the early hefsek is kept, with the warning the dashboard shows
-    expect(refusals!.state.alerts.some(a => /before the days of waiting were over/.test(a.text))).toBe(true);
+    expect(refusals!.state.alerts.some(a => /before the days of waiting ended/.test(a.text))).toBe(true);
     expect(jerusalem!.outcomes.every(o => o.ok)).toBe(true);
     expect(jerusalem!.state.terms).toBe('he');
   });

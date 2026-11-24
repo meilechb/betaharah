@@ -32,11 +32,11 @@ function kindHelp(kind) {
     case 'flow':
       return t('A period began.');
     case 'stain':
-      return t('Only when a {rav} said it makes her {niddah}.');
+      return t('One that makes her {niddah}.');
     case 'hefsek':
       return t('Before {sunset}.');
     case 'broken':
-      return t('The {clean_days} start again.');
+      return t('The {clean_days} start again. A new {hefsek} is needed.');
     case 'mikvah':
       return t('Optional: assumed on the {mikvah_night}.');
     default:
@@ -290,10 +290,9 @@ function form() {
     'form',
     { class: 'record-form', onsubmit: submit, novalidate: true },
     h('h3', { class: 'form-title' }, entryMark(kind), h('span', {}, label)),
-    kind === 'broken' ? h('p', { class: 'help' }, t('A {flow} after the {hefsek} already cancels the count; this is for any other reason a {rav} gives.')) : null,
     whenPart(),
     kind === 'flow'
-      ? checkRow({ id: 'rec-veset', label: t('This {flow} counts for the {vesatot}'), help: t('Leave on unless a {rav} said otherwise.'), checked: rec.veset, onchange: e => (rec.veset = e.target.checked) })
+      ? checkRow({ id: 'rec-veset', label: t('Counts for the {vesatot}'), checked: rec.veset, onchange: e => (rec.veset = e.target.checked) })
       : null,
     textField({ id: 'rec-note', label: 'Note (optional)', help: 'Only you see it, in the Log.', maxlength: 200, value: rec.note, oninput: e => (rec.note = e.target.value) }),
     rec.error && !rec.fieldError ? alert({ kind: 'bad', role: 'alert', className: 'rec-error' }, h('span', { id: 'rec-error', tabindex: '-1' }, rec.error)) : null,

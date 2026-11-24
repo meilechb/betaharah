@@ -290,7 +290,6 @@ function dayActions(date) {
         addButton('dp-add-broken-night', { kind: 'broken', date, part: 'night' }, kinds.broken + ', at night'),
         addButton('dp-add-mikvah', { kind: 'mikvah', date }, kinds.mikvah + ', that evening'),
       ),
-      h('p', { class: 'small muted' }, t('A {stain} only when a {rav} said it makes her {niddah}.')),
       h(
         'form',
         {
@@ -312,7 +311,7 @@ function dayActions(date) {
         textField({ id: 'dp-time', label: 'Time', type: 'time', wide: false, value: dayUi.time, oninput: e => (dayUi.time = e.target.value) }),
         button({ label: 'Record at this time', type: 'submit', size: 'sm', attrs: { id: 'dp-add-time' } }),
       ),
-      checkRow({ id: 'dp-veset', label: t('A {flow} recorded here counts for the {vesatot}'), help: t('Leave on unless a {rav} said otherwise.'), checked: dayUi.veset, onchange: e => (dayUi.veset = e.target.checked) }),
+      checkRow({ id: 'dp-veset', label: t('Counts for the {vesatot}'), checked: dayUi.veset, onchange: e => (dayUi.veset = e.target.checked) }),
     ),
   ];
 }

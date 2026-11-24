@@ -284,7 +284,7 @@ function remindersView() {
     return screen({
       count: 'Phones, part 1 of 2',
       title: 'Text reminders',
-      body: [alert({ kind: 'info' }, 'Text messages are not available on this site yet. Reminders by text can be turned on in Settings once they are. Everything can be recorded here on the website meanwhile.')],
+      body: [alert({ kind: 'info' }, 'Texting is not available yet.')],
       back,
       main: { label: 'Continue', onclick: toSpouse },
     });
@@ -294,8 +294,8 @@ function remindersView() {
       count: 'Phones, part 1 of 2',
       title: 'Text reminders',
       body: [
-        h('div', { id: 'sp-on', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Text reminders are on for ' + (p.me ? 'this phone, ' : '') + pretty(p.number) + '. Which reminders it receives can be changed in Settings.')),
-        p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP, so nothing is sent to it. Text START from it to receive texts again.') : null,
+        h('div', { id: 'sp-on', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Text reminders are on for ' + pretty(p.number) + '.')),
+        p.optedOut ? alert({ kind: 'warn' }, 'This phone replied STOP. Text START to receive texts again.') : null,
       ],
       back,
       main: { label: 'Continue', onclick: toSpouse },
@@ -374,13 +374,13 @@ function spouseView() {
   if (!sms.ready) {
     return screen({
       ...head,
-      body: [alert({ kind: 'info' }, 'A second phone can be added once text messaging is available on this site. It can be added in Settings then.')],
+      body: [alert({ kind: 'info' }, 'Not available until texting is.')],
       back: backToReminders,
       main: { label: 'Continue', onclick: next },
     });
   }
   const list = others.length
-    ? h('div', { id: 'sp-added', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Also on this account: ' + others.map(p => pretty(p.number)).join(', ') + '. Its reminders can be turned on from that phone, or in Settings.'))
+    ? h('div', { id: 'sp-added', tabindex: '-1' }, alert({ kind: 'ok', role: 'status' }, 'Also on this account: ' + others.map(p => pretty(p.number)).join(', ') + '.'))
     : null;
   if (S.phones.length >= S.maxPhones) {
     return screen({ ...head, body: [list, h('p', { class: 'muted' }, 'This account has the most phones it can have (' + S.maxPhones + ').')], back: backToReminders, main: { label: 'Continue', onclick: next } });
@@ -399,7 +399,7 @@ function spouseView() {
     ...head,
     intro: others.length
       ? null
-      : 'For husband and wife to share this account. Add only a phone whose owner has agreed.',
+      : 'For husband and wife. Only a phone whose owner agreed.',
     body: [list, others.length ? h('h3', {}, 'Add another phone') : null, body],
     back: backToReminders,
     skip: others.length ? null : { label: 'Skip this step', onclick: next },
@@ -416,7 +416,7 @@ export function phonesView() {
 export function doneView() {
   const todo = [];
   if (!S.app.place) todo.push({ text: 'Choose the location', step: 'place' });
-  if (!S.halachic.confirmedAt) todo.push({ text: t('Confirm your customs, ideally with your {rav}'), step: 'customs' });
+  if (!S.halachic.confirmedAt) todo.push({ text: 'Save your customs', step: 'customs' });
   if (S.app.place && S.entryCount === 0) todo.push({ text: t('Record the most recent {flow}'), step: 'dates' });
 
   const sms = S.sms;
@@ -426,7 +426,7 @@ export function doneView() {
       'div',
       { class: 'setup-texting' },
       h('h3', {}, icon('message'), 'Recording by text message'),
-      viaGoogle() && !S.phones.length ? h('p', { class: 'muted' }, 'Texts are accepted from a phone on this account. Add your phone in Settings to record by text.') : null,
+      viaGoogle() && !S.phones.length ? h('p', { class: 'muted' }, 'Add your phone in Settings to record by text.') : null,
       h('p', {}, 'Text one of these to ', h('strong', { class: 'nowrap' }, pretty(sms.number)), ':'),
       commandsTable(sms),
     );

@@ -385,7 +385,7 @@ function resultView() {
     el(
       'div',
       { class: 'try-cta' },
-      el('p', {}, 'Nothing here was saved. An account does this with your dates, by text and in your calendar app.'),
+      el('p', {}, 'Nothing here was saved.'),
       el(
         'div',
         { class: 'try-actions' },
@@ -421,7 +421,7 @@ function nextStep(s) {
   const kind = 'hefsek';
   const full = T.entries.length >= (T.info ? T.info.maxEntries : 12);
   const ahead = T.next.date > T.today;
-  if (full) return el('div', { class: 'try-card try-next' }, el('p', { class: 'try-small' }, 'That is as many dates as can be tried here. Start again, or sign up to keep going.'));
+  if (full) return el('div', { class: 'try-card try-next' }, el('p', { class: 'try-small' }, 'That is as many dates as can be tried here.'));
   return el(
     'form',
     {
@@ -478,7 +478,7 @@ function nextStep(s) {
           )
         : null,
     ),
-    ahead ? el('p', { class: 'try-small' }, 'That day is after today. Make it today first, to add it.') : null,
+    ahead ? el('p', { class: 'try-small' }, 'That day is after today.') : null,
   );
 }
 

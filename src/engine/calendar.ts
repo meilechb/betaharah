@@ -119,7 +119,7 @@ function onahEvent(o: OnahView, opts: CalendarOptions): CalendarEvent {
   }
   // The event's own date and hours are not repeated: the reasons, then what is done.
   const lines = [...o.reasons.map(r => reasonText(r, lang)), o.veset ? fill('Separation, and a {bedikah}.', lang) : 'Separation.'];
-  if (o.onMikvahNight) lines.push(fill('It falls on the {mikvah_night}. Ask a {rav}.', lang));
+  if (o.onMikvahNight) lines.push(fill('It falls on the {mikvah_night}.', lang));
   return {
     key,
     kind: 'onah',
@@ -156,7 +156,7 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
   const hefsek = capital(term('hefsek', lang));
   if (p.hefsekAbs !== null) {
     const lines: string[] = [];
-    if (p.hefsekEarly) lines.push(fill('Done before the days of waiting were over; the {clean_days} begin after them. Ask a {rav}.', lang));
+    if (p.hefsekEarly) lines.push(fill('Before the days of waiting ended; the {clean_days} begin after them.', lang));
     out.push({
       key: `hefsek:${p.startId}`,
       kind: 'hefsek',
@@ -217,7 +217,7 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
     if (m.restNight) lines.push(fill('The night of {shabbat} or {yom_tov}: prepare beforehand.', lang));
     if (m.afterRestDay && !m.restNight) lines.push(fill('The night after {shabbat} or {yom_tov}.', lang));
     if (m.afterRestDay && m.restNight) lines.push(fill('The day before is {shabbat} or {yom_tov}: prepare before that.', lang));
-    if (clash) lines.push(fill('It falls on an {onat_perishah}. Ask a {rav}.', lang));
+    if (clash) lines.push(fill('It falls on an {onat_perishah}.', lang));
     if (p.projected) lines.push(fill(PROJECTED_NOTE, lang));
     out.push({
       key: `mikvah:${p.startId}`,

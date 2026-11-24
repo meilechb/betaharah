@@ -323,19 +323,25 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.click('#setup-main');
     await heading('Your customs');
     const t = await page.textContent('.setup-card');
-    for (const phrase of ['The calendar follows the customs chosen here.', 'Until they are confirmed, it uses the stricter option of each.', 'They can be changed at any time', 'Go over them with your rav.']) {
+    for (const phrase of ['Until saved, the stricter option of each is used.']) {
       if (!t.includes(phrase)) throw new Error('missing: ' + phrase);
     }
+    if (/\brav\b/i.test(t)) throw new Error('the screen tells people to ask a rav');
     await shot('24-setup-customs');
     // the English/Hebrew switch works here too, and keeps the focus on itself
+    const termsNow = async want => {
+      for (let i = 0; i < 25 && (await api('GET', '/api/state')).state.app.terms !== want; i += 1) await page.waitForTimeout(200);
+      if ((await api('GET', '/api/state')).state.app.terms !== want) throw new Error('the terms are not ' + want);
+    };
     await page.click('#setup-terms-he');
-    await expectText('.setup-card', 'הפסק טהרה');
+    await termsNow('he');
+    await page.waitForSelector('#setup-terms-he[aria-pressed="true"]');
     if ((await page.evaluate(() => document.activeElement.id)) !== 'setup-terms-he') throw new Error('focus lost after switching');
     await shot('24-setup-customs-hebrew');
     await page.click('#setup-terms-en');
-    await expectText('.setup-card', 'before the hefsek taharah');
+    await termsNow('en');
     await page.click('#setup-skip');
-    await heading('When did the most recent flow begin?');
+    await heading('When did the last period begin?');
     const st = (await api('GET', '/api/state')).state;
     if (st.halachic.confirmedAt !== null) throw new Error('confirmed by "keep defaults"');
   });
@@ -361,7 +367,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     for (const c of st.halachic.choices) if (!titles.includes(c.title)) throw new Error('choice not shown: ' + c.title);
     if (!titles.includes(st.halachic.tzeitTitle)) throw new Error('nightfall not shown');
     await page.click('#setup-confirm-customs');
-    await heading('When did the most recent flow begin?');
+    await heading('When did the last period begin?');
     const after = (await api('GET', '/api/state')).state;
     if (!after.halachic.confirmedAt || after.halachic.settings.minWaitDays !== '4') throw new Error('not confirmed or not saved');
   });
@@ -375,30 +381,27 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await expectText('.setup-error', 'Choose whether it began by day or at night.');
     await page.check('#r-sd-part-day');
     await page.click('#sd-record');
-    await heading('Has the hefsek taharah been done since then?');
+    await heading('Was the hefsek taharah done?');
     await expectText('#sd-recorded', 'Recorded');
     await shot('27-setup-hefsek');
     await page.fill('#sd-date', isoDaysAgo(15));
     await page.click('#sd-record');
-    await heading('Has the immersion taken place since then?');
+    // the immersion is not asked for
+    await heading('Your recent dates');
     await page.click('#sd-undo');
-    await heading('Has the hefsek taharah been done since then?');
-    await expectText('#sd-note', 'That date was removed.');
+    await heading('Was the hefsek taharah done?');
+    await expectText('#sd-note', 'Removed.');
     await page.fill('#sd-date', isoDaysAgo(15));
-    await page.click('#sd-record');
-    await heading('Has the immersion taken place since then?');
-    await shot('28-setup-immersion');
-    await page.fill('#sd-date', isoDaysAgo(8));
     await page.click('#sd-record');
     await heading('Your recent dates');
     await shot('29-setup-dates-summary');
     const st = (await api('GET', '/api/state')).state;
-    if (st.entryCount !== 3) throw new Error('entries: ' + st.entryCount);
+    if (st.entryCount !== 2) throw new Error('entries: ' + st.entryCount);
   });
 
   await step('setup: dates, the server’s refusal is shown at the field', async () => {
     await page.click('#setup-back');
-    await heading('Has the immersion taken place since then?');
+    await heading('Was the hefsek taharah done?');
     await page.fill('#sd-date', isoDaysAgo(30));
     await page.click('#sd-record');
     await page.waitForSelector('.field .error');
@@ -419,11 +422,11 @@ async function variant(browser, name, width, scheme, offset, shots) {
 
   await step('setup: phones, this phone must be confirmed first; the spouse’s phone', async () => {
     await heading('Text reminders to this phone');
-    await expectText('.setup-card', 'confirm that it is yours');
+    await expectText('.setup-card', 'with a code texted to it');
     await shot('33-setup-phone-confirm');
     await page.click('#setup-skip');
     await heading('Your spouse’s phone');
-    await expectText('.setup-card', 'Add only a phone whose owner has agreed.');
+    await expectText('.setup-card', 'Only a phone whose owner agreed.');
     if ((await page.textContent('#sp-number-help')) !== CONSENT_CODE) throw new Error('consent wording missing under the spouse’s number');
     let calls = 0;
     await page.route('**/api/phones/code', async route => {
@@ -650,7 +653,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await clean('43-google-calendar');
     await page.click('#setup-skip');
     await heading('Your phone');
-    await expectText('.setup-card', 'to get reminders by text and to record by text');
+    await expectText('.setup-card', 'For reminders and recording by text');
     if ((await page.textContent('#sp-own-number-help')) !== CONSENT_CODE) throw new Error('consent wording missing under the number');
     await clean('44-google-phone');
     await page.fill('#sp-own-number', local(added));

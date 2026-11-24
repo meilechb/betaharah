@@ -1056,8 +1056,8 @@ describe('settings', () => {
     expect(en.words.hefsek).toBe('hefsek taharah');
     expect(en.status.headline).toBe('Niddah, before the hefsek taharah');
     expect(en.labels.kinds).toEqual({ flow: 'Flow', stain: 'Stain', hefsek: 'Hefsek taharah', broken: 'Count broken', mikvah: 'Immersion' });
-    expect(en.halachic.choices[0].title).toBe('Days to wait before the hefsek taharah');
-    expect(en.halachic.tzeitTitle).toBe('Nightfall, for the time of immersion');
+    expect(en.halachic.choices[0].title).toBe('Days before the hefsek taharah');
+    expect(en.halachic.tzeitTitle).toBe('Nightfall');
     expect(en.entries[0].text).toBe('Flow: Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
     expect(en.upcoming.map((e: any) => e.title)).toContain('Hefsek taharah (by 4:33 PM)');
     expect(JSON.stringify(en)).not.toMatch(/[֐-׿]/);
@@ -1068,7 +1068,7 @@ describe('settings', () => {
     expect(he.status.headline).toBe('נדה, before the הפסק טהרה');
     expect(he.labels.kinds).toEqual({ flow: 'ראייה', stain: 'כתם', hefsek: 'הפסק טהרה', broken: 'Count broken', mikvah: 'טבילה' });
     expect(he.labels.reminders.onah).toBe('עונת פרישה');
-    expect(he.halachic.choices[0].title).toBe('Days to wait before the הפסק טהרה');
+    expect(he.halachic.choices[0].title).toBe('Days before the הפסק טהרה');
     expect(he.entries[0].text).toBe('ראייה: Sunday, י״ב כסלו תשפ״ז (Nov 22, 2026), by day');
     expect(he.today.hebrew).toBe('Monday, י״ג כסלו תשפ״ז');
     expect(he.upcoming.map((e: any) => e.title)).toContain('הפסק טהרה (by 4:33 PM)');
@@ -1254,7 +1254,7 @@ describe('husband and wife on one account', () => {
     // a phone that may not record by text is told so, and nothing changes (it can still use the words that do not record)
     await text(WIFE, '1', 'ev-w');
     expect((await husband.state()).entries).toEqual([]);
-    expect(textsTo(WIFE).filter(t => !t.startsWith('Betaharah code'))).toEqual(['This phone may not record entries. That is changed on the website, under Settings.']);
+    expect(textsTo(WIFE).filter(t => !t.startsWith('Betaharah code'))).toEqual(['This phone may not record entries (see Settings on the website).']);
   });
 
   it('turning reminders on for a phone records the consent and sends one confirmation', async () => {
@@ -2320,7 +2320,7 @@ describe('the test account', () => {
 
     // a phone that may not record by text is told so
     await c.put('/api/phones', { number: DEMO_NUMBER, name: 'Test phone', canUpdate: false, reminders: [], texts: true });
-    expect(await demoText(c, '1')).toBe('This phone may not record entries. That is changed on the website, under Settings.');
+    expect(await demoText(c, '1')).toBe('This phone may not record entries (see Settings on the website).');
     s = await c.state();
     expect(s.entryCount).toBe(14);
     expect(s.messages[1]).toMatchObject({ direction: 'in', body: '1', status: 'simulated' });

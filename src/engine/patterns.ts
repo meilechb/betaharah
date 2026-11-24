@@ -2,7 +2,7 @@
  * Detects histories that may have established a veset kavua.
  *
  * The engine never applies a veset kavua by itself: whether one has been
- * established, and what follows from it, is a question for a rav. These
+ * established, and what follows from it, is not decided here. These
  * checks only raise the question.
  */
 import { hebrewOfAbs, nextHebrewMonth } from './hebrew';
