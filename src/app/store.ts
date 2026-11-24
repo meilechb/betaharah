@@ -154,6 +154,8 @@ function parseHousehold(raw: unknown): HouseholdData {
     queue: Array.isArray(d.queue) ? d.queue : [],
     usage: d.usage && typeof d.usage.month === 'string' && typeof d.usage.texts === 'number' ? d.usage : { month: '', texts: 0 },
     seenTexts: Array.isArray(d.seenTexts) ? d.seenTexts : [],
+    welcomedAt: typeof d.welcomedAt === 'number' ? d.welcomedAt : null,
+    demo: d.demo === true,
   };
 }
 
@@ -248,6 +250,11 @@ export async function setRefresh(db: D1Database, id: string, at: number): Promis
 export async function householdsToWake(db: D1Database, now: number, limit: number): Promise<string[]> {
   const { results } = await db.prepare('SELECT id FROM households WHERE wake_at <= ? ORDER BY wake_at LIMIT ?').bind(now, limit).all<{ id: string }>();
   return results.map(r => r.id);
+}
+
+/** True if this household has a reminder due. */
+export async function isDueToWake(db: D1Database, id: string, now: number): Promise<boolean> {
+  return (await db.prepare('SELECT 1 AS due FROM households WHERE id = ? AND wake_at <= ?').bind(id, now).first<{ due: number }>()) !== null;
 }
 
 /** Stops the periodic job from opening a household whose data cannot be read. */

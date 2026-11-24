@@ -23,6 +23,40 @@ It shows totals, never any account's data. There you:
 3. **Enter the keys** for Telnyx and, optionally, Google.
 4. **Make invitations.**
 5. **Delete an account** if someone asks and cannot do it themselves.
+6. **Open the test account** (see below).
+
+## Test account
+
+The console can open a test account, to try every feature on the live site,
+text messages included, before Telnyx is set up and without sending any
+text.
+
+- "Open the test account" deletes the test account if there is one, makes a
+  new one, and signs your browser in to it. Its phone is (732) 555-0100,
+  named "Test phone"; a second phone, (732) 555-0199, is named "Spouse
+  (example)". Numbers from 555-0100 to 555-0199 are reserved for fiction and
+  are never real phones.
+- It starts fully set up in Lakewood, NJ, with four past cycles and a
+  period that began about nine days ago, so it opens in the seven clean
+  days, with reminders and a coming mikvah night.
+- No text is ever sent for it. Replies, reminders, the "reminders are on"
+  text, test texts and the codes for adding a phone are recorded in its
+  Log as "simulated" instead. Nothing is counted against the site's limits.
+- The dashboard has a box for sending a text from the test phone. It is
+  answered exactly as a real text would be (commands, STOP, START, HELP),
+  and the reply is shown on the page.
+- A phone added to it must have a number from 555-0100 to 555-0199. The code
+  is shown on the page instead of being texted.
+- Its reminders are "sent" by the periodic job at their times, and appear in
+  its Log.
+- To come back to it later, set a password inside it (Settings) and sign in
+  with (732) 555-0100 and that password, or open it again from the console,
+  which starts it fresh.
+- "Delete the test account" removes it. It is listed among the accounts like
+  any other while it exists.
+
+The site never texts a number from 555-0100 to 555-0199: sign-in codes,
+one-number invitations and the console's test text refuse them.
 
 ## Before text messaging works
 

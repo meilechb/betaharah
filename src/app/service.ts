@@ -5,6 +5,7 @@
  * texts, and the periodic job.
  */
 import { fingerprint, randomCode } from './crypto';
+import { DEMO_NUMBER } from './demo';
 import type { Deps, Env } from './env';
 import { GoogleCalendar, GoogleError, refreshAccessToken } from './google';
 import { compute, runCommand, type Computed } from './household';
@@ -20,6 +21,7 @@ import {
   getPhone,
   householdsDue,
   householdsToWake,
+  isDueToWake,
   loadHousehold,
   loadSite,
   phoneHash,
@@ -101,15 +103,34 @@ export async function sendSms(env: Env, deps: Deps, site: Site, args: { to: stri
   return refused;
 }
 
+/** What became of a text for a household: sent, simulated (the test account), or not sent. */
+export type HouseholdSmsOutcome = { ok: true; simulated: boolean } | Extract<SmsOutcome, { ok: false }>;
+
+/**
+ * Sends one text to a phone of a household. For the test account nothing
+ * is sent and no counter of the site is touched; the text counts as
+ * delivered and is recorded as simulated.
+ */
+export async function sendHouseholdText(env: Env, deps: Deps, site: Site, demo: boolean, args: { to: string; text: string; now: number }): Promise<HouseholdSmsOutcome> {
+  if (demo) return { ok: true, simulated: true };
+  const outcome = await sendSms(env, deps, site, args);
+  return outcome.ok ? { ok: true, simulated: false } : outcome;
+}
+
+/** The status a sent text is recorded with in the household's messages. */
+export function messageStatus(outcome: HouseholdSmsOutcome): 'sent' | 'simulated' | 'not sent' {
+  return outcome.ok ? (outcome.simulated ? 'simulated' : 'sent') : 'not sent';
+}
+
 // ---------- sign-in codes ----------
 
-const CODE_RESEND_SECONDS = 60;
+export const CODE_RESEND_SECONDS = 60;
 const CODES_PER_PHONE_PER_DAY = 5;
 const CODES_PER_ADDRESS_PER_HOUR = 8;
 const CODE_GUESSES = 5;
 
 export type CodeRequest =
-  | { ok: true; delivery: Promise<SmsOutcome> }
+  | { ok: true; delivery: Promise<SmsOutcome>; /** Only for a simulated code (the test account). */ code?: string }
   | { ok: false; reason: 'wait' | 'too_many' | 'unavailable' | 'busy'; message: string };
 
 const codeHash = (env: Env, hash: string, code: string): Promise<string> => fingerprint(env.ENCRYPTION_KEY, 'code', `${hash}:${code}`);
@@ -126,15 +147,20 @@ const codeHash = (env: Env, hash: string, code: string): Promise<string> => fing
  *
  * The text itself is sent by the returned `delivery`, which the caller may
  * leave running after it has answered.
+ *
+ * With `simulate: true` (a phone added to the test account) nothing is
+ * sent and the site's counters are not touched; the code is returned so
+ * that the page can show it. The limits per number still apply.
  */
 export async function requestCode(
   env: Env,
   deps: Deps,
   site: Site,
-  args: { number: string; purpose: 'login' | 'add'; householdId: string | null; address: string; send: boolean; now: number },
+  args: { number: string; purpose: 'login' | 'add'; householdId: string | null; address: string; send: boolean; now: number; simulate?: boolean },
 ): Promise<CodeRequest> {
   const { now } = args;
-  if (!smsReady(site)) return { ok: false, reason: 'unavailable', message: 'Sign-in by text message is not available yet.' };
+  const simulate = args.simulate === true;
+  if (!simulate && !smsReady(site)) return { ok: false, reason: 'unavailable', message: 'Sign-in by text message is not available yet.' };
   const hash = await phoneHash(env, args.number);
   const existing = await getCode(env.DB, hash);
   let windowStart = now;
@@ -151,18 +177,20 @@ export async function requestCode(
   if (windowCount >= CODES_PER_PHONE_PER_DAY) {
     return { ok: false, reason: 'too_many', message: 'Too many codes were sent to this number today. Try again tomorrow, or sign in with your password.' };
   }
-  const addressKey = `code-ip:${(await fingerprint(env.ENCRYPTION_KEY, 'ip', args.address)).slice(0, 24)}`;
-  const [fromAddress, today] = await bumpMany(
-    env.DB,
-    [
-      [addressKey, HOUR],
-      [codesTodayKey(now), 2 * DAY],
-    ],
-    now,
-  );
-  if ((fromAddress ?? 0) > CODES_PER_ADDRESS_PER_HOUR) return { ok: false, reason: 'too_many', message: 'Too many codes were requested. Try again in an hour.' };
-  if ((today ?? 0) > site.config.dailyCodeLimit) {
-    return { ok: false, reason: 'busy', message: 'Sign-in by text message is paused for today. Try again tomorrow, or sign in with your password.' };
+  if (!simulate) {
+    const addressKey = `code-ip:${(await fingerprint(env.ENCRYPTION_KEY, 'ip', args.address)).slice(0, 24)}`;
+    const [fromAddress, today] = await bumpMany(
+      env.DB,
+      [
+        [addressKey, HOUR],
+        [codesTodayKey(now), 2 * DAY],
+      ],
+      now,
+    );
+    if ((fromAddress ?? 0) > CODES_PER_ADDRESS_PER_HOUR) return { ok: false, reason: 'too_many', message: 'Too many codes were requested. Try again in an hour.' };
+    if ((today ?? 0) > site.config.dailyCodeLimit) {
+      return { ok: false, reason: 'busy', message: 'Sign-in by text message is paused for today. Try again tomorrow, or sign in with your password.' };
+    }
   }
 
   const code = randomCode();
@@ -178,6 +206,7 @@ export async function requestCode(
     window_start: windowStart,
     window_count: windowCount + 1,
   });
+  if (simulate) return { ok: true, delivery: Promise.resolve({ ok: true }), code: args.send ? code : undefined };
   const delivery: Promise<SmsOutcome> = args.send ? sendSms(env, deps, site, { to: args.number, text: codeText(code), now }) : Promise.resolve({ ok: true });
   return { ok: true, delivery };
 }
@@ -299,17 +328,58 @@ export async function handleInbound(env: Env, deps: Deps, site: Site, message: I
   const hash = await phoneHash(env, message.from);
   const row = await getPhone(env.DB, hash);
   if (!row) return null;
-  if ((await bump(env.DB, `in:${hash.slice(0, 24)}`, HOUR, now)) > MAX_INBOUND_PER_HOUR) return null;
+  if (!(await allowInbound(env, hash, now))) return null;
+  const handled = await receiveText(env, deps, site, row.household_id, message, now);
+  if (!handled || !handled.refresh) return null;
+  return { household: handled.household, computed: handled.computed };
+}
 
+/** Counts one received text from a phone; false once it sent too many this hour. */
+export async function allowInbound(env: Env, phoneHashValue: string, now: number): Promise<boolean> {
+  return (await bump(env.DB, `in:${phoneHashValue.slice(0, 24)}`, HOUR, now)) <= MAX_INBOUND_PER_HOUR;
+}
+
+export interface Received {
+  /** The household as saved. */
+  household: Household;
+  /** The reply that was sent (or simulated), or null if nothing was sent. */
+  reply: string | null;
+  /** True when the household's reminders and calendar should now be refreshed. */
+  refresh: boolean;
+  /**
+   * The household's current picture: always when `refresh` is true, and
+   * otherwise when the reply needed it; else null (not worked out).
+   */
+  computed: Computed | null;
+}
+
+/**
+ * The handling of one received text, shared by the webhook and by the
+ * test account's "send a text" box: STOP, START, HELP and commands, the
+ * reply, and the record in the household's messages. For the test account
+ * the reply is not sent; both messages are recorded as simulated.
+ *
+ * Returns null when the phone is not on the household or the text was
+ * already handled.
+ */
+export async function receiveText(
+  env: Env,
+  deps: Deps,
+  site: Site,
+  householdId: string,
+  message: Pick<InboundMessage, 'eventId' | 'from' | 'text' | 'autoresponseType'>,
+  now: number,
+): Promise<Received | null> {
   const kind = inboundKind(message);
-  const changed = await changeHousehold(env, row.household_id, now, data => {
-    const none = { reply: null as string | null, refresh: false, computed: undefined as Computed | null | undefined };
+  const changed = await changeHousehold(env, householdId, now, data => {
+    const none = { handled: false, simulated: false, reply: null as string | null, refresh: false, computed: undefined as Computed | null | undefined };
     const phone = data.phones.find(p => p.number === message.from);
     if (!phone) return none;
     if (data.seenTexts.includes(message.eventId)) return none; // a repeated delivery
     data.seenTexts.push(message.eventId);
     if (data.seenTexts.length > MAX_SEEN_TEXTS) data.seenTexts.splice(0, data.seenTexts.length - MAX_SEEN_TEXTS);
-    addMessage(data, { direction: 'in', phone: lastFour(message.from), body: message.text, at: now, status: 'received' });
+    const simulated = data.demo;
+    addMessage(data, { direction: 'in', phone: lastFour(message.from), body: message.text, at: now, status: simulated ? 'simulated' : 'received' });
 
     let text: string | null = null;
     let refresh = false;
@@ -332,21 +402,24 @@ export async function handleInbound(env: Env, deps: Deps, site: Site, message: I
     if (text !== null) {
       // The reply counts against the household's monthly limit; past it, nothing is sent.
       const allowed = allowText(data, site.config.householdMonthlyLimit, now);
-      addMessage(data, { direction: 'out', phone: lastFour(message.from), body: text, at: now, status: allowed ? 'sent' : 'not sent' });
+      addMessage(data, { direction: 'out', phone: lastFour(message.from), body: text, at: now, status: allowed ? (simulated ? 'simulated' : 'sent') : 'not sent' });
       if (allowed) reply = text;
     }
-    return { reply, refresh, computed };
+    return { handled: true, simulated, reply, refresh, computed };
   });
-  if (!changed) return null;
-  const { reply, refresh, computed } = changed.result;
+  if (!changed || !changed.result.handled) return null;
+  const { simulated, refresh, computed } = changed.result;
+  let { reply } = changed.result;
   let household = changed.household;
 
-  if (reply !== null) {
-    const sent = await sendSms(env, deps, site, { to: message.from, text: reply, now });
+  if (reply !== null && !simulated) {
+    const text = reply;
+    const sent = await sendSms(env, deps, site, { to: message.from, text, now });
     if (!sent.ok) {
-      const noted = await changeHousehold(env, row.household_id, now, data => {
+      reply = null;
+      const noted = await changeHousehold(env, householdId, now, data => {
         refundText(data, now);
-        const m = data.messages.find(x => x.direction === 'out' && x.at === now && x.body === reply.slice(0, 320));
+        const m = data.messages.find(x => x.direction === 'out' && x.at === now && x.body === text.slice(0, 320));
         if (m) m.status = 'not sent';
         if (sent.reason === 'blocked') {
           const phone = data.phones.find(p => p.number === message.from);
@@ -356,8 +429,7 @@ export async function handleInbound(env: Env, deps: Deps, site: Site, message: I
       if (noted) household = noted.household;
     }
   }
-  if (!refresh) return null;
-  return { household, computed: computed === undefined ? compute(household.data, now) : computed };
+  return { household, reply, refresh, computed: computed !== undefined ? computed : refresh ? compute(household.data, now) : null };
 }
 
 // ---------- the periodic job ----------
@@ -373,20 +445,32 @@ const HOUSEHOLDS_PER_RUN = 5;
  * is recorded.
  */
 export async function sendDueReminders(env: Env, deps: Deps, site: Site, now: number): Promise<number> {
-  if (!smsReady(site)) return 0;
+  const ready = smsReady(site);
+  let ids: string[];
+  if (ready) {
+    ids = await householdsToWake(env.DB, now, HOUSEHOLDS_PER_RUN);
+  } else {
+    // While texting is not set up, only the test account's reminders, which are simulated, are dealt with.
+    const row = await getPhone(env.DB, await phoneHash(env, DEMO_NUMBER));
+    ids = row && (await isDueToWake(env.DB, row.household_id, now)) ? [row.household_id] : [];
+  }
   let sent = 0;
   let budget = REMINDERS_PER_RUN;
-  for (const id of await householdsToWake(env.DB, now, HOUSEHOLDS_PER_RUN)) {
+  for (const id of ids) {
     if (budget <= 0) break;
     try {
-      const taken = await changeHousehold(env, id, now, data => takeDue(data, now, budget, site.config.householdMonthlyLimit));
-      if (!taken || taken.result.length === 0) continue;
-      budget -= taken.result.length;
-      const results: Array<{ key: string; to: string; result: Settlement }> = [];
-      for (const q of taken.result) {
-        const outcome = await sendSms(env, deps, site, { to: q.to, text: q.text, now });
+      const taken = await changeHousehold(env, id, now, data => ({
+        demo: data.demo,
+        due: ready || data.demo ? takeDue(data, now, budget, site.config.householdMonthlyLimit) : [],
+      }));
+      if (!taken || taken.result.due.length === 0) continue;
+      const { demo, due } = taken.result;
+      budget -= due.length;
+      const results: Array<{ key: string; to: string; text: string; result: Settlement }> = [];
+      for (const q of due) {
+        const outcome = await sendHouseholdText(env, deps, site, demo, { to: q.to, text: q.text, now });
         if (outcome.ok) sent++;
-        results.push({ key: q.key, to: q.to, result: outcome.ok ? 'sent' : outcome.reason === 'failed' ? 'failed' : outcome.reason === 'blocked' ? 'blocked' : 'refused' });
+        results.push({ key: q.key, to: q.to, text: q.text, result: outcome.ok ? 'sent' : outcome.reason === 'failed' ? 'failed' : outcome.reason === 'blocked' ? 'blocked' : 'refused' });
       }
       const blocked = results.some(r => r.result === 'blocked');
       await changeHousehold(
@@ -394,7 +478,11 @@ export async function sendDueReminders(env: Env, deps: Deps, site: Site, now: nu
         id,
         now,
         data => {
-          for (const r of results) settle(data, r, r.result, now);
+          for (const r of results) {
+            settle(data, r, r.result, now);
+            // The test account's reminders appear in its messages, as they would arrive on a phone.
+            if (demo) addMessage(data, { direction: 'out', phone: lastFour(r.to), body: r.text, at: now, status: 'simulated' });
+          }
         },
         // A phone that opted out: refresh soon, so that nothing more waits for it.
         blocked ? now : undefined,

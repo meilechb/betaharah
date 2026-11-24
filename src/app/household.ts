@@ -252,7 +252,7 @@ export interface Reply {
   text: string;
   /** True if the household's data changed. */
   changed: boolean;
-  /** The picture after the change, when there was one. */
+  /** The picture after the change, or the current one when it was worked out for the reply. */
   computed?: Computed;
 }
 
@@ -268,7 +268,7 @@ export function runCommand(data: HouseholdData, text: string, now: number): Repl
 
   if (command.kind === 'status') {
     const computed = compute(data, now);
-    return { text: computed ? statusText(computed.timeline, tz) : rejectionText('no_place', null), changed: false };
+    return { text: computed ? statusText(computed.timeline, tz) : rejectionText('no_place', null), changed: false, computed: computed ?? undefined };
   }
 
   if (command.kind === 'undo') {

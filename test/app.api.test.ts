@@ -6,10 +6,11 @@ import type { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../src/app/env';
 import { createApp } from '../src/app/index';
+import { DEMO_NUMBER, DEMO_SPOUSE } from '../src/app/demo';
 import { DEFAULT_SITE_CONFIG, type SiteConfig } from '../src/app/model';
 import type { QueuedReminder } from '../src/app/model';
 import { TABLES } from '../src/app/schema';
-import { HELP_REPLY, REMINDERS_ON_TEXT, TEST_TEXT, tick } from '../src/app/service';
+import { codeText, HELP_REPLY, REMINDERS_ON_TEXT, TEST_TEXT, tick } from '../src/app/service';
 import { DEFAULT_APP_SETTINGS, PLACES } from '../src/app/settings';
 import { loadHousehold } from '../src/app/store';
 import { localToInstant } from '../src/engine/civil';
@@ -23,9 +24,10 @@ const START = at(11, 23, 10); // Monday 23 November 2026, 10:00
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-const HUSBAND = '+17325550101';
-const WIFE = '+17325550102';
-const OTHER = '+17325550199';
+// Real-looking numbers: 555-0100 to 555-0199 are reserved for fiction and the site refuses to text them (see the test account).
+const HUSBAND = '+17324440101';
+const WIFE = '+17324440102';
+const OTHER = '+17324440199';
 const OUR_NUMBER = '+18885550100';
 
 let testDb: TestDb;
@@ -277,7 +279,17 @@ describe('pages and request rules', () => {
 
   it('says what the site allows, and nothing about anyone', async () => {
     await site({ config: { signup: 'invite', contactName: 'M', contactEmail: '' } });
-    expect((await new Client().get('/api/public')).json).toEqual({ configured: true, signedIn: false, signup: 'invite', sms: true, prefixes: ['+1'], contactName: 'M', contactEmail: '' });
+    expect((await new Client().get('/api/public')).json).toEqual({
+      configured: true,
+      signedIn: false,
+      signup: 'invite',
+      sms: true,
+      prefixes: ['+1'],
+      contactName: 'M',
+      contactEmail: '',
+      codeMinutes: 10,
+      resendSeconds: 60,
+    });
   });
 });
 
@@ -288,21 +300,23 @@ describe('signing up and signing in with a phone number', () => {
 
   it('a number and a texted code are all it takes', async () => {
     const c = new Client();
-    const asked = await c.post('/api/auth/code', { number: '(732) 555-0101' });
+    const asked = await c.post('/api/auth/code', { number: '(732) 444-0101' });
     expect(asked.status).toBe(200);
     expect(asked.json).toEqual({ ok: true });
     expect(world.telnyx.sent).toHaveLength(1);
     expect(world.telnyx.sent[0]).toMatchObject({ from: OUR_NUMBER, to: HUSBAND });
     expect(world.telnyx.sent[0]!.text).toMatch(/^Betaharah code: \d{6}\. It expires in 10 minutes\. Do not share it\.$/);
 
-    const verified = await c.post('/api/auth/verify', { number: '732-555-0101', code: lastCode(HUSBAND) });
+    const verified = await c.post('/api/auth/verify', { number: '732-444-0101', code: lastCode(HUSBAND) });
     expect(verified.status).toBe(200);
     expect(verified.json).toEqual({ ok: true, created: true });
     expect(c.lastSetCookie).toMatch(/^bt_session=[^;]+; Path=\/; HttpOnly; SameSite=Lax; Max-Age=5184000; Secure$/);
 
     const s = await c.state();
     expect(s.phones).toEqual([{ number: HUSBAND, name: '', canUpdate: true, reminders: expect.any(Array), verified: true, texts: false, optedOut: false, me: true }]);
-    expect(s.account).toEqual({ number: HUSBAND, hasPassword: false, fresh: true });
+    expect(s.account).toEqual({ number: HUSBAND, hasPassword: false, fresh: true, welcomed: false });
+    expect(s.demo).toBe(false);
+    expect(s.sms.simulated).toBe(false);
     expect(s.terms).toBe('en');
     expect(s.status).toBeNull(); // no location yet
     expect(s.setup.map((x: any) => [x.key, x.done])).toEqual([['place', false], ['customs', false], ['entry', false], ['calendar', false], ['texts', false]]);
@@ -372,7 +386,7 @@ describe('signing up and signing in with a phone number', () => {
 
   it('refuses numbers it cannot use, without texting anything', async () => {
     const c = new Client();
-    for (const number of ['555-0101', 'hello', '', null, '+44 20 7946 0958']) {
+    for (const number of ['444-0101', 'hello', '', null, '+44 20 7946 0958']) {
       const r = await c.post('/api/auth/code', { number });
       expect(r.status, String(number)).toBe(400);
     }
@@ -416,27 +430,27 @@ describe('limits on sign-in codes', () => {
   it('eight an hour from one network address, whatever the numbers', async () => {
     await site();
     const c = new Client('203.0.113.77');
-    for (let i = 0; i < 8; i++) expect((await c.post('/api/auth/code', { number: `+1732555020${i}` })).status).toBe(200);
-    const ninth = await c.post('/api/auth/code', { number: '+17325550209' });
+    for (let i = 0; i < 8; i++) expect((await c.post('/api/auth/code', { number: `+1732444020${i}` })).status).toBe(200);
+    const ninth = await c.post('/api/auth/code', { number: '+17324440209' });
     expect(ninth.status).toBe(429);
     expect(world.telnyx.sent).toHaveLength(8);
     // someone else is not affected
-    expect((await new Client('203.0.113.78').post('/api/auth/code', { number: '+17325550210' })).status).toBe(200);
+    expect((await new Client('203.0.113.78').post('/api/auth/code', { number: '+17324440210' })).status).toBe(200);
     world.clock.now += HOUR + 1000;
-    expect((await c.post('/api/auth/code', { number: '+17325550211' })).status).toBe(200);
+    expect((await c.post('/api/auth/code', { number: '+17324440211' })).status).toBe(200);
   });
 
   it('a daily total for the whole site, which the operator sets', async () => {
     await site({ config: { dailyCodeLimit: 2 } });
-    expect((await new Client('203.0.113.1').post('/api/auth/code', { number: '+17325550201' })).status).toBe(200);
-    expect((await new Client('203.0.113.2').post('/api/auth/code', { number: '+17325550202' })).status).toBe(200);
-    const third = await new Client('203.0.113.3').post('/api/auth/code', { number: '+17325550203' });
+    expect((await new Client('203.0.113.1').post('/api/auth/code', { number: '+17324440201' })).status).toBe(200);
+    expect((await new Client('203.0.113.2').post('/api/auth/code', { number: '+17324440202' })).status).toBe(200);
+    const third = await new Client('203.0.113.3').post('/api/auth/code', { number: '+17324440203' });
     expect(third.status).toBe(429);
     expect(third.json.error).toContain('paused for today');
     expect(world.telnyx.sent).toHaveLength(2);
     // the count lasts the day, not the hour
     world.clock.now += 3 * HOUR;
-    expect((await new Client('203.0.113.4').post('/api/auth/code', { number: '+17325550204' })).status).toBe(429);
+    expect((await new Client('203.0.113.4').post('/api/auth/code', { number: '+17324440204' })).status).toBe(429);
   });
 
   it('a monthly total of texts for the whole site', async () => {
@@ -494,13 +508,13 @@ describe('who may sign up', () => {
     expect(await dump()).not.toContain(invite);
     expect(made.json.state.invites).toEqual([expect.objectContaining({ kind: 'signup', note: 'cousins', maxUses: 2, uses: 0 })]);
 
-    await signIn('+17325550201', new Client('203.0.113.1'), invite);
-    await signIn('+17325550202', new Client('203.0.113.2'), invite);
+    await signIn('+17324440201', new Client('203.0.113.1'), invite);
+    await signIn('+17324440202', new Client('203.0.113.2'), invite);
     expect(await count('households')).toBe(2);
     // used up: a third number gets the usual answer and no text
     const third = new Client('203.0.113.3');
-    expect((await third.post('/api/auth/code', { number: '+17325550203', invite })).json).toEqual({ ok: true });
-    expect(textsTo('+17325550203')).toEqual([]);
+    expect((await third.post('/api/auth/code', { number: '+17324440203', invite })).json).toEqual({ ok: true });
+    expect(textsTo('+17324440203')).toEqual([]);
     expect((await op.get('/api/admin/state')).json.invites).toEqual([]);
   });
 
@@ -519,8 +533,8 @@ describe('who may sign up', () => {
     const second = new URL((await op.post('/api/admin/invites', { kind: 'signup', maxUses: 5, days: 1 })).json.link).searchParams.get('invite') as string;
     world.clock.now += DAY + MINUTE;
     expect((await new Client().get(`/api/auth/invite?code=${second}`)).status).toBe(404);
-    await new Client('203.0.113.9').post('/api/auth/code', { number: '+17325550203', invite: second });
-    expect(textsTo('+17325550203')).toEqual([]);
+    await new Client('203.0.113.9').post('/api/auth/code', { number: '+17324440203', invite: second });
+    expect(textsTo('+17324440203')).toEqual([]);
   });
 
   it('closed: nobody new, and existing accounts carry on', async () => {
@@ -538,7 +552,7 @@ describe('an account made by the operator for one number, with a password and no
   let invite: string;
   beforeEach(async () => {
     op = await site({ sms: false, config: { signup: 'invite' } });
-    const made = await op.post('/api/admin/invites', { kind: 'setup', number: '(732) 555-0101', days: 7 });
+    const made = await op.post('/api/admin/invites', { kind: 'setup', number: '(732) 444-0101', days: 7 });
     expect(made.status).toBe(200);
     invite = new URL(made.json.link).searchParams.get('invite') as string;
   });
@@ -576,7 +590,7 @@ describe('an account made by the operator for one number, with a password and no
     expect(unknown.status).toBe(401);
     expect(unknown.json).toEqual(wrong.json);
     expect(c.cookies.size).toBe(0);
-    const ok = await c.post('/api/auth/password', { number: '732-555-0101', password: 'a good long password' });
+    const ok = await c.post('/api/auth/password', { number: '732-444-0101', password: 'a good long password' });
     expect(ok.status).toBe(200);
     expect((await c.state()).account).toMatchObject({ number: HUSBAND, hasPassword: true });
     expect(c.lastSetCookie).toContain('HttpOnly');
@@ -763,11 +777,11 @@ describe('one account never sees another', () => {
     expect((await b.state()).phones).toHaveLength(1);
     // and a sign-in code is not an add-a-phone code, nor the other way round
     world.clock.now += 2 * MINUTE;
-    await new Client('203.0.113.60').post('/api/auth/code', { number: '+17325550150' });
-    expect((await a.post('/api/phones/verify', { number: '+17325550150', code: lastCode('+17325550150') })).status).toBe(400);
+    await new Client('203.0.113.60').post('/api/auth/code', { number: '+17324440150' });
+    expect((await a.post('/api/phones/verify', { number: '+17324440150', code: lastCode('+17324440150') })).status).toBe(400);
     world.clock.now += 2 * MINUTE;
-    await a.post('/api/phones/code', { number: '+17325550151' });
-    expect((await new Client('203.0.113.61').post('/api/auth/verify', { number: '+17325550151', code: lastCode('+17325550151') })).status).toBe(400);
+    await a.post('/api/phones/code', { number: '+17324440151' });
+    expect((await new Client('203.0.113.61').post('/api/auth/verify', { number: '+17324440151', code: lastCode('+17324440151') })).status).toBe(400);
     expect(await count('households')).toBe(2);
   });
 
@@ -956,7 +970,7 @@ describe('husband and wife on one account', () => {
 
   it('a second phone is added with a code texted to it, and then shares everything', async () => {
     world.clock.now += 2 * MINUTE;
-    const asked = await husband.post('/api/phones/code', { number: '(732) 555-0102' });
+    const asked = await husband.post('/api/phones/code', { number: '(732) 444-0102' });
     expect(asked.json).toEqual({ ok: true, number: WIFE });
     expect(textsTo(WIFE)).toHaveLength(1);
     expect((await husband.post('/api/phones/verify', { number: WIFE, code: '000000' })).status).toBe(400);
@@ -992,13 +1006,13 @@ describe('husband and wife on one account', () => {
     const again = await husband.post('/api/phones/code', { number: WIFE });
     expect(again.status).toBe(400);
     expect(again.json.error).toBe('That phone is already on this account.');
-    await addPhone(husband, '+17325550103');
-    await addPhone(husband, '+17325550104');
+    await addPhone(husband, '+17324440103');
+    await addPhone(husband, '+17324440104');
     world.clock.now += 2 * MINUTE;
-    const fifth = await husband.post('/api/phones/code', { number: '+17325550105' });
+    const fifth = await husband.post('/api/phones/code', { number: '+17324440105' });
     expect(fifth.status).toBe(400);
     expect(fifth.json.error).toBe('An account can have at most 4 phones.');
-    expect(textsTo('+17325550105')).toEqual([]);
+    expect(textsTo('+17324440105')).toEqual([]);
   });
 
   it('each phone has its own name, permission and reminders', async () => {
@@ -1251,7 +1265,7 @@ describe('reminders', () => {
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     expect(await waiting()).toBeGreaterThan(0);
     const all = await dump();
-    for (const hidden of ['Hefsek', 'hefsek', 'bedikah', 'mikvah', 'onah', 'Clean day', '7325550102']) expect(all.includes(hidden), hidden).toBe(false);
+    for (const hidden of ['Hefsek', 'hefsek', 'bedikah', 'mikvah', 'onah', 'Clean day', '7324440102']) expect(all.includes(hidden), hidden).toBe(false);
     // the one thing kept outside the encrypted data is when the next reminder is due
     const first = Math.min(...(await queue()).map(q => q.at));
     expect(await count('households', `wake_at = ${first}`)).toBe(1);
@@ -1587,14 +1601,27 @@ describe('what can be read in the database', () => {
     await new Client('203.0.113.70').post('/api/auth/code', { number: OTHER });
     const pending = lastCode(OTHER);
     await c.put('/api/password', { password: 'a good long password' }).catch(() => undefined);
-    await op.post('/api/admin/invites', { kind: 'setup', number: '+17325550177' });
+    await op.post('/api/admin/invites', { kind: 'setup', number: '+17324440177' });
+    // the test account, with a simulated text, a simulated added phone and its simulated code
+    expect((await op.post('/api/admin/demo')).status).toBe(200);
+    expect((await op.post('/api/demo/text', { text: '9' })).status).toBe(200);
+    const demoCode = (await op.post('/api/phones/code', { number: '+17325550150' })).json.demoCode as string;
+    expect(demoCode).toMatch(/^\d{6}$/);
 
     const all = await dump();
     for (const secret of [
-      '7325550101',
-      '7325550102',
+      '7325550100',
       '7325550199',
-      '7325550177',
+      '7325550150',
+      'Test phone',
+      'Spouse (example)',
+      'simulated',
+      'demo',
+      demoCode,
+      '7324440101',
+      '7324440102',
+      '7324440199',
+      '7324440177',
       '0101',
       'Private name',
       'a private note',
@@ -1621,7 +1648,7 @@ describe('what can be read in the database', () => {
     // what is readable: ids, times, counts, and the site's own settings
     expect(all).toContain('contactName');
     expect(all).toContain('codes:2026-11-23');
-    expect(await count('households')).toBe(1);
+    expect(await count('households')).toBe(2);
   });
 });
 
@@ -1674,7 +1701,7 @@ describe('the operator\'s console', () => {
     });
     expect(r.json.smsReady).toBe(true);
     expect(r.json.googleReady).toBe(true);
-    for (const hidden of ['7325550101', '7325550102', 'Private name', 'a private note', 'Lakewood', 'telnyx-key', 'client-secret', 'Tehorah']) {
+    for (const hidden of ['7324440101', '7324440102', 'Private name', 'a private note', 'Lakewood', 'telnyx-key', 'client-secret', 'Tehorah']) {
       expect(r.text.includes(hidden), hidden).toBe(false);
     }
   });
@@ -1697,7 +1724,7 @@ describe('the operator\'s console', () => {
 
   it('sends a test text, and deletes an account when asked', async () => {
     const op = await site({ google: true });
-    expect((await op.post('/api/admin/test-text', { to: '(732) 555-0101' })).status).toBe(200);
+    expect((await op.post('/api/admin/test-text', { to: '(732) 444-0101' })).status).toBe(200);
     expect(textsTo(HUSBAND)).toEqual([TEST_TEXT]);
     world.telnyx.failNext = 1;
     expect((await op.post('/api/admin/test-text', { to: HUSBAND })).status).toBe(502);
@@ -1715,5 +1742,333 @@ describe('the operator\'s console', () => {
     expect(world.google.revoked).toEqual(['refresh-1']);
     expect((await other.get('/api/state')).status).toBe(200);
     expect((await op.del('/api/admin/households/no-such-id')).status).toBe(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/** Nothing went to the text-message provider, and no counter of texts or codes moved. */
+async function nothingSent(): Promise<void> {
+  expect(world.telnyx.sent).toEqual([]);
+  expect(await count('counters', "key LIKE 'sms:%' OR key LIKE 'codes:%' OR key LIKE 'code-ip:%'")).toBe(0);
+}
+
+/** The operator opens the test account; the operator's browser is then signed in to it. */
+async function openDemo(op: Client): Promise<Client> {
+  const r = await op.post('/api/admin/demo');
+  expect(r.status, JSON.stringify(r.json)).toBe(200);
+  return op;
+}
+
+/** The test account's simulated text box. */
+async function demoText(c: Client, body: string): Promise<string | null> {
+  const r = await c.post('/api/demo/text', { text: body });
+  expect(r.status, JSON.stringify(r.json)).toBe(200);
+  return r.json.reply;
+}
+
+describe('the test account', () => {
+  it('the operator opens it with one click, set up, in the clean days, and signed in', async () => {
+    const op = await site({ sms: false });
+    expect((await op.get('/api/admin/state')).json.demo).toEqual({ exists: false, number: DEMO_NUMBER });
+    const r = await op.post('/api/admin/demo');
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ ok: true, number: DEMO_NUMBER });
+    expect(op.lastSetCookie).toMatch(/^bt_session=[^;]+; Path=\/; HttpOnly; SameSite=Lax; Max-Age=5184000; Secure$/);
+
+    const s = await op.state();
+    expect(s.demo).toBe(true);
+    expect(s.account).toEqual({ number: DEMO_NUMBER, hasPassword: false, fresh: true, welcomed: true });
+    expect(s.phones.map((p: any) => [p.number, p.name, p.verified, p.texts, p.canUpdate, p.me])).toEqual([
+      [DEMO_NUMBER, 'Test phone', true, true, true, true],
+      [DEMO_SPOUSE, 'Spouse (example)', true, true, true, false],
+    ]);
+    // texting is shown as working, with a made-up number while the site has none
+    expect(s.sms).toMatchObject({ ready: true, simulated: true, number: '+18885550100' });
+    expect(s.app.place.name).toBe('Lakewood, NJ');
+    expect(s.halachic.confirmedAt).not.toBeNull();
+    expect(s.entryCount).toBe(14);
+    expect(s.status.headline).toMatch(/: day 5$/);
+    expect(s.setup.filter((x: any) => x.done).map((x: any) => x.key)).toEqual(['place', 'customs', 'entry', 'texts']);
+    expect(s.reminders.length).toBeGreaterThan(5);
+    expect(s.upcoming.some((e: any) => e.kind === 'mikvah')).toBe(true);
+    expect(s.upcoming.some((e: any) => e.kind === 'onah')).toBe(true);
+    expect(s.alerts.filter((a: any) => a.level === 'warn')).toEqual([]);
+    // the reminders are waiting to be "sent"
+    expect(await waiting()).toBeGreaterThan(0);
+    expect(await count('households', 'wake_at IS NOT NULL')).toBe(1);
+
+    const admin = (await op.get('/api/admin/state')).json;
+    expect(admin.demo).toEqual({ exists: true, number: DEMO_NUMBER });
+    expect(admin.totals).toMatchObject({ households: 1, phones: 2 });
+    await nothingSent();
+  });
+
+  it('shows the site\'s own texting number once there is one', async () => {
+    const op = await openDemo(await site());
+    expect((await op.state()).sms).toMatchObject({ ready: true, simulated: true, number: OUR_NUMBER });
+  });
+
+  it('only the operator can open or delete it', async () => {
+    await site();
+    const member = await account(HUSBAND);
+    expect((await member.post('/api/admin/demo')).status).toBe(401);
+    expect((await member.del('/api/admin/demo')).status).toBe(401);
+    expect((await new Client().post('/api/admin/demo')).status).toBe(401);
+    expect((await new Client().post('/api/admin/demo', {}, { header: false })).status).toBe(400);
+    expect(await count('households')).toBe(1);
+    expect((await member.state()).demo).toBe(false);
+  });
+
+  it('opening it again starts a fresh one; deleting it removes it', async () => {
+    const op = await openDemo(await site({ sms: false }));
+    await op.put('/api/phones', { number: DEMO_SPOUSE, name: 'Changed', canUpdate: true, reminders: ['mikvah'], texts: true });
+    const old = new Client('203.0.113.80');
+    old.cookies.set('bt_session', op.cookies.get('bt_session') as string);
+    expect((await old.get('/api/state')).status).toBe(200);
+
+    world.clock.now += HOUR;
+    await openDemo(op);
+    expect(await count('households')).toBe(1);
+    expect(await count('phones')).toBe(2);
+    expect((await old.get('/api/state')).status).toBe(401);
+    expect((await op.state()).phones[1].name).toBe('Spouse (example)');
+
+    const gone = await op.del('/api/admin/demo');
+    expect(gone.status).toBe(200);
+    expect(gone.json.demo).toEqual({ exists: false, number: DEMO_NUMBER });
+    expect(await count('households')).toBe(0);
+    expect(await count('phones')).toBe(0);
+    expect((await op.get('/api/state')).status).toBe(401);
+    // deleting when there is none is harmless
+    expect((await op.del('/api/admin/demo')).status).toBe(200);
+  });
+
+  it('deleting it leaves every other account alone', async () => {
+    const op = await site();
+    const member = await account(HUSBAND);
+    await member.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    await openDemo(op);
+    expect(await count('households')).toBe(2);
+    await op.del('/api/admin/demo');
+    expect(await count('households')).toBe(1);
+    expect((await member.state()).entries).toHaveLength(1);
+  });
+
+  it('a simulated text is answered exactly as a real one would be, and nothing is sent', async () => {
+    const c = await openDemo(await site({ sms: false }));
+    const status = await demoText(c, '9');
+    expect(status).toMatch(/^Clean day 5 of 7\. Mikvah /);
+    let s = await c.state();
+    expect(s.messages.slice(0, 2).map((m: any) => [m.direction, m.phone, m.body, m.status])).toEqual([
+      ['out', '0100', status, 'simulated'],
+      ['in', '0100', '9', 'simulated'],
+    ]);
+    expect(await demoText(c, '?')).toMatch(/^1 flow began, 2 hefsek done/);
+    expect(await demoText(c, 'HELP')).toBe(HELP_REPLY);
+    expect(await demoText(c, 'what?')).toMatch(/^Not understood; nothing was changed\./);
+
+    // STOP and START: the carrier would confirm them, so the site's reply is null
+    const stopped = await c.post('/api/demo/text', { text: 'STOP' });
+    expect(stopped.json.reply).toBeNull();
+    expect(stopped.json.state.phones[0]).toMatchObject({ number: DEMO_NUMBER, optedOut: true });
+    expect(await demoText(c, '9')).toBeNull(); // not acted on while opted out
+    expect(await demoText(c, 'START')).toBeNull();
+    expect((await c.state()).phones[0].optedOut).toBe(false);
+
+    // commands change the account, and the reply comes with the new picture
+    expect(await demoText(c, '0')).toBe('Nothing recent to undo. Older entries can be removed on the website.');
+    const flow = await c.post('/api/demo/text', { text: '1' });
+    expect(flow.json.reply).toBe('Recorded: flow Mon Nov 23 by day. The count is cancelled; a new hefsek is needed. 0 to undo.');
+    expect(flow.json.state.entryCount).toBe(15);
+    expect(flow.json.state.entries[0]).toMatchObject({ kind: 'flow', source: 'sms' });
+    expect(flow.json.state.status.headline).toBe('Niddah, before the hefsek taharah');
+    const undo = await c.post('/api/demo/text', { text: '0' });
+    expect(undo.json.reply).toMatch(/^Removed: flow Mon Nov 23 by day\. Clean day 5 of 7\./);
+    expect(undo.json.state.entryCount).toBe(14);
+
+    // a phone that may not record by text gets no answer
+    await c.put('/api/phones', { number: DEMO_NUMBER, name: 'Test phone', canUpdate: false, reminders: [], texts: true });
+    expect(await demoText(c, '1')).toBeNull();
+    s = await c.state();
+    expect(s.entryCount).toBe(14);
+    expect(s.messages[0]).toMatchObject({ direction: 'in', body: '1', status: 'simulated' });
+
+    for (const bad of [{ text: '' }, { text: '   ' }, { text: 'x'.repeat(321) }, { text: 9 }, {}]) expect((await c.post('/api/demo/text', bad)).status, JSON.stringify(bad)).toBe(400);
+    expect((await c.post('/api/demo/text', { text: '9' }, { header: false })).status).toBe(400);
+    await nothingSent();
+  });
+
+  it('only the test account can send a simulated text', async () => {
+    await site();
+    const member = await account(HUSBAND);
+    const r = await member.post('/api/demo/text', { text: '1' });
+    expect(r.status).toBe(403);
+    expect((await member.state()).entries).toEqual([]);
+    expect((await new Client().post('/api/demo/text', { text: '1' })).status).toBe(401);
+    expect(textsTo(HUSBAND).filter(t => !t.startsWith('Betaharah code'))).toEqual([]);
+  });
+
+  it('its reminders arrive in its messages, before texting is set up', async () => {
+    const c = await openDemo(await site({ sms: false }));
+    const next = (await c.state()).reminders[0];
+    world.clock.now = next.at + MINUTE;
+    await tick(env, world.deps);
+    const arrived = (await c.state()).messages.filter((m: any) => m.direction === 'out' && m.body === next.text);
+    expect(arrived.map((m: any) => [m.phone, m.status]).sort()).toEqual([
+      ['0100', 'simulated'],
+      ['0199', 'simulated'],
+    ]);
+    expect((await queue()).filter(q => q.status === 'sent')).toHaveLength(2);
+    // once only
+    world.clock.now += MINUTE;
+    await tick(env, world.deps);
+    expect((await c.state()).messages.filter((m: any) => m.body === next.text)).toHaveLength(2);
+    await nothingSent();
+  });
+
+  it('its reminders are simulated also once texting is set up, while a real account\'s are sent', async () => {
+    const op = await site();
+    const member = await account(HUSBAND);
+    await textsOn(member, HUSBAND, ['bedikah_afternoon']);
+    // the member's hefsek on the same day as the test account's, so that both have the same reminders
+    await member.post('/api/entries', { kind: 'flow', date: '2026-11-14', part: 'day' });
+    world.clock.now = at(11, 18, 16);
+    await member.post('/api/entries', { kind: 'hefsek', when: 'now' });
+    world.clock.now = START;
+    const before = world.telnyx.sent.length;
+    const c = await openDemo(op);
+    const next = (await c.state()).reminders.find((r: any) => r.kind === 'bedikah_afternoon');
+    world.clock.now = next.at + MINUTE;
+    await tick(env, world.deps);
+    expect(world.telnyx.sent.slice(before).map(t => t.to)).toEqual([HUSBAND]);
+    expect((await c.state()).messages.filter((m: any) => m.body === next.text && m.status === 'simulated')).toHaveLength(2);
+  });
+
+  it('adding a phone shows the code on the page instead of texting it', async () => {
+    const c = await openDemo(await site({ sms: false }));
+    const real = await c.post('/api/phones/code', { number: '+17324440150' });
+    expect(real.status).toBe(400);
+    expect(real.json.error).toContain('555-0100 to 555-0199');
+    const asked = await c.post('/api/phones/code', { number: '(732) 555-0150' });
+    expect(asked.status).toBe(200);
+    expect(asked.json).toEqual({ ok: true, number: '+17325550150', demoCode: expect.stringMatching(/^\d{6}$/) });
+    const code = asked.json.demoCode as string;
+    expect((await c.state()).messages[0]).toMatchObject({ direction: 'out', phone: '0150', body: codeText(code), status: 'simulated' });
+    // the limits on codes for a number still apply
+    expect((await c.post('/api/phones/code', { number: '+17325550150' })).status).toBe(429);
+    expect((await c.post('/api/phones/verify', { number: '+17325550150', code: code === '000000' ? '000001' : '000000' })).status).toBe(400);
+    const added = await c.post('/api/phones/verify', { number: '+17325550150', code });
+    expect(added.status).toBe(200);
+    expect(added.json.state.phones.map((p: any) => [p.number, p.verified, p.texts])).toEqual([
+      [DEMO_NUMBER, true, true],
+      [DEMO_SPOUSE, true, true],
+      ['+17325550150', true, false],
+    ]);
+
+    // turning reminders on, and a test text: both simulated
+    await textsOn(c, '+17325550150', ['mikvah']);
+    expect((await c.state()).messages[0]).toMatchObject({ direction: 'out', phone: '0150', body: REMINDERS_ON_TEXT, status: 'simulated' });
+    const tested = await c.post('/api/phones/test', { number: '+17325550150' });
+    expect(tested.status).toBe(200);
+    expect(tested.json.state.messages[0]).toMatchObject({ direction: 'out', phone: '0150', body: TEST_TEXT, status: 'simulated' });
+    expect(tested.json.state.sms.usedThisMonth).toBeGreaterThanOrEqual(2);
+    await nothingSent();
+  });
+
+  it('a regular account cannot add a made-up number, and never sees a code', async () => {
+    await site();
+    const member = await account(HUSBAND);
+    world.clock.now += 2 * MINUTE;
+    const fictional = await member.post('/api/phones/code', { number: '+17325550150' });
+    expect(fictional.status).toBe(400);
+    expect(fictional.json.error).toContain('reserved for fiction');
+    expect(textsTo('+17325550150')).toEqual([]);
+    const real = await member.post('/api/phones/code', { number: WIFE });
+    expect(real.json).toEqual({ ok: true, number: WIFE });
+    expect(textsTo(WIFE)).toHaveLength(1);
+  });
+
+  it('made-up numbers are never texted by sign-in, invitations or the test text, and never get an account by code', async () => {
+    const op = await site();
+    await openDemo(op);
+    for (const number of [DEMO_NUMBER, DEMO_SPOUSE, '(212) 555-0142']) {
+      const c = new Client(`203.0.113.${number.length}`);
+      const asked = await c.post('/api/auth/code', { number });
+      expect(asked.status, number).toBe(200);
+      expect(asked.json).toEqual({ ok: true });
+      for (const code of ['000000', '123456']) expect((await c.post('/api/auth/verify', { number, code })).status).toBe(400);
+      expect(c.cookies.has('bt_session')).toBe(false);
+    }
+    expect(await count('households')).toBe(1); // only the test account
+
+    const invite = await op.post('/api/admin/invites', { kind: 'setup', number: '(732) 555-0142' });
+    expect(invite.status).toBe(400);
+    expect(invite.json.error).toContain('reserved for fiction');
+    const test = await op.post('/api/admin/test-text', { to: DEMO_NUMBER });
+    expect(test.status).toBe(400);
+    expect(test.json.error).toContain('reserved for fiction');
+    expect(world.telnyx.sent).toEqual([]);
+  });
+
+  it('a password set inside the test account signs in to it', async () => {
+    const c = await openDemo(await site({ sms: false }));
+    expect((await c.put('/api/password', { password: 'a good long password' })).status).toBe(200);
+    const again = new Client('203.0.113.90');
+    expect((await again.post('/api/auth/password', { number: '(732) 555-0100', password: 'a good long password' })).status).toBe(200);
+    const s = await again.state();
+    expect(s.demo).toBe(true);
+    expect(s.account).toMatchObject({ number: DEMO_NUMBER, hasPassword: true });
+  });
+
+  it('the test phone stays on it; other phones can be removed, and the account can be deleted from inside', async () => {
+    const op = await site({ sms: false });
+    const c = await openDemo(op);
+    const kept = await c.post('/api/phones/remove', { number: DEMO_NUMBER });
+    expect(kept.status).toBe(400);
+    expect(kept.json.error).toContain('test phone stays');
+    const removed = await c.post('/api/phones/remove', { number: DEMO_SPOUSE });
+    expect(removed.status).toBe(200);
+    expect(removed.json.state.phones.map((p: any) => p.number)).toEqual([DEMO_NUMBER]);
+    expect((await c.post('/api/account/delete', { confirm: 'DELETE' })).status).toBe(200);
+    expect((await op.get('/api/admin/state')).json.demo.exists).toBe(false);
+  });
+
+  it('a regular account\'s data says it is not the test account, and texts to it are really sent', async () => {
+    await site();
+    const member = await account(HUSBAND);
+    const s = await member.state();
+    expect(s.demo).toBe(false);
+    expect(s.sms).toMatchObject({ ready: true, simulated: false, number: OUR_NUMBER });
+    await text(HUSBAND, '9', 'ev-real');
+    expect(textsTo(HUSBAND).at(-1)).toBe('Tehorah.');
+    expect((await member.state()).messages.map((m: any) => m.status)).toEqual(['sent', 'received']);
+  });
+});
+
+describe('the guided first steps', () => {
+  const welcomedAt = async (): Promise<number | null> => {
+    const row = await testDb.db.prepare('SELECT id FROM households').first<{ id: string }>();
+    return (await loadHousehold(env, row!.id))!.data.welcomedAt;
+  };
+
+  it('are marked as seen once, for the whole account', async () => {
+    await site();
+    const c = await signIn(HUSBAND);
+    expect((await c.state()).account.welcomed).toBe(false);
+    expect(await welcomedAt()).toBeNull();
+    expect((await c.post('/api/welcome', {}, { header: false })).status).toBe(400);
+    expect((await new Client().post('/api/welcome')).status).toBe(401);
+    const r = await c.post('/api/welcome');
+    expect(r.status).toBe(200);
+    expect(r.json.state.account.welcomed).toBe(true);
+    expect(await welcomedAt()).toBe(START);
+    world.clock.now += HOUR;
+    await c.post('/api/welcome');
+    expect(await welcomedAt()).toBe(START);
+    // a second phone of the account sees it as done too
+    await addPhone(c, WIFE);
+    world.clock.now += 2 * MINUTE;
+    expect((await (await signIn(WIFE, new Client('203.0.113.8'))).state()).account.welcomed).toBe(true);
   });
 });

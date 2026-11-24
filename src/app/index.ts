@@ -28,6 +28,7 @@ import {
 } from './auth';
 import { checkPassword, fingerprint, hashPassword, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, randomToken } from './crypto';
 import { dashboardState, draftFromForm, FRESH_MS } from './dashboard';
+import { buildDemoData, DEMO_NUMBER, DEMO_SPOUSE, isFictionalNumber } from './demo';
 import { realDeps, type Deps, type Env } from './env';
 import { authorizationUrl, exchangeCode, GoogleCalendar, GoogleError, revokeToken } from './google';
 import { compute, confirmationText, recordEntry, rejectionText, removeEntry, whereOf, type Computed } from './household';
@@ -37,12 +38,19 @@ import { helpPage, privacyPage, termsPage } from './pages';
 import { allowText, refundText } from './queue';
 import { ensureSchema } from './schema';
 import {
+  allowInbound,
   checkCode,
+  CODE_MINUTES,
+  CODE_RESEND_SECONDS,
   codesTodayKey,
+  codeText,
   handleInbound,
+  messageStatus,
+  receiveText,
   refreshHousehold,
   REMINDERS_ON_TEXT,
   requestCode,
+  sendHouseholdText,
   sendSms,
   TEST_TEXT,
   textsThisMonthKey,
@@ -54,6 +62,7 @@ import {
   bump,
   changeHousehold,
   ConflictError,
+  createHousehold,
   createInvite,
   deleteHousehold,
   deleteInvite,
@@ -61,6 +70,7 @@ import {
   getInvite,
   getPhone,
   householdIdByLink,
+  insertPhone,
   inviteHash,
   listHouseholds,
   listInvites,
@@ -95,6 +105,9 @@ class HttpError extends Error {
     this.name = 'HttpError';
   }
 }
+
+/** The answer when someone tries to text, or make an account for, a number reserved for fiction. */
+const FICTIONAL_MESSAGE = 'Numbers from 555-0100 to 555-0199 are reserved for fiction; they are never real phones and cannot receive texts.';
 
 const PASSWORD_FAILURES = 8;
 const PASSWORD_FAILURES_PER_ADDRESS = 40;
@@ -243,6 +256,9 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       prefixes: site.config.allowedPrefixes,
       contactName: site.config.contactName,
       contactEmail: site.config.contactEmail,
+      // How long a texted code lasts, and how long before another can be asked for.
+      codeMinutes: CODE_MINUTES,
+      resendSeconds: CODE_RESEND_SECONDS,
     });
   });
 
@@ -261,7 +277,10 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     if (!prefixAllowed(number, site.config)) throw new ValidationError(prefixMessage(site.config));
     const phone = await getPhone(c.env.DB, await phoneHash(c.env, number));
     let send = phone !== null;
-    if (!phone) {
+    if (isFictionalNumber(number)) {
+      // A number reserved for fiction is never texted: it is answered like a number that may not sign up.
+      send = false;
+    } else if (!phone) {
       if (site.config.signup === 'open') {
         send = true;
       } else if (site.config.signup === 'invite' && typeof body.invite === 'string') {
@@ -281,6 +300,8 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const site = await loadSite(c.env);
     const body = await readBody(c);
     const number = tidyNumber(body.number, site.config);
+    // No sign-in code is ever sent to a number reserved for fiction, so none can be right.
+    if (isFictionalNumber(number)) throw new HttpError(400, 'That code is not right, or it has expired.');
     const check = await checkCode(c.env, { number, code: body.code, purpose: 'login', now });
     if (!check.ok) throw new HttpError(400, check.message);
     const hash = await phoneHash(c.env, number);
@@ -403,6 +424,8 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
         codesToday: await readCounter(c.env.DB, codesTodayKey(now), now),
       },
       households: await listHouseholds(c.env.DB),
+      // The test account, found by its phone; nothing of its data is read here.
+      demo: { exists: (await getPhone(c.env.DB, await phoneHash(c.env, DEMO_NUMBER))) !== null, number: DEMO_NUMBER },
       invites: (await listInvites(c.env.DB, now)).map(i => ({ id: i.hash, kind: i.kind, note: i.note, createdAt: i.created_at, expiresAt: i.expires_at, maxUses: i.max_uses, uses: i.uses })),
       urls: {
         webhook: `${origin}/webhooks/telnyx`,
@@ -449,6 +472,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     if (body.kind === 'setup') {
       const number = tidyNumber(body.number, site.config);
       if (!prefixAllowed(number, site.config)) throw new ValidationError(prefixMessage(site.config));
+      if (isFictionalNumber(number)) throw new HttpError(400, `${FICTIONAL_MESSAGE} To try the site, open the test account instead.`);
       const hash = await phoneHash(c.env, number);
       if (await getPhone(c.env.DB, hash)) throw new HttpError(400, 'That number already has an account.');
       await createInvite(c.env.DB, { ...base, kind: 'setup', phone_hash: hash, max_uses: 1 });
@@ -478,9 +502,51 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const site = await loadSite(c.env);
     const body = await readBody(c);
     const to = tidyNumber(body.to, site.config);
+    if (isFictionalNumber(to)) throw new HttpError(400, FICTIONAL_MESSAGE);
     const outcome = await sendSms(c.env, deps, site, { to, text: TEST_TEXT, now: deps.now() });
     if (!outcome.ok) throw new HttpError(502, outcome.detail);
     return c.json({ ok: true });
+  });
+
+  /** Deletes the test account, found by the phones it was made with. Only a test account is ever deleted here. */
+  const deleteDemo = async (env: Env): Promise<void> => {
+    for (const number of [DEMO_NUMBER, DEMO_SPOUSE]) {
+      const row = await getPhone(env.DB, await phoneHash(env, number));
+      if (!row) continue;
+      const household = await loadHousehold(env, row.household_id).catch(() => null);
+      if (household && !household.data.demo) throw new HttpError(409, 'A regular account uses a number of the test account; it was left alone.');
+      if (household?.data.google) await revokeToken(deps, household.data.google.refreshToken);
+      await deleteHousehold(env.DB, row.household_id);
+    }
+  };
+
+  /**
+   * Opens a fresh test account: deletes the one there was, makes a new one
+   * with a made-up history, and signs this browser in to it with its test
+   * phone. No text is sent.
+   */
+  app.post('/api/admin/demo', async c => {
+    const now = deps.now();
+    const site = await loadSite(c.env);
+    await deleteDemo(c.env);
+    const household = await createHousehold(c.env, buildDemoData(now), now);
+    for (const number of [DEMO_NUMBER, DEMO_SPOUSE]) {
+      if (!(await insertPhone(c.env.DB, await phoneHash(c.env, number), household.id, null, now))) {
+        await deleteHousehold(c.env.DB, household.id);
+        throw new HttpError(409, 'Please try again.');
+      }
+    }
+    await refreshHousehold(c.env, deps, site, household, compute(household.data, now), now);
+    const phone = await getPhone(c.env.DB, await phoneHash(c.env, DEMO_NUMBER));
+    if (!phone) throw new HttpError(409, 'Please try again.');
+    // Signed in "by code", so that the password can be set within the next minutes, as after a real sign-in.
+    c.header('Set-Cookie', await sessionCookie(c.env, phone, 'code', now, isSecure(c)));
+    return c.json({ ok: true, number: DEMO_NUMBER });
+  });
+
+  app.delete('/api/admin/demo', async c => {
+    await deleteDemo(c.env);
+    return c.json(await adminState(c));
   });
 
   app.all('/api/admin/*', c => c.json({ error: 'Not found.' }, 404));
@@ -541,19 +607,24 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
   };
 
   /** The dashboard's data. `computed` passes on a picture already worked out in this request. */
-  const stateOf = async (c: C, site: Site, household: Household, computed?: Computed | null) => {
-    const now = deps.now();
+  /** The number of the phone this session signed in with. */
+  const numberOf = async (c: C, household: Household): Promise<string | null> => {
     const session = c.get('session');
     let myNumber: string | null = null;
     for (const p of household.data.phones) {
       if ((await phoneHash(c.env, p.number)) === session.phoneHash) myNumber = p.number;
     }
+    return myNumber;
+  };
+
+  const stateOf = async (c: C, site: Site, household: Household, computed?: Computed | null) => {
+    const now = deps.now();
     return dashboardState({
       data: household.data,
       computed: computed === undefined ? compute(household.data, now) : computed,
       site,
-      session,
-      myNumber,
+      session: c.get('session'),
+      myNumber: await numberOf(c, household),
       now,
       origin: originOf(c),
     });
@@ -574,6 +645,38 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
   };
 
   app.get('/api/state', async c => c.json({ state: await stateOf(c, await loadSite(c.env), await mine(c)) }));
+
+  /** Notes that the guided first steps were shown and closed. */
+  app.post('/api/welcome', async c => {
+    const now = deps.now();
+    const site = await loadSite(c.env);
+    const { household } = await change(c, data => {
+      data.welcomedAt ??= now;
+    });
+    return c.json({ state: await stateOf(c, site, household) });
+  });
+
+  /**
+   * The test account only: a text "sent" from this session's phone, handled
+   * exactly as a real received text is (STOP, START, HELP, commands). The
+   * reply is shown on the page instead of being sent; both messages are
+   * recorded as simulated.
+   */
+  app.post('/api/demo/text', async c => {
+    const now = deps.now();
+    const site = await loadSite(c.env);
+    const body = await readBody(c);
+    const household = await mine(c);
+    if (!household.data.demo) throw new HttpError(403, 'Only the test account can simulate a text.');
+    if (typeof body.text !== 'string' || body.text.trim() === '') throw new ValidationError('Type a text to send.');
+    if (body.text.length > 320) throw new ValidationError('That text is too long.');
+    const from = await numberOf(c, household);
+    if (!from) throw new HttpError(404, 'This phone is no longer on the account.');
+    if (!(await allowInbound(c.env, c.get('session').phoneHash, now))) throw new HttpError(429, 'Too many texts in the last hour. Try again later.');
+    const received = await receiveText(c.env, deps, site, household.id, { eventId: `demo:${randomToken()}`, from, text: body.text, autoresponseType: null }, now);
+    if (!received) throw new HttpError(409, 'Please try again.');
+    return finish(c, site, received.household, received.computed ?? compute(received.household.data, now), { reply: received.reply });
+  });
 
   app.post('/api/auth/logout-all', async c => {
     await endSessions(c.env.DB, c.get('session').phoneHash);
@@ -647,11 +750,22 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const number = tidyNumber(body.number, site.config);
     if (!prefixAllowed(number, site.config)) throw new ValidationError(prefixMessage(site.config));
     const household = await mine(c);
+    const demo = household.data.demo;
+    if (demo && !isFictionalNumber(number)) {
+      throw new HttpError(400, 'The test account takes only made-up numbers, from 555-0100 to 555-0199 in any area code, for example (732) 555-0150.');
+    }
+    if (!demo && isFictionalNumber(number)) throw new HttpError(400, FICTIONAL_MESSAGE);
     const present = household.data.phones.find(p => p.number === number);
     if (present && present.verifiedAt !== null) throw new HttpError(400, 'That phone is already on this account.');
     if (!present && household.data.phones.length >= MAX_PHONES) throw new HttpError(400, `An account can have at most ${MAX_PHONES} phones.`);
-    const result = await requestCode(c.env, deps, site, { number, purpose: 'add', householdId: household.id, address: addressOf(c), send: true, now });
+    const result = await requestCode(c.env, deps, site, { number, purpose: 'add', householdId: household.id, address: addressOf(c), send: true, now, simulate: demo });
     if (!result.ok) throw new HttpError(result.reason === 'unavailable' ? 503 : 429, result.message);
+    if (demo && result.code) {
+      // Nothing is sent: the code is recorded as a simulated text and shown on the page.
+      const code = result.code;
+      await change(c, data => addMessage(data, { direction: 'out', phone: lastFour(number), body: codeText(code), at: now, status: 'simulated' }));
+      return c.json({ ok: true, number, demoCode: code });
+    }
     const outcome = await result.delivery;
     if (!outcome.ok) throw new HttpError(502, 'The code could not be sent. Check the number and try again.');
     return c.json({ ok: true, number });
@@ -685,7 +799,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const body = await readBody(c);
     const options = parsePhoneOptions(body);
     const texts = body.texts === true;
-    const { result: confirm } = await change(c, data => {
+    const { result: changed } = await change(c, data => {
       const phone = data.phones.find(p => p.number === body.number);
       if (!phone) throw new HttpError(404, 'No such phone on this account.');
       if (texts && phone.verifiedAt === null) throw new HttpError(400, 'Verify this number with a texted code before turning on reminders for it.');
@@ -694,13 +808,14 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       if (texts) phone.consentAt ??= now;
       else phone.consentAt = null;
       // One confirmation text when reminders are turned on for a phone, within the account's monthly limit.
-      return turnedOn && !phone.optedOut && allowText(data, site.config.householdMonthlyLimit, now) ? phone.number : null;
+      return { demo: data.demo, confirm: turnedOn && !phone.optedOut && allowText(data, site.config.householdMonthlyLimit, now) ? phone.number : null };
     });
+    const { confirm } = changed;
     if (confirm) {
-      const outcome = await sendSms(c.env, deps, site, { to: confirm, text: REMINDERS_ON_TEXT, now });
+      const outcome = await sendHouseholdText(c.env, deps, site, changed.demo, { to: confirm, text: REMINDERS_ON_TEXT, now });
       await change(c, data => {
         if (!outcome.ok) refundText(data, now);
-        addMessage(data, { direction: 'out', phone: lastFour(confirm), body: REMINDERS_ON_TEXT, at: now, status: outcome.ok ? 'sent' : 'not sent' });
+        addMessage(data, { direction: 'out', phone: lastFour(confirm), body: REMINDERS_ON_TEXT, at: now, status: messageStatus(outcome) });
         const phone = data.phones.find(p => p.number === confirm);
         if (phone && !outcome.ok && outcome.reason === 'blocked') phone.optedOut = true;
       });
@@ -715,6 +830,10 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const body = await readBody(c);
     const session = c.get('session');
     if (typeof body.number !== 'string') throw new ValidationError('number: required');
+    if (body.number === DEMO_NUMBER && (await mine(c)).data.demo) {
+      // The console finds the test account by this phone.
+      throw new HttpError(400, 'The test phone stays on the test account. Remove another phone, or delete the test account from the console.');
+    }
     const removed = await removePhone(c.env, session.householdId, body.number, now);
     if (!removed.ok) {
       throw new HttpError(
@@ -736,18 +855,19 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const now = deps.now();
     const site = await loadSite(c.env);
     const body = await readBody(c);
-    const { result: to } = await change(c, data => {
+    const { result: taken } = await change(c, data => {
       const phone = data.phones.find(p => p.number === body.number);
       if (!phone) throw new HttpError(404, 'No such phone on this account.');
       if (phone.verifiedAt === null) throw new HttpError(400, 'Verify this number first.');
       if (phone.optedOut) throw new HttpError(400, 'This phone replied STOP. Text START from it to receive texts again.');
       if (!allowText(data, site.config.householdMonthlyLimit, now)) throw new HttpError(429, "This account's monthly limit on text messages has been reached.");
-      return phone.number;
+      return { to: phone.number, demo: data.demo };
     });
-    const outcome = await sendSms(c.env, deps, site, { to, text: TEST_TEXT, now });
+    const { to } = taken;
+    const outcome = await sendHouseholdText(c.env, deps, site, taken.demo, { to, text: TEST_TEXT, now });
     const { household: after } = await change(c, data => {
       if (!outcome.ok) refundText(data, now);
-      addMessage(data, { direction: 'out', phone: lastFour(to), body: TEST_TEXT, at: now, status: outcome.ok ? 'sent' : 'not sent' });
+      addMessage(data, { direction: 'out', phone: lastFour(to), body: TEST_TEXT, at: now, status: messageStatus(outcome) });
       const p = data.phones.find(x => x.number === to);
       if (p && !outcome.ok && outcome.reason === 'blocked') p.optedOut = true;
     });
