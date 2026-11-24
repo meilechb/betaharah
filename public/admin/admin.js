@@ -237,6 +237,7 @@ function keysCard() {
       h('li', {}, 'In Telnyx, buy a toll-free number, create a Messaging Profile, and assign the number to it.'),
       h('li', {}, 'Submit the toll-free verification. It asks for these addresses: website ', h('code', {}, S.urls.home), ', privacy ', h('code', {}, S.urls.privacy), ', terms ', h('code', {}, S.urls.terms), '.'),
       h('li', {}, 'Set the profile’s inbound webhook address to:', h('code', { class: 'copy' }, S.urls.webhook)),
+      h('li', {}, 'For an RCS agent, set its inbound webhook to:', h('code', { class: 'copy' }, S.urls.rcsWebhook)),
       h('li', {}, 'Paste the API key, the public key and the number here.'),
     ),
     secretField('telnyxApiKey', 'Telnyx API key'),

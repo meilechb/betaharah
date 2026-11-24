@@ -32,6 +32,20 @@ describe('public copy and the dashboard shell', () => {
     expect(app).toContain("href: '/terms'");
     expect(admin).toContain('t.waiting');
     expect(admin).not.toContain('pendingReminders');
+    expect(admin).toContain('S.urls.rcsWebhook');
+  });
+
+  it('the RCS brand images are the sizes Telnyx asks for', () => {
+    const logo = readFileSync('public/brand/logo-224.png');
+    const banner = readFileSync('public/brand/banner-1440x448.png');
+    expect(logo.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(logo.readUInt32BE(16)).toBe(224);
+    expect(logo.readUInt32BE(20)).toBe(224);
+    expect(logo.length).toBeLessThan(50 * 1024);
+    expect(banner.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(banner.readUInt32BE(16)).toBe(1440);
+    expect(banner.readUInt32BE(20)).toBe(448);
+    expect(banner.length).toBeLessThan(200 * 1024);
   });
 
   it('document pages stay a readable measure, and buttons are large enough to tap', () => {

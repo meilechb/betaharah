@@ -170,7 +170,7 @@ export class FakeTelnyx {
     return new Response(JSON.stringify({ data: { id: `msg-${this.sent.length}` } }), { status: 200 });
   }
 
-  /** A signed webhook request for a received message. */
+  /** A signed webhook request for a received SMS. */
   async inbound(args: { from: string; to: string; text: string; eventId: string; nowMs: number; eventType?: string; autoresponseType?: string }): Promise<{ body: string; headers: Record<string, string> }> {
     const body = JSON.stringify({
       data: {
@@ -184,6 +184,30 @@ export class FakeTelnyx {
           text: args.text,
           type: 'SMS',
           ...(args.autoresponseType ? { autoresponse_type: args.autoresponseType } : {}),
+        },
+        record_type: 'event',
+      },
+      meta: { attempt: 1 },
+    });
+    const timestamp = String(Math.floor(args.nowMs / 1000));
+    const signature = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, this.privateKey, new TextEncoder().encode(`${timestamp}|${body}`)));
+    return { body, headers: { 'telnyx-signature-ed25519': toBase64(signature), 'telnyx-timestamp': timestamp, 'content-type': 'application/json' } };
+  }
+
+  /** A signed RCS inbound webhook. The text is nested, and the recipient is the agent. */
+  async inboundRcs(args: { from: string; text?: string | null; eventId: string; nowMs: number; agentId?: string; eventType?: string }): Promise<{ body: string; headers: Record<string, string> }> {
+    const content = args.text == null ? { user_file: { url: 'https://example.invalid/photo' } } : { text: args.text };
+    const body = JSON.stringify({
+      data: {
+        event_type: args.eventType ?? 'message.received',
+        id: args.eventId,
+        occurred_at: new Date(args.nowMs).toISOString(),
+        payload: {
+          type: 'RCS',
+          direction: 'inbound',
+          from: { phone_number: args.from },
+          to: [{ agent_id: args.agentId ?? 'agent-betaharah', agent_name: 'Betaharah' }],
+          body: content,
         },
         record_type: 'event',
       },

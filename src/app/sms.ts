@@ -31,12 +31,17 @@ export type WebhookResult =
   | { ok: true; message: InboundMessage | null }
   | { ok: false; status: number; reason: string };
 
-export async function readTelnyxWebhook(
+type Verified =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; status: number; reason: string };
+
+/** Checks Telnyx's Ed25519 signature and returns the event object. */
+async function verifiedEvent(
   rawBody: string,
   headers: { signature: string | null; timestamp: string | null },
   publicKey: string,
   nowMs: number,
-): Promise<WebhookResult> {
+): Promise<Verified> {
   if (!headers.signature || !headers.timestamp) return { ok: false, status: 401, reason: 'missing signature' };
   const ts = Number(headers.timestamp);
   if (!Number.isFinite(ts) || Math.abs(nowMs / 1000 - ts) > MAX_SKEW_SECONDS) {
@@ -53,6 +58,22 @@ export async function readTelnyxWebhook(
   }
   const data = (body as { data?: Record<string, unknown> }).data;
   if (!data || typeof data.id !== 'string') return { ok: false, status: 400, reason: 'no event' };
+  return { ok: true, data };
+}
+
+function autoresponse(payload: { autoresponse_type?: unknown } | undefined): string | null {
+  return typeof payload?.autoresponse_type === 'string' && payload.autoresponse_type !== '' ? payload.autoresponse_type.toUpperCase() : null;
+}
+
+export async function readTelnyxWebhook(
+  rawBody: string,
+  headers: { signature: string | null; timestamp: string | null },
+  publicKey: string,
+  nowMs: number,
+): Promise<WebhookResult> {
+  const verified = await verifiedEvent(rawBody, headers, publicKey, nowMs);
+  if (!verified.ok) return verified;
+  const data = verified.data;
   // Delivery reports and other events are acknowledged and ignored.
   if (data.event_type !== 'message.received') return { ok: true, message: null };
   const payload = data.payload as
@@ -64,12 +85,46 @@ export async function readTelnyxWebhook(
   return {
     ok: true,
     message: {
-      eventId: data.id,
+      eventId: data.id as string,
       from,
       to,
       text: typeof payload?.text === 'string' ? payload.text : '',
-      autoresponseType: typeof payload?.autoresponse_type === 'string' && payload.autoresponse_type !== '' ? payload.autoresponse_type.toUpperCase() : null,
+      autoresponseType: autoresponse(payload),
     },
+  };
+}
+
+/**
+ * An inbound RCS message. The text lives at `payload.body.text`, and the
+ * recipient is the agent (`to[].agent_id`), not a phone number. Files,
+ * locations, suggestion taps, and delivery receipts are acknowledged and ignored.
+ */
+export async function readTelnyxRcsWebhook(
+  rawBody: string,
+  headers: { signature: string | null; timestamp: string | null },
+  publicKey: string,
+  nowMs: number,
+): Promise<WebhookResult> {
+  const verified = await verifiedEvent(rawBody, headers, publicKey, nowMs);
+  if (!verified.ok) return verified;
+  const data = verified.data;
+  if (data.event_type !== 'message.received') return { ok: true, message: null };
+  const payload = data.payload as
+    | {
+        type?: unknown;
+        from?: { phone_number?: unknown };
+        body?: { text?: unknown };
+        autoresponse_type?: unknown;
+      }
+    | undefined;
+  if (payload?.type !== 'RCS') return { ok: true, message: null };
+  const text = payload.body?.text;
+  if (typeof text !== 'string') return { ok: true, message: null };
+  const from = payload.from?.phone_number;
+  if (typeof from !== 'string') return { ok: false, status: 400, reason: 'no sender' };
+  return {
+    ok: true,
+    message: { eventId: data.id as string, from, to: '', text, autoresponseType: autoresponse(payload) },
   };
 }
 

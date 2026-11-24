@@ -33,7 +33,7 @@ import {
   ValidationError,
 } from '../src/app/settings';
 import { parseSiteConfig } from '../src/app/store';
-import { readTelnyxWebhook } from '../src/app/sms';
+import { readTelnyxRcsWebhook, readTelnyxWebhook } from '../src/app/sms';
 import { planSync, toDesired, type DesiredEvent } from '../src/app/sync';
 import { civilToAbs } from '../src/engine/civil';
 import type { CalendarEvent } from '../src/engine/calendar';
@@ -372,6 +372,21 @@ describe('reading a Telnyx webhook', () => {
     const req = await telnyx.inbound({ from: '+1', to: '+2', text: '', eventId: 'e2', nowMs: NOW, eventType: 'message.finalized' });
     const r = await readTelnyxWebhook(req.body, { signature: req.headers['telnyx-signature-ed25519']!, timestamp: req.headers['telnyx-timestamp']! }, telnyx.publicKey, NOW);
     expect(r).toEqual({ ok: true, message: null });
+  });
+
+  it('reads an RCS message, which is not shaped like an SMS', async () => {
+    const telnyx = await FakeTelnyx.create();
+    const req = await telnyx.inboundRcs({ from: '+17325550123', text: '1', eventId: 'rcs1', nowMs: NOW });
+    const headers = { signature: req.headers['telnyx-signature-ed25519']!, timestamp: req.headers['telnyx-timestamp']! };
+    expect(await readTelnyxRcsWebhook(req.body, headers, telnyx.publicKey, NOW)).toEqual({
+      ok: true,
+      message: { eventId: 'rcs1', from: '+17325550123', to: '', text: '1', autoresponseType: null },
+    });
+    // The SMS reader cannot see the text or a phone recipient, so it refuses the body.
+    expect(await readTelnyxWebhook(req.body, headers, telnyx.publicKey, NOW)).toMatchObject({ ok: false, status: 400, reason: 'no sender' });
+    const file = await telnyx.inboundRcs({ from: '+17325550123', text: null, eventId: 'rcs2', nowMs: NOW });
+    expect(await readTelnyxRcsWebhook(file.body, { signature: file.headers['telnyx-signature-ed25519']!, timestamp: file.headers['telnyx-timestamp']! }, telnyx.publicKey, NOW)).toEqual({ ok: true, message: null });
+    expect(await readTelnyxRcsWebhook(req.body, headers, telnyx.publicKey, NOW + 10 * 60_000)).toMatchObject({ ok: false, status: 401 });
   });
 });
 

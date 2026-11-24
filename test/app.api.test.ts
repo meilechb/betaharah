@@ -1117,6 +1117,19 @@ describe('text messages', () => {
     expect(await count('households')).toBe(1);
   });
 
+  it('records an RCS text through its own webhook, and not through the SMS one', async () => {
+    const req = await world.telnyx.inboundRcs({ from: HUSBAND, text: '1', eventId: 'rcs1', nowMs: world.clock.now });
+    const smsRoute = await new Client().call('POST', '/webhooks/telnyx', undefined, { raw: req.body, headers: req.headers, header: false });
+    expect(smsRoute.status).toBe(400);
+    expect((await c.state()).entries).toEqual([]);
+    const rcs = await new Client().call('POST', '/webhooks/telnyx/rcs', undefined, { raw: req.body, headers: req.headers, header: false });
+    expect(rcs.status).toBe(200);
+    expect((await c.state()).entries[0]).toMatchObject({ kind: 'flow', source: 'sms' });
+    expect(replies()).toEqual(['Recorded: flow Mon Nov 23 by day. Hefsek from Fri Nov 27. 0 to undo.']);
+    const unsigned = await new Client().call('POST', '/webhooks/telnyx/rcs', undefined, { raw: req.body, header: false });
+    expect(unsigned.status).toBe(401);
+  });
+
   it('refuses a webhook that Telnyx did not sign', async () => {
     const req = await world.telnyx.inbound({ from: HUSBAND, to: OUR_NUMBER, text: '1', eventId: 'ev1', nowMs: world.clock.now });
     const forged = await new Client().call('POST', '/webhooks/telnyx', undefined, { raw: req.body.replace('"1"', '"4"'), headers: req.headers, header: false });
@@ -1687,6 +1700,7 @@ describe('the operator\'s console', () => {
     expect(r.json.secretsSet).toEqual({ googleClientId: true, googleClientSecret: true, telnyxApiKey: true, telnyxPublicKey: true, telnyxNumber: true });
     expect(r.json.urls).toEqual({
       webhook: 'https://cal.example/webhooks/telnyx',
+      rcsWebhook: 'https://cal.example/webhooks/telnyx/rcs',
       redirect: 'https://cal.example/api/google/callback',
       signInRedirect: 'https://cal.example/api/auth/google/callback',
       home: 'https://cal.example/',

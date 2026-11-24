@@ -53,7 +53,9 @@ site can send is 3,000 texts a month.
    auto-responses: on toll-free numbers the carrier answers STOP and START
    itself, and the site answers HELP).
 3. Set the profile's **inbound webhook URL** to the address the console
-   shows (`https://betaharah.com/webhooks/telnyx`).
+   shows (`https://betaharah.com/webhooks/telnyx`). An RCS agent's inbound
+   webhook is a different address, `https://betaharah.com/webhooks/telnyx/rcs`,
+   because an RCS message is not shaped like an SMS.
 4. Submit the **toll-free verification** for the number. US carriers do not
    deliver texts from an unverified toll-free number. Telnyx says it takes
    one to two weeks. Suggested answers are below.

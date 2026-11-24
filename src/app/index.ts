@@ -52,7 +52,7 @@ import {
   tick,
 } from './service';
 import { assertSunTimesExist, parseAppSettings, parsePhoneOptions, ValidationError } from './settings';
-import { readTelnyxWebhook } from './sms';
+import { readTelnyxRcsWebhook, readTelnyxWebhook, type InboundMessage } from './sms';
 import {
   bump,
   changeHousehold,
@@ -203,20 +203,20 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
 
   // ----- text-message webhook (authenticated by Telnyx's signature) -----
 
-  app.post('/webhooks/telnyx', async c => {
+  const telnyxInbound = async (c: C, read: typeof readTelnyxWebhook, accept: (message: InboundMessage, telnyxNumber: string) => boolean) => {
     if (!isConfigured(c.env)) return c.json({ error: 'not set up' }, 503);
     const raw = await c.req.text();
     const site = await loadSite(c.env);
     const { telnyxPublicKey, telnyxNumber } = site.secrets;
     if (!telnyxPublicKey || !telnyxNumber) return c.json({ error: 'text messaging is not set up' }, 503);
-    const result = await readTelnyxWebhook(
+    const result = await read(
       raw,
       { signature: c.req.header('telnyx-signature-ed25519') ?? null, timestamp: c.req.header('telnyx-timestamp') ?? null },
       telnyxPublicKey,
       deps.now(),
     );
     if (!result.ok) return c.json({ error: result.reason }, result.status as 400 | 401);
-    if (result.message && result.message.to === telnyxNumber) {
+    if (result.message && accept(result.message, telnyxNumber)) {
       const after = await handleInbound(c.env, deps, site, result.message);
       if (after) {
         const pending = background(c, refreshHousehold(c.env, deps, site, after.household, after.computed, deps.now()));
@@ -224,7 +224,11 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       }
     }
     return c.json({ ok: true });
-  });
+  };
+
+  app.post('/webhooks/telnyx', c => telnyxInbound(c, readTelnyxWebhook, (message, telnyxNumber) => message.to === telnyxNumber));
+  // RCS inbound uses a different payload (text at body.text, recipient is the agent). Same signature, same commands.
+  app.post('/webhooks/telnyx/rcs', c => telnyxInbound(c, readTelnyxRcsWebhook, () => true));
 
   // ----- everything under /api -----
 
@@ -519,6 +523,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       invites: (await listInvites(c.env.DB, now)).map(i => ({ id: i.hash, kind: i.kind, note: i.note, createdAt: i.created_at, expiresAt: i.expires_at, maxUses: i.max_uses, uses: i.uses })),
       urls: {
         webhook: `${origin}/webhooks/telnyx`,
+        rcsWebhook: `${origin}/webhooks/telnyx/rcs`,
         redirect: `${origin}/api/google/callback`,
         signInRedirect: `${origin}/api/auth/google/callback`,
         home: `${origin}/`,
