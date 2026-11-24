@@ -37,19 +37,10 @@ function smsLink(number, label) {
 function texting(info) {
   const number = typeof info.textingNumber === 'string' && info.textingNumber ? info.textingNumber : null;
   if (number) {
-    show('hero-sms', 'Or start by text: text ', el('code', {}, 'JOIN'), ' to ', smsLink(number), '.');
-    show('closing-sms', 'Or text ', el('code', {}, 'JOIN'), ' to ', smsLink(number), ' from any phone.');
-    show(
-      'offline-cta',
-      el(
-        'a',
-        { class: 'btn btn-light btn-lg sms-btn', href: `sms:${number}?body=JOIN` },
-        `Text JOIN to ${pretty(number)}`,
-      ),
-    );
+    show('hero-sms', 'Text ', el('code', {}, 'JOIN'), ' to ', smsLink(number), '.');
     show('offline-note');
   } else if (info.sms) {
-    show('offline-note', 'Sign up on the website. Then everything works by text.');
+    show('offline-note', 'Sign up on the website. Then you can text it too.');
   } else {
     show('offline-note', 'Texting is not available yet. Use the website.');
   }
@@ -65,12 +56,14 @@ function signupNote(info) {
 function prefixes(info) {
   const list = Array.isArray(info.prefixes) ? info.prefixes.filter(p => typeof p === 'string' && p) : [];
   if (list.length === 0 || (list.length === 1 && list[0] === '+1')) return;
-  const node = byId('faq-prefixes');
-  if (node) node.textContent = `Signing up needs a number that begins with ${list.join(' or ')}.`;
+  const node = byId('prefix-note');
+  if (!node) return;
+  node.textContent = `Signing up needs a number that begins with ${list.join(' or ')}.`;
+  node.hidden = false;
 }
 
 function signedIn() {
-  for (const id of ['hero-start', 'closing-start']) {
+  for (const id of ['hero-start']) {
     const a = byId(id);
     if (a && a.firstChild) a.firstChild.textContent = 'Open my calendar';
   }
@@ -97,12 +90,10 @@ async function fromServer() {
   if (info.donate === true) donate();
 }
 
-/** The line under the questions and the footer link; both stay hidden until the server says the page exists. */
+/** The footer link stays hidden until the server says the page exists. */
 function donate() {
-  for (const id of ['faq-donate', 'foot-donate']) {
-    const node = byId(id);
-    if (node) node.hidden = false;
-  }
+  const node = byId('foot-donate');
+  if (node) node.hidden = false;
 }
 
 function navLine() {

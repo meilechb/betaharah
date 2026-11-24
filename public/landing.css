@@ -1077,13 +1077,15 @@ body.lp {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 16px;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
   border-top: 1px solid var(--line);
   font-size: 12px;
   color: var(--muted);
+  list-style: none;
 }
-.cal-legend > span {
+.cal-legend > span,
+.cal-legend > li {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -2779,5 +2781,112 @@ body.lp {
   font-weight: var(--weight-normal);
   color: var(--muted);
   vertical-align: middle;
+}
+
+/* The hero is the calendar. */
+.demo {
+  max-width: 720px;
+  margin: var(--space-6) auto 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: clamp(16px, 3vw, 28px);
+  box-shadow: var(--lp-shadow-card);
+  text-align: start;
+}
+.demo .eyebrow {
+  text-align: center;
+  margin-bottom: var(--space-4);
+}
+.demo-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+.demo-status {
+  margin: 0 0 var(--space-3);
+  text-align: center;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+.demo-status:empty {
+  display: none;
+}
+.demo-day {
+  margin: var(--space-3) 0 0;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+.demo-day b {
+  font-weight: 650;
+}
+.demo-note,
+.demo-saved {
+  margin: var(--space-3) 0 0;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.demo > .btn {
+  display: flex;
+  width: fit-content;
+  margin: var(--space-5) auto 0;
+}
+.month .day {
+  width: 100%;
+  box-sizing: border-box;
+}
+#try-cal[aria-busy='true'] {
+  opacity: 0.6;
+}
+@media (min-width: 560px) {
+  .demo-fields {
+    grid-template-columns: 1.5fr 0.7fr;
+    align-items: end;
+  }
+}
+
+.plain {
+  padding: clamp(36px, 6vw, 72px) 0;
+}
+.plain.alt {
+  background: color-mix(in srgb, var(--surface) 65%, transparent);
+}
+.plain h2 {
+  margin: 0 0 var(--space-3);
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  line-height: 1.15;
+}
+.plain p {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--lp-ink-soft);
+}
+.narrow {
+  max-width: 640px;
+}
+.text-row {
+  display: grid;
+  gap: var(--space-6);
+  align-items: center;
+}
+.text-say {
+  margin-top: var(--space-3) !important;
+}
+.text-phone {
+  width: min(100%, 280px);
+  margin: 0 auto;
+  border-width: 8px;
+}
+@media (min-width: 720px) {
+  .text-row {
+    grid-template-columns: 1fr auto;
+    gap: clamp(24px, 6vw, 80px);
+  }
+  .text-phone {
+    margin: 0;
+  }
 }
 
