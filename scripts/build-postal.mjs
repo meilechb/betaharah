@@ -25,7 +25,9 @@
  *    CA.zip (all of Canada) and cities500.zip (towns of 500 people or more),
  *    CC BY 4.0, as published on 2026-11-24. Used only to check locations.
  *
- * 4. Time zones: the geo-tz package (devDependency, MIT licence), which looks
+ * 4. Time zones: the geo-tz package (MIT licence; 72 MB, so it is not kept
+ *    in package.json: before running this script, install it for the moment
+ *    with `npm install --no-save geo-tz@8.1.11`), which looks
  *    a point up in the polygons of timezone-boundary-builder (data under the
  *    Open Database Licence; https://github.com/evansiroky/timezone-boundary-builder).
  *    Version 8.1.11, published 2026-11-02. The zone is computed here, at build
