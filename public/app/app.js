@@ -294,13 +294,17 @@ function googleButton(a) {
 }
 
 function showFatal(e) {
-  root.replaceChildren(h('div', { class: 'card login' }, h('h2', {}, 'Could not load'), h('p', {}, (e && e.message) || 'Unknown error')));
+  root.replaceChildren(
+    h('div', { class: 'card login' }, h('h2', {}, 'Could not load'), h('p', {}, (e && e.message) || 'Unknown error'), h('p', {}, h('a', { href: '/' }, 'Back to the home page'))),
+  );
 }
 
 async function start() {
   P = await api('GET', '/api/public');
   if (!P.configured) {
-    root.replaceChildren(h('div', { class: 'card login' }, h('h2', {}, 'Not set up yet'), h('p', {}, 'This site is not ready to be used yet.')));
+    root.replaceChildren(
+      h('div', { class: 'card login' }, h('h2', {}, 'Not set up yet'), h('p', {}, 'This site is not ready to be used yet.'), h('p', {}, h('a', { href: '/' }, 'Back to the home page'))),
+    );
     return;
   }
   const params = new URLSearchParams(location.search);
@@ -325,6 +329,7 @@ async function start() {
   }
   if (!P.sms && !P.google && auth.inviteKind !== 'setup') auth.mode = 'password';
   if (params.get('google_error')) auth.message = params.get('google_error');
+  if (params.has('google_error')) history.replaceState(null, '', location.pathname + location.hash);
   renderAuth();
 }
 
@@ -342,8 +347,13 @@ function render() {
     h(
       'header',
       { class: 'top' },
-      h('h1', {}, 'Betaharah'),
-      S.today ? h('div', { class: 'today' }, S.today.hebrew + ' · ' + S.today.part + ' · ' + S.today.civil) : null,
+      h('h1', {}, h('a', { href: '/' }, 'Betaharah')),
+      h(
+        'div',
+        { class: 'top-side' },
+        S.today ? h('div', { class: 'today' }, S.today.hebrew + ' · ' + S.today.part + ' · ' + S.today.civil) : null,
+        h('button', { class: 'quiet', type: 'button', onclick: signOut }, 'Sign out'),
+      ),
     ),
     h(
       'nav',
@@ -392,6 +402,7 @@ function setupCard() {
     'section',
     { class: 'card' },
     h('h2', {}, 'Getting started'),
+    h('p', { class: 'muted' }, 'Choose your place, confirm your customs, and record the most recent dates. The calendar can then show what is next. Texting, once it is available, is a single digit from a phone on this account.'),
     h(
       'ul',
       { class: 'checklist' },
@@ -414,8 +425,16 @@ function viewToday() {
     alertsBlock(),
     setupCard(),
     S.status
-      ? h('section', { class: 'card status' }, h('p', { class: 'headline' }, S.status.headline), S.status.detail ? h('p', { class: 'detail' }, S.status.detail) : null)
-      : h('section', { class: 'card' }, h('p', {}, 'Nothing can be calculated until a location is chosen.'), h('button', { class: 'primary', type: 'button', onclick: () => go('settings') }, 'Choose your location')),
+      ? h('section', { class: 'card status' }, h('p', { class: 'kicker' }, 'Where things stand'), h('p', { class: 'headline' }, S.status.headline), S.status.detail ? h('p', { class: 'detail' }, S.status.detail) : null)
+      : h(
+          'section',
+          { class: 'card' },
+          h('h2', {}, 'Location first'),
+          h('p', {}, 'Nothing can be calculated until a location is chosen.'),
+          h('p', { class: 'muted' }, 'Sunrise, sunset and nightfall are worked out for that place. You can change it when you travel.'),
+          h('button', { class: 'primary', type: 'button', onclick: () => go('settings') }, 'Choose your location'),
+        ),
+    textingCard(),
     S.status ? recordCard() : null,
     S.status ? upcomingCard() : null,
   );
@@ -524,17 +543,36 @@ function recordCard() {
   );
 }
 
+function textingCard() {
+  if (!S.sms) return null;
+  if (!S.sms.ready) {
+    return h('section', { class: 'card' }, h('h2', {}, 'Texting'), h('p', { class: 'muted' }, 'Texting is not turned on for this site yet. You can record everything here.'));
+  }
+  return h(
+    'section',
+    { class: 'card' },
+    h('h2', {}, 'Text this number'),
+    h('p', { class: 'mono big-number' }, S.sms.number),
+    h('p', { class: 'small' }, S.sms.commands),
+    h('p', { class: 'small muted' }, 'From a phone on this account. Reply STOP to stop texts to that phone, HELP for a short description.'),
+  );
+}
+
+let showAllUpcoming = false;
+
 function upcomingCard() {
+  const all = S.upcoming;
+  const shown = showAllUpcoming ? all : all.slice(0, 12);
   return h(
     'section',
     { class: 'card' },
     h('h2', {}, 'Coming up'),
-    S.upcoming.length === 0
-      ? h('p', { class: 'muted' }, 'Nothing coming up.')
+    all.length === 0
+      ? h('p', { class: 'muted' }, 'Nothing coming up. After you record a date, the next hefsek, clean days and mikvah night appear here.')
       : h(
           'ul',
           { class: 'list' },
-          S.upcoming.map(e =>
+          shown.map(e =>
             h(
               'li',
               { class: e.projected ? 'projected' : '' },
@@ -549,6 +587,19 @@ function upcomingCard() {
             ),
           ),
         ),
+    !showAllUpcoming && all.length > shown.length
+      ? h(
+          'button',
+          {
+            type: 'button',
+            onclick: () => {
+              showAllUpcoming = true;
+              render();
+            },
+          },
+          'Show all ' + all.length,
+        )
+      : null,
   );
 }
 
@@ -1322,11 +1373,10 @@ function signInCard() {
     h('h3', {}, 'Password'),
     passwordPart,
     h('h3', {}, 'Sessions'),
-    h(
-      'div',
-      { class: 'actions' },
-      h('button', { type: 'button', onclick: signOut }, 'Sign out'),
       h(
+        'div',
+        { class: 'actions' },
+        h(
         'button',
         {
           type: 'button',
