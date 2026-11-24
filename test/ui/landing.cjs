@@ -39,7 +39,6 @@ const HOME_PHRASES = [
   'Where things stand',
   'Recorded: flow Tue Dec 1 by day. Hefsek from Sat Dec 5. 0 to undo.',
   'Calculated by your customs',
-  'Ask a rav',
   'In the calendar you already use',
   'Nothing is sent on Shabbat or Yom Tov',
   'One account, each on your own phone',

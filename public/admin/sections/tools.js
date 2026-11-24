@@ -68,7 +68,7 @@ function whatPeopleText() {
   const rows = [
     ['JOIN', 'Signs up while sign-up is open. While it is by invitation: JOIN and an invitation word. JOIN and a code (from ADD on an account) adds a phone to that account.'],
     ['MENU', 'Lists the words. Each word sent alone shows its own options: STATUS, HISTORY, UNDO, LOCATION, CUSTOMS, NIGHTFALL, REMINDERS, PHONES, CALENDAR, TERMS, WEB, SETUP, DELETE ACCOUNT.'],
-    ['1 2 3 4 5', 'Record: 1 flow began, 2 hefsek done, 3 count broken, 4 immersed, 5 stain. After 1, 3 or 5 add day, night, yesterday night or a time (9pm). A date also works: 1 11/22 night.'],
+    ['1 2 3 4 5', 'Record: 1 flow began, 2 hefsek done, 3 count broken, 4 immersion (optional), 5 stain. After 1, 3 or 5 add day, night, yesterday night or a time (9pm). A date also works: 1 11/22 night.'],
     ['9, 0, ?', '9 status, 0 undo the last entry, ? the short list of digits.'],
     ['REMINDERS ON', 'Turns reminders on for that phone. That text is the consent; reminders are off until then.'],
     ['WEB', 'Texts back a one-time link that signs in on the website.'],
