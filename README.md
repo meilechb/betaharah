@@ -96,9 +96,12 @@ In [Google Cloud Console](https://console.cloud.google.com/):
 1. Create a project and enable the **Google Calendar API**.
 2. Configure the OAuth consent screen (user type: External). Set its
    publishing status to **In production**. In "Testing" status Google ends
-   the app's access every seven days. Google will show a "this app isn't
-   verified" page when you sign in, because the app is yours and not
-   reviewed; continue past it.
+   the app's access every seven days. On the consent screen, set the privacy
+   policy to **https://betaharah.com/privacy** (it is a public page, linked
+   from the sign-in page, and it needs no password). If the form asks for a
+   terms of service, use **https://betaharah.com/terms**. Google will show a
+   "this app isn't verified" page when you sign in, because the app is yours
+   and not reviewed; continue past it.
 3. Create an OAuth client of type **Web application**. Add the redirect
    address shown in the dashboard under Settings → Google Calendar.
 4. Paste the client ID and client secret into the dashboard, save, and press
@@ -134,6 +137,13 @@ Until the number is verified, everything else works: the dashboard, the
 calendar, and Google Calendar's own notifications.
 
 ## Privacy
+
+The public pages are **https://betaharah.com/privacy** and
+**https://betaharah.com/terms**. They are linked from the sign-in page and
+need no password. The contact address written on them is
+privacy@betaharah.com. Nothing in this repository creates that mailbox:
+create it, or change the address in `public/privacy.html` and
+`public/terms.html`, before relying on it.
 
 - The dashboard needs the password; eight wrong attempts lock sign-in for 15
   minutes.
