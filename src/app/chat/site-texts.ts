@@ -21,6 +21,7 @@
  */
 import { DEFAULT_WORDS, GENERAL_ACTIONS, MAIN, MESSAGE_BY_KEY, MESSAGES, messageDef, OPTION_FAMILY, type MessageDef } from './messages';
 import { foldToGsm, isGsmBasic, MAX_TEXT_CHARS, repairs, segments } from './gsm';
+import { CATEGORIES, TEXT_SETS, textMeta } from './messages-meta';
 import { ValidationError } from '../settings';
 
 export interface MessageChange {
@@ -441,8 +442,12 @@ export function textsForConsole(texts: SiteTexts) {
         changed: change !== undefined,
         length: text.length,
         segments: segments(text),
+        // how the Texts page lists it (messages-meta.ts)
+        meta: textMeta(def.key, def.when),
       };
     }),
+    categories: CATEGORIES,
+    sets: TEXT_SETS,
     words: GENERAL_ACTIONS.map(a => ({ action: a.action, name: a.name, words: texts.words[a.action] ?? a.words, defaults: a.words })),
   };
 }

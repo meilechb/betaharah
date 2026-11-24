@@ -486,38 +486,82 @@ async function seed() {
     await page.fill('#sim-from', '(732) 555-01' + n);
   };
 
-  await step('texts: every group, the filed texts marked, search', async () => {
+  const txRows = () => page.locator('#texts .tx-row');
+  const shownCount = async () => Number((await page.textContent('#tx-shown')).split(' ')[0]);
+
+  await step('texts: opens on the important ones; categories with counts filter; search; pairs and sets; filed texts marked', async () => {
     await open('texts');
     await page.waitForSelector('#texts .tx-row');
-    for (const g of ['sign-up', 'recording', 'status', 'reminders', 'settings', 'phones', 'calendar', 'carrier-words', 'other']) {
-      if ((await page.locator('#tx-group-' + g).count()) !== 1) throw new Error('no group ' + g);
+    if ((await page.getAttribute('#tx-important', 'aria-pressed')) !== 'true') throw new Error('Important is not on');
+    const first = await txRows().count();
+    if (first < 15 || first > 25) throw new Error(first + ' rows on Important');
+    if (!(await page.textContent('#tx-shown')).endsWith(' of 158') && !/ of \d+$/.test(await page.textContent('#tx-shown'))) throw new Error('count line');
+    const total = Number((await page.textContent('#tx-shown')).split(' of ')[1]);
+    if (total < 150) throw new Error('only ' + total + ' texts');
+    // every category button has a count, and the counts add up to All
+    let sum = 0;
+    for (const id of ['reminders', 'recording', 'status', 'signup', 'menu', 'settings', 'phones', 'carrier']) {
+      const n = Number(await page.textContent('#tx-cat-' + id + ' .tx-cat-count'));
+      if (!(n > 0)) throw new Error('no count on ' + id);
+      sum += n;
     }
-    const all = await page.locator('#texts .tx-row').count();
-    if (all < 100) throw new Error('only ' + all + ' texts');
-    if (!(await page.textContent('#tx-shown')).startsWith(all + ' of ' + all)) throw new Error('count line');
-    if ((await page.locator('#tx-group-carrier-words .tx-filed').count()) !== 3) throw new Error('the three filed texts are not marked');
-    if (!(await page.textContent('#tx-group-carrier-words')).includes('Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.')) throw new Error('HELP wording');
-    // every text shows its options line and its count
-    const main = await page.textContent('#tx-menu-main-sms');
-    if (main !== 'Betaharah.\nReply: PERIOD, HEFSEK, STATUS, MORE') throw new Error('main menu text: ' + JSON.stringify(main));
-    if (!/^46 characters · 1 SMS$/.test((await page.textContent('#tx-menu-main .tx-count')).trim())) throw new Error('count');
+    const other = await page.locator('#tx-cat-other .tx-cat-count').count();
+    if (!other && sum !== total) throw new Error('the counts add up to ' + sum + ', not ' + total);
+    // a category shows exactly its texts
+    await page.click('#tx-cat-recording');
+    await page.waitForSelector('#tx-cat-recording[aria-pressed="true"]');
+    if ((await page.getAttribute('#tx-important', 'aria-pressed')) !== 'false') throw new Error('Important stayed on in a category');
+    if ((await shownCount()) !== Number(await page.textContent('#tx-cat-recording .tx-cat-count'))) throw new Error('the category count is not what is shown');
+    if ((await page.locator('#texts .tx-group').count()) !== 1) throw new Error('other categories shown');
+    // a plain and a discreet wording are one row
+    await page.click('#tx-cat-reminders');
+    await page.waitForSelector('#tx-reminder-hefsek');
+    if ((await page.locator('#tx-reminder-hefsek-discreet').count()) !== 0) throw new Error('the discreet wording has its own row');
+    const hefsek = await page.textContent('#tx-reminder-hefsek');
+    if (!hefsek.includes('Hefsek taharah day') || !hefsek.includes('Plain:') || !hefsek.includes('Discreet:') || !hefsek.includes('H Wed Nov 25 before')) throw new Error('reminder row: ' + hefsek);
+    if ((await txRows().count()) !== 6) throw new Error((await txRows().count()) + ' reminder rows');
+    // the customs questions are one row that opens to twelve
+    await page.click('#tx-cat-settings');
+    await page.waitForSelector('#tx-set-customs-questions');
+    if ((await page.locator('#tx-set-customs-questions .tx-members > .tx-row').count()) !== 0) throw new Error('the set is open');
+    await page.click('#tx-open-set-customs-questions');
+    await page.waitForFunction(() => document.querySelectorAll('#tx-set-customs-questions .tx-members > .tx-row').length === 12);
+    await page.click('#tx-open-set-customs-questions');
+    await page.waitForFunction(() => document.querySelectorAll('#tx-set-customs-questions .tx-members > .tx-row').length === 0);
+    // the three filed texts
+    await page.click('#tx-cat-carrier');
+    await page.waitForSelector('#tx-carrier-help');
+    if ((await page.locator('#texts .tag:text-is("filed with the carrier")').count()) !== 3) throw new Error('the three filed texts are not marked');
+    if (!(await page.textContent('#tx-carrier-help')).includes('Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.')) throw new Error('HELP wording');
+    // search: names, "sent when" and the wording
+    await page.click('#tx-cat-all');
     await page.fill('#tx-search', 'hefsek tahara');
-    await page.waitForFunction(n => document.querySelectorAll('#texts .tx-row').length < n, all);
-    const found = await page.locator('#texts .tx-row').count();
-    if (found < 2 || found > 8) throw new Error(found + ' found');
+    await page.waitForFunction(() => document.querySelector('#tx-important').getAttribute('aria-pressed') === 'false');
+    const found = await txRows().count();
+    if (found < 2 || found > 10) throw new Error(found + ' found');
     if ((await page.locator('#tx-reminder-hefsek').count()) !== 1) throw new Error('the hefsek reminder is not found');
+    await page.fill('#tx-search', 'Book the mikvah');
+    await page.waitForSelector('#tx-reminder-mikvah_book');
     await page.fill('#tx-search', 'no such words at all');
     await page.waitForSelector('#texts .empty');
     await page.fill('#tx-search', '');
-    await page.waitForFunction(n => document.querySelectorAll('#texts .tx-row').length === n, all);
     await noSideways();
+    // the main options: the wording as sent, with its options as chips
+    await page.fill('#tx-search', 'MENU, ?');
+    await page.waitForSelector('#tx-menu-main');
+    const chips = await page.locator('#tx-menu-main .tx-chip').allTextContents();
+    if (chips.join(',') !== 'PERIOD,HEFSEK,STATUS,MORE') throw new Error('main menu chips: ' + chips);
+    await page.fill('#tx-search', '');
   });
 
-  await step('texts: edit a body and a label with a preview and count, a validation error, save; the simulator uses it; reset', async () => {
+  await step('texts: a row opens in place, edits with a preview, a validation error, saves, shows "changed"; one editor at a time; Escape; Changed; the address; reset', async () => {
     await open('texts');
-    await page.click('#tx-edit-setup-start');
-    await page.waitForSelector('#tx-body');
-    // the placeholders and the labels
+    await page.click('#tx-cat-signup');
+    await page.click('#tx-open-setup-start');
+    await page.waitForSelector('#tx-setup-start #tx-body');
+    if ((await page.getAttribute('#tx-open-setup-start', 'aria-expanded')) !== 'true') throw new Error('not marked open');
+    // its other wording (SETUP again) is a button in the same row
+    if ((await page.locator('#tx-wording-setup-again').count()) !== 1) throw new Error('no second wording');
     await page.fill('#tx-body', 'Welcome. Setup step 1 of 3: the ZIP code.');
     await page.waitForFunction(() => document.querySelector('#tx-edit-sms').textContent === 'Welcome. Setup step 1 of 3: the ZIP code.\nReply: SKIP');
     if (!/^\d+ characters · 1 SMS$/.test((await page.textContent('#tx-edit-count')).trim())) throw new Error('no count');
@@ -530,46 +574,110 @@ async function seed() {
     await page.click('#tx-save');
     await toast('Saved');
     await page.waitForSelector('#tx-setup-start .tag:has-text("changed")');
-    if ((await page.textContent('#tx-setup-start-sms')) !== 'Welcome. Setup step 1 of 3: the ZIP code.\nReply: NOT NOW') throw new Error('not shown as saved');
-    // an editor with a placeholder: a chip inserts it, and the server refuses a missing one
-    await page.click('#tx-edit-location-set');
+    if ((await page.locator('#tx-body').count()) !== 0) throw new Error('the editor stayed open');
+    if (!(await page.textContent('#tx-setup-start')).includes('Welcome. Setup step 1 of 3: the ZIP code.NOT NOW')) throw new Error('not shown as saved');
+    // Changed shows only the changed text
+    await page.click('#tx-changed');
+    await page.waitForFunction(() => document.querySelectorAll('#texts .tx-row').length === 1);
+    if ((await page.locator('#tx-setup-start').count()) !== 1) throw new Error('Changed does not show it');
+    await page.click('#tx-changed');
+    // a placeholder chip says what it stands for, inserts it, and the server refuses a missing one
+    await page.click('#tx-cat-settings');
+    await page.click('#tx-open-location-set');
+    if (!(await page.textContent('#tx-var-place')).includes('Brooklyn, NY 11219')) throw new Error('the chip does not show its example');
     await page.fill('#tx-body', 'Location set.');
     await page.click('#tx-save');
     await page.waitForSelector('#texts .error:has-text("{place} must stay in the text.")');
     await page.click('#tx-var-place');
     await page.waitForFunction(() => document.querySelector('#tx-body').value.includes('{place}'));
-    await page.click('#tx-cancel');
+    // only one editor: opening another closes this one
+    await page.click('#tx-open-location-show');
+    await page.waitForSelector('#tx-location-show #tx-body');
+    if ((await page.locator('#texts .tx-edit').count()) !== 1) throw new Error('two editors');
+    if ((await page.getAttribute('#tx-open-location-set', 'aria-expanded')) !== 'false') throw new Error('the first stayed open');
+    // the address keeps the place; a reload comes back to it
+    if (!page.url().includes('#texts/settings/location.show')) throw new Error('address: ' + page.url());
+    await page.reload();
+    await page.waitForSelector('#tx-location-show #tx-body');
+    if ((await page.getAttribute('#tx-cat-settings', 'aria-pressed')) !== 'true') throw new Error('the category was not kept');
+    // Escape closes it, and the focus goes back to its row
+    await page.focus('#tx-body');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('#tx-body'));
+    if ((await page.evaluate(() => document.activeElement && document.activeElement.id)) !== 'tx-open-location-show') throw new Error('focus did not go back to the row');
+    // Enter on a row opens it
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#tx-location-show #tx-body');
+    await page.keyboard.press('Escape');
+    // the search is kept in the address too
+    await page.fill('#tx-search', 'calendar link');
+    await page.waitForFunction(() => location.hash.includes('q=calendar%20link'));
+    await page.reload();
+    await page.waitForSelector('#texts .tx-row');
+    if ((await page.inputValue('#tx-search')) !== 'calendar link') throw new Error('the search was not kept');
+    await page.fill('#tx-search', '');
     // the simulator uses the new wording, and its option
     await open('simulator');
     await newNumber();
     await simSay('JOIN', 'Welcome. Setup step 1 of 3: the ZIP code.');
     await page.waitForSelector('#sim-log .sim-msg.site:last-child .chip:text-is("NOT NOW")');
     await tap('NOT NOW', 'Step 2 of 3');
+    // Back returns to the same place
+    await page.goBack();
+    await page.waitForSelector('#texts .tx-row');
     // back to the original
     await open('texts');
-    await page.click('#tx-edit-setup-start');
+    await page.click('#tx-cat-signup');
+    await page.click('#tx-open-setup-start');
     await page.click('#tx-reset');
     await toast('Back to the original');
-    if ((await page.textContent('#tx-setup-start-sms')).endsWith('Reply: SKIP') !== true) throw new Error('not reset');
+    if (!(await page.textContent('#tx-setup-start')).includes('SKIP')) throw new Error('not reset');
     if ((await page.locator('#tx-setup-start .tag:has-text("changed")').count()) !== 0) throw new Error('still marked changed');
+    await noSideways();
   });
 
-  await step('texts: the general words and the options prefix, with an error beside the field', async () => {
+  await step('texts: at 1280 px at least 12 rows fit on the screen', async () => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => (location.hash = 'texts'));
+    await page.waitForSelector('#texts .tx-row');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const fit = await page.evaluate(() => [...document.querySelectorAll('#texts .tx-row')].filter(r => r.getBoundingClientRect().bottom <= innerHeight).length);
+    if (fit < 12) throw new Error('only ' + fit + ' rows fit');
+    await page.click('#tx-cat-recording');
+    const fit2 = await page.evaluate(() => [...document.querySelectorAll('#texts .tx-row')].filter(r => r.getBoundingClientRect().bottom <= innerHeight).length);
+    if (fit2 < 12) throw new Error('only ' + fit2 + ' recording rows fit');
+    await noSideways();
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.evaluate(() => (location.hash = 'texts'));
+  });
+
+  await step('texts: the words people can write, as chips, with an error beside the line; the options prefix', async () => {
     await open('texts');
+    await page.click('#tx-cat-words');
     await page.waitForSelector('#tx-words-status');
-    await page.fill('#tx-words-status', 'status, where, hefsek');
-    await page.click('#tx-words-save');
-    await page.waitForSelector('#tx-words .error:has-text("already a word for")');
-    await page.fill('#tx-words-status', 'status, where, situation');
-    await page.click('#tx-words-save');
+    await page.fill('#tx-add-status', 'hefsek');
+    await page.click('#tx-add-btn-status');
+    await page.waitForSelector('#tx-words-status .error:has-text("already a word for")');
+    await page.fill('#tx-add-status', 'situation');
+    await page.click('#tx-add-btn-status');
     await toast('Saved');
+    await page.waitForSelector('#tx-words-status .tx-wchip:has-text("situation")');
+    await page.waitForSelector('#tx-words-status .tag:has-text("changed")');
+    await noSideways();
     await open('simulator');
     await newNumber();
     await simSay('JOIN', 'Step 1 of 3');
     await simSay('situation', 'No location is set yet.');
     await open('texts');
-    await page.fill('#tx-words-status', 'status, where');
-    await page.click('#tx-words-save');
+    await page.click('#tx-cat-words');
+    await page.click('#tx-remove-status-situation');
+    await toast('Saved');
+    await page.waitForFunction(() => !document.querySelector('#tx-words-status .tag'));
+    await page.fill('#tx-prefix', '');
+    await page.click('#tx-prefix-save');
+    await page.waitForSelector('#tx-words .error');
+    await page.fill('#tx-prefix', 'Reply:');
+    await page.click('#tx-prefix-save');
     await toast('Saved');
   });
 
