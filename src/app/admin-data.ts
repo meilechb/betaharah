@@ -447,6 +447,8 @@ export async function adminState(env: Env, now: number, origin: string, cookieHe
     urls: {
       webhook: `${origin}/webhooks/telnyx`,
       redirect: `${origin}/api/google/callback`,
+      // An RCS agent's inbound webhook may be set to this address; it is read by the same handler.
+      rcsWebhook: `${origin}/webhooks/telnyx/rcs`,
       // The second redirect to register with Google: signing in with Google, apart from the calendar.
       signInRedirect: `${origin}/api/auth/google/callback`,
       home: `${origin}/`,

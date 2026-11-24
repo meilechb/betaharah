@@ -316,6 +316,8 @@ describe('the calendar feed', () => {
     expect(ics).not.toMatch(/[^\r]\n/); // every line ends CR LF
     expect(lines).toContain('VERSION:2.0');
     expect(lines).toContain('X-WR-CALNAME:Betaharah\\, home');
+    expect(lines).toContain('COLOR:#6E3D45');
+    expect(ics.replace(/\r\n /g, '')).toContain('IMAGE;VALUE=URI;DISPLAY=BADGE;FMTTYPE=image/png:https://betaharah.com/brand/logo-224.png');
     expect(lines.filter(l => l === 'BEGIN:VEVENT')).toHaveLength(events.length);
     expect(lines.filter(l => l === 'END:VEVENT')).toHaveLength(events.length);
     const uids = lines.filter(l => l.startsWith('UID:'));

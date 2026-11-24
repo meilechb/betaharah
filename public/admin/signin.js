@@ -53,6 +53,7 @@ export function showSignIn(notice, onSignedIn) {
         );
       },
     },
+    h('a', { class: 'login-brand', href: '/' }, h('img', { class: 'mark', src: '/favicon.svg', width: '32', height: '32', alt: '' }), 'Betaharah'),
     h('h1', { class: 'login-title' }, 'Operator console'),
     h('p', { class: 'muted' }, 'For the person who runs this site. To use the calendar, go to the ', h('a', { href: '/app/' }, 'sign-in page'), '.'),
     formAlert,

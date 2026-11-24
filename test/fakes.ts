@@ -281,7 +281,7 @@ export class FakeTelnyx {
     return { body, headers: { 'telnyx-signature-ed25519': toBase64(signature), 'telnyx-timestamp': timestamp, 'content-type': 'application/json' } };
   }
 
-  /** A signed webhook request for a received message. */
+  /** A signed webhook request for a received SMS. */
   async inbound(args: { from: string; to: string; text: string; eventId: string; nowMs: number; eventType?: string; autoresponseType?: string }): Promise<{ body: string; headers: Record<string, string> }> {
     const body = JSON.stringify({
       data: {

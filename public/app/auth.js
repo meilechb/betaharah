@@ -73,7 +73,7 @@ function dropParam(name) {
 }
 
 function brand() {
-  return h('header', { class: 'top auth-brand' }, h('h1', {}, h('a', { href: '/' }, 'Betaharah')));
+  return h('header', { class: 'top auth-brand' }, h('h1', {}, h('a', { class: 'brand', href: '/' }, h('img', { class: 'mark', src: '/favicon.svg', width: '28', height: '28', alt: '' }), 'Betaharah')));
 }
 
 /** Shows the sign-in views; first handles a sign-in link (?k=...) and an invitation (?invite=...). */

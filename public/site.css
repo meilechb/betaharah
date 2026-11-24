@@ -193,6 +193,17 @@ p {
   margin: 0 0 var(--space-3);
 }
 
+/* The site's mark (the wine disc), beside the name. Its size comes from the image's own width and height. */
+img.mark {
+  display: block;
+  flex: none;
+}
+header.top h1 a.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 a {
   color: var(--accent);
   text-underline-offset: 0.15em;

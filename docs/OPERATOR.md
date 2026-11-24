@@ -133,7 +133,11 @@ site can send is 3,000 texts a month.
    below).
    Note the profile's **Messaging Profile ID**: RCS needs it later.
 3. Set the profile's **inbound webhook URL** to the address the console
-   shows (`https://betaharah.com/webhooks/telnyx`).
+   shows (`https://betaharah.com/webhooks/telnyx`). An RCS agent's inbound
+   webhook may be set to that same address or to
+   `https://betaharah.com/webhooks/telnyx/rcs`: both read SMS and RCS
+   messages alike. Until the agent's id is saved in the console, an RCS
+   message is answered by SMS.
 4. Submit the **toll-free verification** for the number. US carriers do not
    deliver texts from an unverified toll-free number. Telnyx says it takes
    one to two weeks. Suggested answers are below.

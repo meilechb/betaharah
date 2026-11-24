@@ -139,7 +139,7 @@ function topBar() {
   return h(
     'header',
     { class: 'app-bar' },
-    h('a', { class: 'brand', href: '#overview' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'B'), h('span', { class: 'brand-name' }, 'Betaharah'), h('span', { class: 'brand-sub' }, 'Operator console')),
+    h('a', { class: 'brand', href: '#overview' }, h('img', { class: 'mark', src: '/favicon.svg', width: '32', height: '32', alt: '' }), h('span', { class: 'brand-name' }, 'Betaharah'), h('span', { class: 'brand-sub' }, 'Operator console')),
     h(
       'div',
       { class: 'app-bar-end' },

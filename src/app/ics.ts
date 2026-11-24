@@ -48,7 +48,11 @@ export function toICalendar(events: readonly CalendarEvent[], name: string, now:
     'PRODID:-//betaharah//calendar//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
+    `NAME:${escapeText(name)}`,
     `X-WR-CALNAME:${escapeText(name)}`,
+    'COLOR:#6E3D45',
+    'X-APPLE-CALENDAR-COLOR:#6E3D45',
+    'IMAGE;VALUE=URI;DISPLAY=BADGE;FMTTYPE=image/png:https://betaharah.com/brand/logo-224.png',
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
     'X-PUBLISHED-TTL:PT1H',
   ];

@@ -543,7 +543,9 @@ async function joinByCode(
 
 /** Whether a received message was sent to this site: its number (SMS), or its RCS agent. */
 export function addressedToSite(site: Site, message: Pick<InboundMessage, 'channel' | 'to' | 'agentId'>): boolean {
-  if (message.channel === 'rcs') return Boolean(site.secrets.rcsAgentId) && message.agentId === site.secrets.rcsAgentId;
+  // Every webhook is signed by Telnyx for this account. Once the agent's id is saved, only that agent's messages are taken;
+  // until then an RCS message is taken as it comes (and answered by SMS, since RCS sending needs the id).
+  if (message.channel === 'rcs') return !site.secrets.rcsAgentId || message.agentId === site.secrets.rcsAgentId;
   return Boolean(site.secrets.telnyxNumber) && message.to === site.secrets.telnyxNumber;
 }
 

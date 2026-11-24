@@ -427,14 +427,18 @@ describe('the same conversation over RCS', () => {
     expect(replies).toBe(30);
   });
 
-  it('while RCS is switched off, everything goes by SMS; RCS messages to a saved agent are still answered', async () => {
+  it('while RCS is switched off, everything goes by SMS; RCS messages are still answered', async () => {
     await config({ rcsEnabled: false });
     await rcs(WIFE, tap('JOIN'));
     expect(world.telnyx.sent.at(-1)).toMatchObject({ to: WIFE, endpoint: 'sms', text: T.SETUP_START });
-    // an agent id that is not saved is never accepted
+    // while no agent id is saved, an RCS message is taken as it comes (Telnyx signed it) and answered by SMS;
+    // once one is saved, only that agent's messages are taken (the test above)
     const op = await operator();
     expect((await op.put('/api/admin/secrets', { rcsAgentId: null })).status).toBe(200);
-    expect(await rcs(WIFE, { text: '9' })).toEqual([]);
+    const before = world.telnyx.sent.length;
+    await rcs(WIFE, { text: '9' });
+    expect(world.telnyx.sent.slice(before)).toHaveLength(1);
+    expect(world.telnyx.sent.at(-1)).toMatchObject({ to: WIFE, endpoint: 'sms' });
   });
 });
 

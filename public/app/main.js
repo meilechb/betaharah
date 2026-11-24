@@ -85,7 +85,7 @@ function render() {
       h(
         'header',
         { class: 'top dash-top' },
-        h('h1', {}, h('a', { href: '#today', onclick: e => (e.preventDefault(), go('today')) }, 'Betaharah')),
+        h('h1', {}, h('a', { class: 'brand', href: '#today', onclick: e => (e.preventDefault(), go('today')) }, h('img', { class: 'mark', src: '/favicon.svg', width: '28', height: '28', alt: '' }), 'Betaharah')),
         dateLine(),
         button({ label: 'Sign out', icon: 'log-out', size: 'sm', className: 'top-signout', attrs: { id: 'top-sign-out' }, onclick: signOutFromHeader }),
       ),

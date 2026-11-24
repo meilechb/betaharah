@@ -183,7 +183,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     h.set('Strict-Transport-Security', 'max-age=31536000');
     if (!h.has('Cache-Control')) h.set('Cache-Control', 'no-store');
     if ((h.get('Content-Type') ?? '').startsWith('text/html')) {
-      h.set('Content-Security-Policy', "default-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+      h.set('Content-Security-Policy', "default-src 'none'; style-src 'self'; img-src 'self' data:; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
     }
   });
 
@@ -211,7 +211,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
 
   // ----- text-message webhook (authenticated by Telnyx's signature) -----
 
-  app.post('/webhooks/telnyx', async c => {
+  const telnyxInbound = async (c: C) => {
     if (!isConfigured(c.env)) return c.json({ error: 'not set up' }, 503);
     const raw = await c.req.text();
     const site = await loadSite(c.env);
@@ -235,7 +235,12 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       }
     }
     return c.json({ ok: true });
-  });
+  };
+
+  // One handler reads both shapes of message (an SMS, and an RCS message whose words are at body.text).
+  // The second address exists because an RCS agent's inbound webhook was set to it; either address takes either kind.
+  app.post('/webhooks/telnyx', telnyxInbound);
+  app.post('/webhooks/telnyx/rcs', telnyxInbound);
 
   // ----- everything under /api -----
 

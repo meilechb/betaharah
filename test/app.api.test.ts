@@ -1256,6 +1256,25 @@ describe('text messages', () => {
     expect(await count('households')).toBe(1);
   });
 
+  it('records an RCS text sent to either webhook address, before the agent is saved in the console', async () => {
+    // An RCS agent's inbound webhook may be set to /webhooks/telnyx/rcs; one handler reads both shapes at both addresses.
+    const req = await world.telnyx.inboundRcs({ from: HUSBAND, agentId: 'agent-betaharah', eventId: 'rcs1', nowMs: world.clock.now, body: { text: '1' } });
+    const unsigned = await new Client().call('POST', '/webhooks/telnyx/rcs', undefined, { raw: req.body, header: false });
+    expect(unsigned.status).toBe(401);
+    expect((await c.state()).entries).toEqual([]);
+    const rcs = await new Client().call('POST', '/webhooks/telnyx/rcs', undefined, { raw: req.body, headers: req.headers, header: false });
+    expect(rcs.status).toBe(200);
+    expect((await c.state()).entries[0]).toMatchObject({ kind: 'flow', source: 'sms' });
+    // no agent is saved, so the reply goes by SMS
+    expect(replies()).toHaveLength(1);
+    expect(replies()[0]).toMatch(/^Recorded: flow /);
+    // delivered again to the other address: acted on once
+    const again = await new Client().call('POST', '/webhooks/telnyx', undefined, { raw: req.body, headers: req.headers, header: false });
+    expect(again.status).toBe(200);
+    expect((await c.state()).entries).toHaveLength(1);
+    expect(replies()).toHaveLength(1);
+  });
+
   it('refuses a webhook that Telnyx did not sign', async () => {
     const req = await world.telnyx.inbound({ from: HUSBAND, to: OUR_NUMBER, text: '1', eventId: 'ev1', nowMs: world.clock.now });
     const forged = await new Client().call('POST', '/webhooks/telnyx', undefined, { raw: req.body.replace('"1"', '"4"'), headers: req.headers, header: false });
@@ -1676,6 +1695,8 @@ describe('the calendar subscription link', () => {
     expect(feed.res.headers.get('x-robots-tag')).toBe('noindex');
     expect(feed.text).toContain('BEGIN:VCALENDAR');
     expect(feed.text).toContain('X-WR-CALNAME:Betaharah');
+    expect(feed.text).toContain('COLOR:#6E3D45');
+    expect(feed.text.replace(/\r\n /g, '')).toContain('https://betaharah.com/brand/logo-224.png');
     expect(feed.text).toContain('SUMMARY:Hefsek taharah (by 4:33 PM)');
     expect(feed.text.match(/BEGIN:VEVENT/g)!.length).toBe((await c.state()).upcoming.length + 1); // and the flow, which is past
     // it follows the entries
@@ -1914,6 +1935,7 @@ describe('the operator\'s console', () => {
     });
     expect(r.json.urls).toEqual({
       webhook: 'https://cal.example/webhooks/telnyx',
+      rcsWebhook: 'https://cal.example/webhooks/telnyx/rcs',
       redirect: 'https://cal.example/api/google/callback',
       signInRedirect: 'https://cal.example/api/auth/google/callback',
       home: 'https://cal.example/',

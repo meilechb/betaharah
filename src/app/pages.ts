@@ -26,10 +26,16 @@ interface Doc {
   updated?: boolean;
   /** Whether search engines may list the page. Privacy and Terms may: Google's review of the sign-in looks for them. */
   indexable?: boolean;
+  /** The page's own address, for the share tags: '/help'. */
+  path: string;
   sections: Section[];
 }
 
+const SHARE = 'A free mikvah calendar that works by text message and shows up in your own calendar. Calculated by your customs.';
+const SHARE_IMAGE = 'https://betaharah.com/brand/og-1200x630.png';
+
 function layout(doc: Doc): string {
+  const full = `${doc.title} · Betaharah`;
   const toc = doc.sections.map(s => `<li><a href="#${s.id}">${s.title}</a></li>`).join('');
   const sections = doc.sections.map(s => `<section id="${s.id}" aria-labelledby="${s.id}-h">\n<h2 id="${s.id}-h">${s.title}</h2>\n${s.body}\n</section>`).join('\n\n');
   return `<!doctype html>
@@ -38,15 +44,31 @@ function layout(doc: Doc): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="${doc.indexable ? 'index,follow' : 'noindex'}">
-<title>${escapeHtml(doc.title)} · Betaharah</title>
+<title>${escapeHtml(full)}</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#6e3d45">
+<meta property="og:site_name" content="Betaharah">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${escapeHtml(full)}">
+<meta property="og:description" content="${escapeHtml(SHARE)}">
+<meta property="og:url" content="https://betaharah.com${doc.path}">
+<meta property="og:image" content="${SHARE_IMAGE}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${escapeHtml(full)}">
+<meta name="twitter:description" content="${escapeHtml(SHARE)}">
+<meta name="twitter:image" content="${SHARE_IMAGE}">
 <link rel="stylesheet" href="/site.css">
 <link rel="stylesheet" href="/pages.css">
 </head>
 <body class="doc-page">
 <a class="skip" href="#main">Skip to the content</a>
 <header class="site">
-  <a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">Betaharah</a>
+  <a class="brand" href="/"><img class="mark" src="/favicon.svg" alt="" width="28" height="28">Betaharah</a>
   <nav aria-label="Site"><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a class="button" href="/app/">Sign in</a></nav>
 </header>
 <main class="doc" id="main">
@@ -115,6 +137,7 @@ export function helpPage(site: Site): string {
   const rows = COMMANDS.map(([code, meaning]) => `  <tr><td><code>${escapeHtml(code)}</code></td><td>${meaning}</td></tr>`).join('\n');
   return layout({
     title: 'Help',
+    path: '/help',
     intro: 'How to start, how to record by text message, and how to see the dates in your calendar.',
     sections: [
       {
@@ -211,6 +234,7 @@ export function privacyPage(site: Site): string {
   const c = contact(site);
   return layout({
     title: 'Privacy',
+    path: '/privacy',
     updated: true,
     indexable: true,
     intro: `Betaharah is a free service run by ${c.who}. It has no advertising, no analytics and no tracking. This page says exactly what is kept and who can see it.`,
@@ -293,6 +317,7 @@ export function termsPage(site: Site): string {
   const c = contact(site);
   return layout({
     title: 'Terms',
+    path: '/terms',
     updated: true,
     indexable: true,
     intro: `Betaharah is a free service run by ${c.who}. By using it you agree to the following.`,
