@@ -9,93 +9,284 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/site.css" />
     <link rel="stylesheet" href="/landing.css" />
+    <script type="module" src="/landing.js"></script>
   </head>
-  <body>
+  <body class="landing-page">
+    <a class="skip" href="#main">Skip to the content</a>
     <header class="site">
-      <a class="brand" href="/">Betaharah</a>
-      <nav>
+      <a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28" />Betaharah</a>
+      <nav aria-label="Site">
         <a href="/help">Help</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
-        <a class="button" href="/app/">Sign in</a>
+        <a class="button" href="/app/" id="nav-sign-in">Sign in</a>
       </nav>
     </header>
 
-    <main class="landing">
-      <section class="hero">
-        <h1>A mikvah calendar you update by text message</h1>
-        <p class="lead">
-          Text one digit when something happens. Betaharah works out the onot perishah, the hefsek taharah, the seven clean days and mikvah night
-          by your customs, shows them in your own calendar, and reminds you by text.
-        </p>
-        <div class="actions">
-          <a class="button primary" href="/app/">Get started</a>
-          <a class="button" href="/help">How it works</a>
+    <main class="landing" id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-text">
+          <h1 id="hero-title">A mikvah calendar you update by text message</h1>
+          <p class="lead">
+            Text one digit when something happens. Betaharah works out the onot perishah, the hefsek taharah, the seven clean days and mikvah night by your
+            customs, shows them in your own calendar, and reminds you by text.
+          </p>
+          <div class="actions">
+            <a class="button primary lg" href="/app/" id="hero-start">Get started</a>
+            <a class="button lg" href="#how">How it works</a>
+          </div>
+          <p class="signup-note" id="signup-note" hidden></p>
+          <ul class="facts">
+            <li>
+              <svg class="fact-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+              Free, with no advertising
+            </li>
+            <li>
+              <svg class="fact-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+              A phone number is all it asks for
+            </li>
+            <li>
+              <svg class="fact-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7" /></svg>
+              Every custom is a setting
+            </li>
+          </ul>
         </div>
-        <p class="note">Free. For family and friends. You sign up with a phone number and nothing else.</p>
+
+        <figure class="handset" aria-labelledby="phone-caption">
+          <div class="screen">
+            <div class="screen-top" aria-hidden="true"><span class="notch"></span><span class="who">Betaharah</span></div>
+            <p class="stamp">Sun Nov 22</p>
+            <p class="bubble out"><span class="visually-hidden">You: </span>1</p>
+            <p class="bubble in"><span class="visually-hidden">Reply: </span>Recorded: flow Sun Nov 22 by day. Hefsek from Thu Nov 26. 0 to undo.</p>
+            <p class="stamp">Thu Nov 26</p>
+            <p class="bubble in"><span class="visually-hidden">Reminder: </span>Hefsek tahara: Thu Nov 26, before sunset at 4:33 PM. Reply 2 when done.</p>
+            <p class="bubble out"><span class="visually-hidden">You: </span>2</p>
+            <p class="bubble in">
+              <span class="visually-hidden">Reply: </span>Recorded: hefsek Thu Nov 26. Clean days Fri Nov 27 - Thu Dec 3. Mikvah Thu Dec 3 after 5:16 PM. 0 to undo.
+            </p>
+          </div>
+          <figcaption id="phone-caption">An example: two texts, the replies, and a reminder the household turned on.</figcaption>
+        </figure>
       </section>
 
-      <div class="grid">
-        <div class="card">
-          <h3>No app to open</h3>
-          <p>Record by texting a number. See the dates in Google Calendar, Apple Calendar or Outlook, next to everything else in your day.</p>
-        </div>
-        <div class="card">
-          <h3>Your customs</h3>
-          <p>Every point on which customs differ is a setting: the days of onah beinonit, Or Zarua, how the haflagah is counted, five days or four, nightfall, and more.</p>
-        </div>
-        <div class="card">
-          <h3>Private</h3>
-          <p>No name, no email, no tracking. Each account's data is encrypted before it is stored, and you can delete it at any time.</p>
-        </div>
-      </div>
+      <section id="how" class="block" aria-labelledby="how-title">
+        <h2 id="how-title">How it works</h2>
+        <ol class="steps-row">
+          <li>
+            <h3>Sign up with your phone number</h3>
+            <p>A code is texted to you and you type it in. Nothing else is asked: no name, no email address.</p>
+          </li>
+          <li>
+            <h3>Choose your location and customs</h3>
+            <p>Sunrise, sunset and nightfall are worked out for your location. Go over the customs with your rav.</p>
+          </li>
+          <li>
+            <h3>Record dates as they happen</h3>
+            <p>Text one digit, or enter it on the website. Every text gets a reply that says what was recorded.</p>
+          </li>
+          <li>
+            <h3>See the dates, get reminders</h3>
+            <p>If you want: the dates in your calendar, reminders by text, and your spouse's phone on the same account.</p>
+          </li>
+        </ol>
+      </section>
 
-      <h2>How it works</h2>
-      <div class="grid">
-        <div class="card">
-          <ol class="steps">
-            <li><strong>Sign in with your phone number.</strong> A code is texted to you; type it in.</li>
-            <li><strong>Choose your location and your customs.</strong> Review the customs with your rav.</li>
-            <li><strong>Record the most recent dates</strong>, on the website or by text.</li>
-            <li><strong>Optional:</strong> connect your calendar, turn on text reminders, and add your spouse's phone to the same account.</li>
-          </ol>
+      <section id="ways" class="block" aria-labelledby="ways-title">
+        <h2 id="ways-title">Two ways to use it</h2>
+        <div class="ways">
+          <div class="card way">
+            <svg class="way-icon" viewBox="0 0 48 48" aria-hidden="true">
+              <rect x="5" y="9" width="38" height="26" rx="3" />
+              <path d="M17 41h14M24 35v6" />
+              <path d="M11 17h14M11 23h20M11 28h9" />
+            </svg>
+            <h3>On the website</h3>
+            <p>
+              Sign in with your phone number and a texted code. See where things stand, record dates, set your customs, connect your calendar and choose your
+              reminders.
+            </p>
+            <div class="actions">
+              <a class="button primary" href="/app/" id="way-start">Get started on the website</a>
+            </div>
+          </div>
+          <div class="card way" id="text-only" aria-live="polite">
+            <svg class="way-icon" viewBox="0 0 48 48" aria-hidden="true">
+              <rect x="13" y="4" width="22" height="40" rx="4" />
+              <path d="M21 39h6" />
+              <path d="M18 13h12v8h-7l-3 3v-3h-2z" />
+            </svg>
+            <h3>By text message only</h3>
+            <p id="text-only-body">Where the site offers it, you can sign up and do everything by text message, with no website at all.</p>
+            <div id="text-only-more"></div>
+          </div>
         </div>
-        <div class="phone-demo" aria-label="Example of a text conversation">
-          <div class="bubble out">1</div>
-          <div class="bubble in">Recorded: flow Sun Nov 22 by day. Hefsek from Thu Nov 26. 0 to undo.</div>
-          <div class="bubble out">2</div>
-          <div class="bubble in">Recorded: hefsek Thu Nov 26. Clean days Fri Nov 27 - Thu Dec 3. Mikvah Thu Dec 3 after 5:16 PM. 0 to undo.</div>
-        </div>
-      </div>
+      </section>
 
-      <h2>What it calculates</h2>
-      <div class="grid">
-        <div class="card">
-          <h3>The onot perishah</h3>
-          <p>Onah beinonit, veset hachodesh and veset haflagah, by day or by night as the Hebrew date and the sun require, with each reason written out.</p>
+      <section id="texts" class="block" aria-labelledby="texts-title">
+        <h2 id="texts-title">One digit for each thing that happens</h2>
+        <div class="split">
+          <div>
+            <table class="digits">
+              <caption class="visually-hidden">What each text means</caption>
+              <thead>
+                <tr><th scope="col">Text</th><th scope="col">Meaning</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>1</code></td><td>A flow began</td></tr>
+                <tr><td><code>2</code></td><td>Hefsek taharah done today</td></tr>
+                <tr><td><code>3</code></td><td>The count of clean days was broken</td></tr>
+                <tr><td><code>4</code></td><td>Immersed tonight</td></tr>
+                <tr><td><code>5</code></td><td>A stain that makes her niddah was found</td></tr>
+                <tr><td><code>9</code></td><td>Where things stand</td></tr>
+                <tr><td><code>0</code></td><td>Undo the last entry</td></tr>
+              </tbody>
+            </table>
+            <p class="muted small">
+              You can say when it happened: <code>1 night</code>, <code>1 yesterday night</code> or <code>1 6:40am</code>. If a text arrives shortly after sunrise or
+              sunset, the reply says which side it was counted on. The <a href="/help#by-text">Help page</a> has every detail.
+            </p>
+          </div>
+          <div class="card reminders">
+            <h3>Reminders, if you turn them on</h3>
+            <p class="muted small">Each phone chooses its own. Nothing is sent on Shabbat or Yom Tov.</p>
+            <dl class="samples">
+              <dt>In words</dt>
+              <dd>Hefsek tahara: Thu Nov 26, before sunset at 4:33 PM. Reply 2 when done.</dd>
+              <dd>Mikvah night: Thu Dec 3, after 5:16 PM. Reply 4 after immersing.</dd>
+              <dt>Discreet</dt>
+              <dd>H Thu Nov 26 before 4:33 PM. Reply 2 when done.</dd>
+              <dd>M night: Thu Dec 3 after 5:16 PM. Reply 4 after.</dd>
+            </dl>
+          </div>
         </div>
-        <div class="card">
-          <h3>Hefsek taharah and the seven clean days</h3>
-          <p>The first day the hefsek can be done and its time before sunset, then each of the seven days, and what changes if the count is broken.</p>
-        </div>
-        <div class="card">
-          <h3>Mikvah night</h3>
-          <p>The night and the time of nightfall for your location, moved past Yom Kippur and Tisha B'Av, with a note when it is Shabbat or Yom Tov.</p>
-        </div>
-      </div>
+      </section>
 
-      <h2>What it does not do</h2>
-      <p>
-        It does not rule on halachic questions. It keeps track of dates by the customs you choose. For stains, for anything unclear, and when a veset kavua may have been
-        established (the calendar points it out and does not apply it), ask your rav.
-      </p>
+      <section id="calendar" class="block" aria-labelledby="calendar-title">
+        <h2 id="calendar-title">In your own calendar</h2>
+        <div class="split">
+          <div>
+            <ul class="plain">
+              <li>
+                <strong>Google Calendar.</strong> Connect your Google account. The site creates one calendar there and keeps it up to date. It can see and change only
+                that one calendar.
+              </li>
+              <li>
+                <strong>Apple Calendar, Outlook, or any calendar app.</strong> Add a private subscription link. Anyone who has the link can read the calendar; you can
+                replace or remove it at any time.
+              </li>
+              <li>
+                <strong>Words or symbols.</strong> Event titles can be written out, or shown as discreet symbols for a calendar other people may see. Halachic terms
+                can be in English letters or in Hebrew.
+              </li>
+            </ul>
+          </div>
+          <figure class="card cal" aria-labelledby="cal-caption">
+            <figcaption id="cal-caption" class="cal-head">Nov 22 to Dec 5, 2026</figcaption>
+            <div class="cal-grid" aria-hidden="true">
+              <span class="wd">Sun</span><span class="wd">Mon</span><span class="wd">Tue</span><span class="wd">Wed</span><span class="wd">Thu</span><span class="wd">Fri</span><span class="wd">Sat</span>
+              <span class="d"><b>22</b><i class="m flow"><span class="long">Flow</span><span class="short">•</span></i></span>
+              <span class="d"><b>23</b></span>
+              <span class="d"><b>24</b></span>
+              <span class="d"><b>25</b></span>
+              <span class="d"><b>26</b><i class="m hefsek"><span class="long">Hefsek</span><span class="short">H</span></i></span>
+              <span class="d"><b>27</b><i class="m clean">1/7</i></span>
+              <span class="d"><b>28</b><i class="m clean">2/7</i></span>
+              <span class="d"><b>29</b><i class="m clean">3/7</i></span>
+              <span class="d"><b>30</b><i class="m clean">4/7</i></span>
+              <span class="d"><b>Dec 1</b><i class="m clean">5/7</i></span>
+              <span class="d"><b>2</b><i class="m clean">6/7</i></span>
+              <span class="d"><b>3</b><i class="m clean">7/7</i><i class="m mikvah"><span class="long">Mikvah</span><span class="short">M</span></i></span>
+              <span class="d"><b>4</b></span>
+              <span class="d"><b>5</b></span>
+            </div>
+            <table class="events">
+              <caption class="visually-hidden">The same events, as their titles appear in each style</caption>
+              <thead>
+                <tr><th scope="col">Date</th><th scope="col">In words</th><th scope="col">Discreet</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Sun Nov 22</td><td>Flow (day)</td><td><code>•</code></td></tr>
+                <tr><td>Thu Nov 26</td><td>Hefsek taharah ✓</td><td><code>H ✓</code></td></tr>
+                <tr><td>Nov 27 to Dec 3</td><td>Seven clean days: day 1 to day 7</td><td><code>1/7</code> to <code>7/7</code></td></tr>
+                <tr><td>Thu Dec 3</td><td>Mikvah night (after 5:16 PM)</td><td><code>M &gt; 5:16 PM</code></td></tr>
+              </tbody>
+            </table>
+          </figure>
+        </div>
+      </section>
 
-      <h2>Text messages</h2>
-      <p class="muted small">
-        Betaharah sends a sign-in code when you ask for one, replies to the commands you text, and sends reminders only if you turn them on in your settings. Message
-        frequency varies. Message and data rates may apply. Reply STOP to stop, HELP for help. See the <a href="/terms">Terms</a> and the
-        <a href="/privacy">Privacy page</a>.
-      </p>
+      <section id="calculates" class="block" aria-labelledby="calc-title">
+        <h2 id="calc-title">What it calculates</h2>
+        <div class="grid">
+          <div class="card kind k-onah">
+            <h3>The onot perishah</h3>
+            <p>Onah beinonit, veset hachodesh and veset haflagah, by day or by night as the Hebrew date and the sun require, with each reason written out.</p>
+          </div>
+          <div class="card kind k-clean">
+            <h3>Hefsek taharah and the seven clean days</h3>
+            <p>The first day the hefsek can be done and its time before sunset, then each of the seven days, and what changes if the count is broken.</p>
+          </div>
+          <div class="card kind k-mikvah">
+            <h3>Mikvah night</h3>
+            <p>The night and the time of nightfall for your location, moved past Yom Kippur and Tisha B'Av, with a note when it is Shabbat or Yom Tov.</p>
+          </div>
+        </div>
+        <div class="card customs">
+          <h3>Every point on which customs differ is a setting</h3>
+          <ul class="tick-list cols-2">
+            <li>Five days or four before the hefsek</li>
+            <li>Onah beinonit on day 30, day 31, or both</li>
+            <li>Onah beinonit and veset hachodesh for one onah or the whole day</li>
+            <li>The onah of the Or Zarua, observed or not</li>
+            <li>The veset haflagah counted in days, or in onot from the hefsek</li>
+            <li>Nightfall: degrees below the horizon, or minutes after sunset</li>
+            <li>Yom Tov in Israel or outside it</li>
+            <li>Long cycles, a flow on the 30th, and longer intervals not yet passed</li>
+          </ul>
+          <p class="muted small">Until you save your choices, the calendar uses the stricter option of each. Review them with your rav.</p>
+        </div>
+      </section>
+
+      <section id="private" class="block" aria-labelledby="private-title">
+        <h2 id="private-title">Private</h2>
+        <div class="split">
+          <ul class="tick-list">
+            <li>A phone number is all it asks for. No name, no email address, no date of birth.</li>
+            <li>Each account's data is encrypted (AES-256-GCM) before it is stored.</li>
+            <li>No advertising, no analytics and no tracking. Nothing on these pages is loaded from another site.</li>
+            <li>Your information is not sold, rented or given to anyone.</li>
+            <li>You can download everything kept about your account, or delete the account, at any time under Settings.</li>
+          </ul>
+          <div class="honest">
+            <h3>What encryption does not do</h3>
+            <p>
+              The server holds the key, because it has to read your dates to work out the calendar and send reminders. So the person who runs the site has the
+              technical means to read an account. Text messages pass through Telnyx and the phone companies, who handle the number and the words of each text.
+            </p>
+            <p><a href="/privacy">Read the Privacy page</a></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="limits" class="block" aria-labelledby="limits-title">
+        <h2 id="limits-title">What it does not do</h2>
+        <div class="card rav">
+          <p>
+            <strong>It does not rule on halachic questions.</strong> It keeps track of dates by the customs you choose. For stains, for anything unclear, and when a
+            veset kavua may have been established (the calendar points it out and does not apply it), ask your rav.
+          </p>
+          <p class="muted small">It is not medical advice. Text messages and calendar updates can be late or fail to arrive, so check what it shows.</p>
+        </div>
+      </section>
+
+      <section id="sms" class="block sms-terms" aria-labelledby="sms-title">
+        <h2 id="sms-title">Text messages</h2>
+        <p class="muted small">
+          Betaharah sends a sign-in code when you ask for one, replies to the messages you text it (including JOIN, if you sign up by text), and sends reminders
+          only if you turn them on in your settings. Message frequency varies. Message and data rates may apply. Reply STOP to stop, HELP for help. See the
+          <a href="/terms">Terms</a> and the <a href="/privacy">Privacy page</a>.
+        </p>
+      </section>
     </main>
 
     <footer class="site">

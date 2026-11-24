@@ -1,0 +1,220 @@
+/* The Help, Privacy and Terms pages (src/app/pages.ts). See docs/UI.md. Use the tokens from /site.css. */
+
+.skip {
+  position: absolute;
+  left: var(--space-2);
+  top: -100px;
+  z-index: 10;
+  background: var(--surface);
+  color: var(--accent);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+.skip:focus {
+  top: var(--space-2);
+}
+
+header.site .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+}
+header.site .brand img {
+  display: block;
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- heading ---------- */
+
+.doc-head {
+  padding: var(--space-6) 0 var(--space-5);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--space-5);
+}
+main.doc .doc-head h1 {
+  font-size: var(--text-2xl);
+  margin: 0 0 var(--space-2);
+}
+@media (min-width: 720px) {
+  main.doc .doc-head h1 {
+    font-size: 2.1rem;
+  }
+}
+.doc-head .updated {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-3);
+}
+.doc-head .intro {
+  font-size: var(--text-lg);
+  color: var(--ink);
+  margin: 0;
+  max-width: 38em;
+}
+
+/* ---------- table of contents ---------- */
+
+.toc {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-4);
+}
+.toc-title {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: var(--weight-medium);
+  margin: 0 0 var(--space-2);
+}
+.toc ol {
+  margin: 0;
+  padding-left: 1.5em;
+}
+@media (min-width: 600px) {
+  .toc ol {
+    columns: 2;
+    column-gap: var(--space-8);
+  }
+}
+main.doc .toc li {
+  margin: 0;
+  break-inside: avoid;
+}
+.toc a {
+  display: inline-block;
+  padding: var(--space-1) 0;
+  min-height: 32px;
+}
+
+/* ---------- sections ---------- */
+
+main.doc section {
+  scroll-margin-top: var(--space-4);
+  padding-top: var(--space-4);
+}
+main.doc section + section {
+  border-top: 1px solid var(--line);
+  margin-top: var(--space-6);
+}
+main.doc h2 {
+  font-size: var(--text-xl);
+  margin: var(--space-4) 0 var(--space-3);
+}
+main.doc h3 {
+  font-size: var(--text-base);
+  margin: var(--space-5) 0 var(--space-2);
+}
+main.doc ul,
+main.doc ol {
+  padding-left: 1.4em;
+}
+main.doc li {
+  margin-bottom: var(--space-2);
+}
+main.doc ol.steps li::marker {
+  font-weight: var(--weight-bold);
+  color: var(--accent);
+}
+main.doc section:target h2 {
+  color: var(--accent);
+}
+
+.number-line {
+  font-size: var(--text-lg);
+}
+.nowrap {
+  white-space: nowrap;
+}
+main.doc p code,
+main.doc li code {
+  white-space: nowrap;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 0.3em;
+}
+
+.callout {
+  background: var(--warn-bg);
+  border-left: 4px solid var(--warn-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin: var(--space-4) 0;
+}
+.callout p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- the command table ---------- */
+
+table.commands {
+  margin: var(--space-3) 0 var(--space-4);
+}
+table.commands caption {
+  text-align: left;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  padding-bottom: var(--space-2);
+}
+table.commands thead th {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: var(--weight-medium);
+}
+table.commands td {
+  vertical-align: middle;
+}
+table.commands td:first-child {
+  width: 3.5em;
+}
+table.commands td:first-child code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2em;
+  height: 2.2em;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-base);
+}
+
+/* ---------- the text-message terms ---------- */
+
+.terms-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.terms-list dt {
+  font-weight: var(--weight-bold);
+  margin-top: var(--space-3);
+}
+.terms-list dd {
+  margin: var(--space-1) 0 0;
+}
+@media (min-width: 600px) {
+  .terms-list {
+    grid-template-columns: 8em minmax(0, 1fr);
+    column-gap: var(--space-4);
+  }
+  .terms-list dt,
+  .terms-list dd {
+    padding: var(--space-3) 0;
+    margin: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+.to-top {
+  margin-top: var(--space-8);
+  font-size: var(--text-sm);
+}

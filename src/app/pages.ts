@@ -1,7 +1,7 @@
 /**
  * The Help, Privacy and Terms pages. They are written by the server so that
  * they can name the person who runs the site, as set in the operator's
- * console.
+ * console. Every value the operator sets goes through escapeHtml.
  */
 import { HELP_TEXT } from './commands';
 import { MAX_MESSAGES_KEPT, MAX_PHONES, MAX_REMOVED_KEPT, smsReady, type Site } from './model';
@@ -12,23 +12,53 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function layout(title: string, body: string): string {
+/** One titled part of a page. `id` is the anchor the table of contents links to. */
+interface Section {
+  id: string;
+  title: string;
+  body: string;
+}
+
+interface Doc {
+  title: string;
+  /** Shown under the heading: the page's purpose, in a sentence or two (HTML). */
+  intro: string;
+  updated?: boolean;
+  sections: Section[];
+}
+
+function layout(doc: Doc): string {
+  const toc = doc.sections.map(s => `<li><a href="#${s.id}">${s.title}</a></li>`).join('');
+  const sections = doc.sections.map(s => `<section id="${s.id}" aria-labelledby="${s.id}-h">\n<h2 id="${s.id}-h">${s.title}</h2>\n${s.body}\n</section>`).join('\n\n');
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escapeHtml(title)} · Betaharah</title>
+<title>${escapeHtml(doc.title)} · Betaharah</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/site.css">
+<link rel="stylesheet" href="/pages.css">
 </head>
-<body>
+<body class="doc-page">
+<a class="skip" href="#main">Skip to the content</a>
 <header class="site">
-  <a class="brand" href="/">Betaharah</a>
-  <nav><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a class="button" href="/app/">Sign in</a></nav>
+  <a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">Betaharah</a>
+  <nav aria-label="Site"><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a class="button" href="/app/">Sign in</a></nav>
 </header>
-<main class="doc">
-${body}
+<main class="doc" id="main">
+<header class="doc-head">
+<h1>${escapeHtml(doc.title)}</h1>
+${doc.updated ? `<p class="updated">Last updated ${LAST_UPDATED}</p>` : ''}
+<p class="intro">${doc.intro}</p>
+</header>
+<nav class="toc" aria-labelledby="toc-title">
+<p class="toc-title" id="toc-title">On this page</p>
+<ol>${toc}</ol>
+</nav>
+${sections}
+<p class="to-top"><a href="#main">Back to the top</a></p>
 </main>
 <footer class="site"><a href="/">Home</a><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
 </body>
@@ -53,75 +83,136 @@ function textingNumber(site: Site): string | null {
   return smsReady(site) ? (site.secrets.telnyxNumber ?? null) : null;
 }
 
+/** The number to text JOIN to, when a person may sign up that way (the same rule as GET /api/public). */
+function joinNumber(site: Site): string | null {
+  return site.config.textSignup && site.config.signup !== 'closed' ? textingNumber(site) : null;
+}
+
+/** A texting number as a link that opens the phone's messages: '+18885550100' is shown as (888) 555-0100. */
+function numberLink(number: string, body?: string): string {
+  const m = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(number);
+  const shown = m ? `(${m[1]}) ${m[2]}-${m[3]}` : number;
+  const href = `sms:${number}${body ? `?body=${encodeURIComponent(body)}` : ''}`;
+  return `<a class="nowrap" href="${escapeHtml(href)}">${escapeHtml(shown)}</a>`;
+}
+
+const COMMANDS: Array<[string, string]> = [
+  ['1', 'A flow began now'],
+  ['2', 'Hefsek taharah done today'],
+  ['3', 'The count of clean days was broken now'],
+  ['4', 'Immersed tonight'],
+  ['5', 'A stain that makes her niddah was found now'],
+  ['9', 'Where things stand'],
+  ['0', 'Undo the last entry (within 48 hours)'],
+  ['?', 'The list of commands'],
+];
+
 export function helpPage(site: Site): string {
   const c = contact(site);
   const number = textingNumber(site);
-  return layout(
-    'Help',
-    `<h1>Help</h1>
-
-<h2>Getting started</h2>
-<ol>
+  const join = joinNumber(site);
+  const rows = COMMANDS.map(([code, meaning]) => `  <tr><td><code>${escapeHtml(code)}</code></td><td>${meaning}</td></tr>`).join('\n');
+  return layout({
+    title: 'Help',
+    intro: 'How to start, how to record by text message, and how to see the dates in your calendar.',
+    sections: [
+      {
+        id: 'getting-started',
+        title: 'Getting started',
+        body: `<ol class="steps">
   <li><strong>Sign in with your phone number.</strong> You get a six-digit code by text message and type it in. There is nothing else to fill in. If you like, you can also set a password under Settings, and sign in with that.</li>
   <li><strong>Choose your location.</strong> Sunrise, sunset and nightfall are calculated for it.</li>
   <li><strong>Review your customs.</strong> Every point on which customs differ is a setting. Until you save them, the calendar uses the stricter option for each. Go over them with your rav.</li>
   <li><strong>Record the most recent dates</strong>: when the last period began, and the hefsek taharah and immersion that followed.</li>
   <li><strong>Optional: put it in your calendar and turn on text reminders</strong>, both under Settings.</li>
-</ol>
-
-<h2>Recording by text message</h2>
-${number ? `<p>Text <strong>${escapeHtml(number)}</strong> from a phone that is on your account.</p>` : '<p>Text messaging is not available on this site yet. Everything can be recorded on the website.</p>'}
-<table>
-  <tr><th>Text</th><th>Meaning</th></tr>
-  <tr><td><code>1</code></td><td>A flow began now</td></tr>
-  <tr><td><code>2</code></td><td>Hefsek taharah done today</td></tr>
-  <tr><td><code>3</code></td><td>The count of clean days was broken now</td></tr>
-  <tr><td><code>4</code></td><td>Immersed tonight</td></tr>
-  <tr><td><code>5</code></td><td>A stain that makes her niddah was found now</td></tr>
-  <tr><td><code>9</code></td><td>Where things stand</td></tr>
-  <tr><td><code>0</code></td><td>Undo the last entry (within 48 hours)</td></tr>
-  <tr><td><code>?</code></td><td>The list of commands</td></tr>
+</ol>`,
+      },
+      {
+        id: 'by-text',
+        title: 'Recording by text message',
+        body: `${number ? `<p class="number-line">Text <strong>${numberLink(number)}</strong> from a phone that is on your account.</p>` : '<p class="number-line">Text messaging is not available on this site yet. Everything can be recorded on the website.</p>'}
+<table class="commands">
+  <caption>Send one of these as a text message</caption>
+  <thead><tr><th scope="col">Text</th><th scope="col">Meaning</th></tr></thead>
+  <tbody>
+${rows}
+  </tbody>
 </table>
-<p>For <code>1</code>, <code>3</code> and <code>5</code> you can add when it happened: <code>1 day</code>, <code>1 night</code>, <code>1 yesterday night</code>, or a clock time such as <code>1 6:40am</code>. For <code>2</code> and <code>4</code> you can add <code>yesterday</code>.</p>
+<h3>Saying when it happened</h3>
+<ul>
+  <li>For <code>1</code>, <code>3</code> and <code>5</code>: <code>1 day</code>, <code>1 night</code>, <code>1 yesterday night</code>, or a clock time such as <code>1 6:40am</code>.</li>
+  <li>For <code>2</code> and <code>4</code>: <code>2 yesterday</code>.</li>
+</ul>
 <p>The short reminder the service sends is: <em>${escapeHtml(HELP_TEXT)}</em></p>
-<p>Every text gets a reply saying what was recorded. If a text arrives shortly after sunrise or sunset, the reply says which side it was counted on and how to correct it.</p>
-
-<h2>Reminders</h2>
-<p>Reminders are off until you turn them on for a phone under Settings. You choose which ones each phone receives and when. Nothing is sent on Shabbat or Yom Tov: what falls on those days is sent beforehand, or held until afterwards, or dropped, depending on what it is.</p>
-<p>To stop all texts to a phone, reply <strong>STOP</strong>. To turn them back on, reply <strong>START</strong>. Reply <strong>HELP</strong> for a short description. Message frequency varies with your settings. Message and data rates may apply.</p>
-
-<h2>Seeing it in your calendar</h2>
-<p>There are two ways, both optional.</p>
+<p>Every text gets a reply saying what was recorded. If a text arrives shortly after sunrise or sunset, the reply says which side it was counted on and how to correct it.</p>`,
+      },
+      {
+        id: 'text-only',
+        title: 'Using it by text only',
+        body: `<p>An account can be created and used entirely by text message, without the website.</p>
+${
+  join
+    ? `<p class="number-line">To start, text <strong>JOIN</strong> to <strong>${numberLink(join, 'JOIN')}</strong>.</p>`
+    : '<p class="number-line">Signing up by text message is not open on this site at the moment. You can sign up on the website.</p>'
+}
+<ul>
+  <li>Texting JOIN counts as your request to create an account and to receive the replies.</li>
+  <li>Text <code>MENU</code> at any time for the list of everything you can do by text.</li>
+  <li>The digits in the table above work the same way.</li>
+  <li>Reply <strong>STOP</strong> to stop all texts to your phone, <strong>START</strong> to turn them back on, and <strong>HELP</strong> for a short description.</li>
+</ul>`,
+      },
+      {
+        id: 'reminders',
+        title: 'Reminders',
+        body: `<p>Reminders are off until you turn them on for a phone under Settings. You choose which ones each phone receives and when. Nothing is sent on Shabbat or Yom Tov: what falls on those days is sent beforehand, or held until afterwards, or dropped, depending on what it is.</p>
+<p>To stop all texts to a phone, reply <strong>STOP</strong>. To turn them back on, reply <strong>START</strong>. Reply <strong>HELP</strong> for a short description. Message frequency varies with your settings. Message and data rates may apply.</p>`,
+      },
+      {
+        id: 'calendar',
+        title: 'Seeing it in your calendar',
+        body: `<p>There are two ways, both optional.</p>
 <ul>
   <li><strong>Google Calendar.</strong> Under Settings, connect your Google account. The site creates one new calendar there and keeps it up to date within about a minute of each change. It can see and change only that one calendar, nothing else in your Google account. To share it with your spouse, share that calendar from Google Calendar.</li>
   <li><strong>A subscription link</strong>, for Apple Calendar, Outlook, or Google Calendar without connecting an account. Under Settings, create the link and add it in your calendar app as a subscribed calendar (in Google Calendar: Other calendars, +, From URL). The calendar app decides how often it looks for changes; Google says it can take up to 12 hours. Anyone who has the link can read the calendar, so treat it like a password. You can replace or remove it at any time.</li>
 </ul>
-<p>Event titles can be written in words or as symbols only, for a calendar other people may see.</p>
-
-<h2>Sharing an account</h2>
-<p>Husband and wife can use one account. Under Settings, add the second phone: a code is texted to it, and once it is entered that phone can sign in, record by text and receive its own choice of reminders. An account can have up to ${MAX_PHONES} phones.</p>
-
-<h2>English or Hebrew terms</h2>
-<p>The site is in English. Under Settings you can choose whether halachic terms are written in English letters (hefsek taharah) or in Hebrew (הפסק טהרה). The choice also applies to the calendar events.</p>
-
-<h2>What this is not</h2>
-<p>The calendar does arithmetic on the dates you record, by the customs you select. It does not rule on halachic questions. For stains, for anything unclear, when a veset kavua may have been established (the calendar points this out but does not apply it), and for every doubt, ask your rav.</p>
-
-<h2>Contact</h2>
-<p>This site is run by ${c.who}. ${c.how}</p>`,
-  );
+<p>Event titles can be written in words or as symbols only, for a calendar other people may see.</p>`,
+      },
+      {
+        id: 'sharing',
+        title: 'Sharing an account',
+        body: `<p>Husband and wife can use one account. Under Settings, add the second phone: a code is texted to it, and once it is entered that phone can sign in, record by text and receive its own choice of reminders. An account can have up to ${MAX_PHONES} phones.</p>`,
+      },
+      {
+        id: 'terms',
+        title: 'English or Hebrew terms',
+        body: `<p>The site is in English. Under Settings you can choose whether halachic terms are written in English letters (hefsek taharah) or in Hebrew (<span lang="he">הפסק טהרה</span>). The choice also applies to the calendar events.</p>`,
+      },
+      {
+        id: 'not-a-rav',
+        title: 'What this is not',
+        body: `<p class="callout">The calendar does arithmetic on the dates you record, by the customs you select. It does not rule on halachic questions. For stains, for anything unclear, when a veset kavua may have been established (the calendar points this out but does not apply it), and for every doubt, ask your rav.</p>`,
+      },
+      {
+        id: 'contact',
+        title: 'Contact',
+        body: `<p>This site is run by ${c.who}. ${c.how}</p>`,
+      },
+    ],
+  });
 }
 
 export function privacyPage(site: Site): string {
   const c = contact(site);
-  return layout(
-    'Privacy',
-    `<h1>Privacy</h1>
-<p class="muted">Last updated ${LAST_UPDATED}</p>
-<p>Betaharah is a free tool run by ${c.who} for family and friends. It has no advertising, no analytics and no tracking. This page says exactly what is kept and who can see it.</p>
-
-<h2>What is kept</h2>
-<ul>
+  return layout({
+    title: 'Privacy',
+    updated: true,
+    intro: `Betaharah is a free tool run by ${c.who} for family and friends. It has no advertising, no analytics and no tracking. This page says exactly what is kept and who can see it.`,
+    sections: [
+      {
+        id: 'kept',
+        title: 'What is kept',
+        body: `<ul>
   <li><strong>Your phone number</strong>, and the number of any phone you add to your account.</li>
   <li><strong>Your settings</strong>: location, customs, reminder choices.</li>
   <li><strong>The dates you record</strong>, and the last ${MAX_REMOVED_KEPT} entries you removed (so that a mistake can be traced).</li>
@@ -129,84 +220,125 @@ export function privacyPage(site: Site): string {
   <li><strong>If you set a password</strong>: a salted, keyed hash of it, from which the password cannot be read.</li>
   <li><strong>If you connect Google Calendar</strong>: a token from Google that lets the site manage the one calendar it creates. The site cannot see your other calendars, your email, your contacts or your name.</li>
 </ul>
-<p>Nothing else is asked for: no name, no email address, no date of birth.</p>
-
-<h2>How it is protected</h2>
-<ul>
+<p>Nothing else is asked for: no name, no email address, no date of birth.</p>`,
+      },
+      {
+        id: 'by-text',
+        title: 'Signing up by text',
+        body: `<p>An account can also be created by texting JOIN to the site's number. Texting JOIN counts as the request to create an account and to receive the replies. What is kept, how it is protected and how it can be deleted are the same as for an account made on the website.</p>`,
+      },
+      {
+        id: 'protected',
+        title: 'How it is protected',
+        body: `<ul>
   <li>Everything about your account, including the dates, settings, phone numbers, messages and the Google token, is encrypted (AES-256-GCM) before it is written to the database.</li>
   <li>The table used to look up an account by phone number holds only a keyed fingerprint of each number, not the number.</li>
   <li>Reminder texts waiting to be sent are encrypted too.</li>
   <li>Each account can be read only through its own sign-in, a text from one of its own phones, or its own calendar link. One account cannot read another.</li>
   <li>All connections use HTTPS. The only cookie is the one that keeps you signed in.</li>
 </ul>
+<div class="callout">
 <p><strong>What encryption does not do.</strong> The encryption key is held by the server, apart from the database. That protects your data if the database alone is copied or looked through. It does not hide your data from the server itself: the server has to read your dates to work out the calendar and send reminders. So the person who operates the site has the technical means to decrypt an account. The operator's console shows no account's data, only totals.</p>
-
-<h2>Who else handles it</h2>
-<ul>
+</div>`,
+      },
+      {
+        id: 'others',
+        title: 'Who else handles it',
+        body: `<ul>
   <li><strong>Cloudflare</strong> hosts the site and the database. The database contents are encrypted as described above. Cloudflare handles each request, including your network address, in order to deliver it.</li>
   <li><strong>Telnyx</strong> and the mobile carriers deliver the text messages, so they handle your phone number and the words of each text. If that matters to you, choose the "discreet" wording for reminders, which uses letters and times only.</li>
   <li><strong>Google</strong>, only if you connect Google Calendar: the events are written to your own calendar there.</li>
 </ul>
-<p>Your information is not sold, rented or given to anyone else. No mobile information is shared with third parties or affiliates for marketing or promotional purposes. Text-message opt-in data and consent are not shared with any third party.</p>
-
-<h2>Logs and limits</h2>
-<p>The server keeps no log of the pages or addresses requested. Errors are logged without any account's data. To stop abuse of sign-in codes, a keyed fingerprint of the network address that asked for a code is kept for up to one hour.</p>
-
-<h2>The calendar link</h2>
-<p>If you create a calendar subscription link, anyone who has that link can read your calendar without signing in. Share it only with your spouse. You can replace or remove the link under Settings; the old one stops working at once.</p>
-
-<h2>Seeing, taking and deleting your data</h2>
-<p>Under Settings you can download everything kept about your account, and you can delete the account. Deleting removes all of it from the database immediately and withdraws the site's access to your Google calendar (the calendar itself stays in your Google account for you to delete). Cloudflare keeps a restore history of the database for 7 days; after that, deleted data cannot be recovered by anyone.</p>
-<p>Replying STOP to a text stops all texts to that phone.</p>
-
-<h2>Adults only</h2>
-<p>This service is for adults.</p>
-
-<h2>Changes and contact</h2>
-<p>If this page changes in a way that matters, the change is noted here with a new date. Questions: ${c.how}</p>`,
-  );
+<p>Your information is not sold, rented or given to anyone else. No mobile information is shared with third parties or affiliates for marketing or promotional purposes. Text-message opt-in data and consent are not shared with any third party.</p>`,
+      },
+      {
+        id: 'logs',
+        title: 'Logs and limits',
+        body: `<p>The server keeps no log of the pages or addresses requested. Errors are logged without any account's data. To stop abuse of sign-in codes, a keyed fingerprint of the network address that asked for a code is kept for up to one hour.</p>`,
+      },
+      {
+        id: 'calendar-link',
+        title: 'The calendar link',
+        body: `<p>If you create a calendar subscription link, anyone who has that link can read your calendar without signing in. Share it only with your spouse. You can replace or remove the link under Settings; the old one stops working at once.</p>`,
+      },
+      {
+        id: 'your-data',
+        title: 'Seeing, taking and deleting your data',
+        body: `<p>Under Settings you can download everything kept about your account, and you can delete the account. Deleting removes all of it from the database immediately and withdraws the site's access to your Google calendar (the calendar itself stays in your Google account for you to delete). Cloudflare keeps a restore history of the database for 7 days; after that, deleted data cannot be recovered by anyone.</p>
+<p>Replying STOP to a text stops all texts to that phone.</p>`,
+      },
+      {
+        id: 'adults',
+        title: 'Adults only',
+        body: '<p>This service is for adults.</p>',
+      },
+      {
+        id: 'changes',
+        title: 'Changes and contact',
+        body: `<p>If this page changes in a way that matters, the change is noted here with a new date. Questions: ${c.how}</p>`,
+      },
+    ],
+  });
 }
 
 export function termsPage(site: Site): string {
   const c = contact(site);
-  return layout(
-    'Terms',
-    `<h1>Terms</h1>
-<p class="muted">Last updated ${LAST_UPDATED}</p>
-<p>Betaharah is a free tool run by ${c.who} for family and friends. By using it you agree to the following.</p>
-
-<h2>What it does, and what it does not</h2>
-<ul>
+  return layout({
+    title: 'Terms',
+    updated: true,
+    intro: `Betaharah is a free tool run by ${c.who} for family and friends. By using it you agree to the following.`,
+    sections: [
+      {
+        id: 'what-it-does',
+        title: 'What it does, and what it does not',
+        body: `<ul>
   <li>It calculates dates from what you record, by the customs you select, for the location you choose. If something is recorded wrongly or a setting does not match your custom, the result will be wrong.</li>
   <li><strong>It is not a rav and does not give halachic rulings.</strong> It is an aid for keeping track. Questions about stains, examinations, a veset kavua, or any doubt belong to your rav. Review your settings with your rav.</li>
   <li>Times are astronomical calculations for your location. They can differ by a minute or two from a printed calendar. Do not rely on the last minutes before a time.</li>
   <li>It is not medical advice.</li>
   <li>You are responsible for checking what it shows. Text messages and calendar updates can be late or fail to arrive.</li>
-</ul>
-
-<h2>Text messages</h2>
-<ul>
-  <li><strong>Program:</strong> Betaharah. Sign-in codes when you ask for one; replies to the commands you text; and, only if you turn them on, reminders about the dates in your calendar.</li>
-  <li><strong>Consent:</strong> you ask for a sign-in code by entering your number on the sign-in page. Reminders are off until you turn them on for a phone under Settings. Add only phones whose owners have agreed. Consent to receive texts is not a condition of anything.</li>
-  <li><strong>Frequency:</strong> message frequency varies with your settings and your calendar.</li>
-  <li><strong>Cost:</strong> the service is free. Message and data rates may apply from your mobile carrier.</li>
-  <li><strong>Stopping:</strong> reply <strong>STOP</strong> to any text to stop all texts to that phone. Reply <strong>START</strong> to turn them back on. Reply <strong>HELP</strong> for help, or see the <a href="/help">Help page</a>.</li>
-  <li>Carriers are not liable for delayed or undelivered messages.</li>
-  <li>See the <a href="/privacy">Privacy page</a> for how phone numbers are handled.</li>
-</ul>
-
-<h2>Your account</h2>
-<ul>
+</ul>`,
+      },
+      {
+        id: 'text-messages',
+        title: 'Text messages',
+        body: `<dl class="terms-list">
+  <dt>Program</dt>
+  <dd>Betaharah. Sign-in codes when you ask for one; replies to the commands you text; and, only if you turn them on, reminders about the dates in your calendar.</dd>
+  <dt>Consent</dt>
+  <dd>You ask for a sign-in code by entering your number on the sign-in page. Or you create an account by texting JOIN to the site's number: texting JOIN counts as your request to create an account and to receive the replies. Reminders are off until you turn them on for a phone. Add only phones whose owners have agreed. Consent to receive texts is not a condition of anything.</dd>
+  <dt>Frequency</dt>
+  <dd>Message frequency varies with your settings and your calendar.</dd>
+  <dt>Cost</dt>
+  <dd>The service is free. Message and data rates may apply from your mobile carrier.</dd>
+  <dt>Stopping</dt>
+  <dd>Reply <strong>STOP</strong> to any text to stop all texts to that phone. Reply <strong>START</strong> to turn them back on. Reply <strong>HELP</strong> for help, or see the <a href="/help">Help page</a>.</dd>
+  <dt>Carriers</dt>
+  <dd>Carriers are not liable for delayed or undelivered messages.</dd>
+  <dt>Privacy</dt>
+  <dd>See the <a href="/privacy">Privacy page</a> for how phone numbers are handled.</dd>
+</dl>`,
+      },
+      {
+        id: 'account',
+        title: 'Your account',
+        body: `<ul>
   <li>Use only phone numbers that are yours or whose owner has agreed.</li>
   <li>Keep your sign-in codes, your password and your calendar link to yourself.</li>
   <li>You can delete your account at any time under Settings.</li>
   <li>The operator may limit or remove accounts that abuse the service, and may limit the number of text messages to keep the service free.</li>
-</ul>
-
-<h2>No warranty</h2>
-<p>The service is provided as it is, without any warranty, and may change or stop. To the extent the law allows, the operator is not liable for loss or harm that comes from using it or from relying on what it shows.</p>
-
-<h2>Contact</h2>
-<p>${c.how}</p>`,
-  );
+</ul>`,
+      },
+      {
+        id: 'warranty',
+        title: 'No warranty',
+        body: '<p>The service is provided as it is, without any warranty, and may change or stop. To the extent the law allows, the operator is not liable for loss or harm that comes from using it or from relying on what it shows.</p>',
+      },
+      {
+        id: 'contact',
+        title: 'Contact',
+        body: `<p>${c.how}</p>`,
+      },
+    ],
+  });
 }
