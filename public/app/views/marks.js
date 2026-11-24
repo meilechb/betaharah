@@ -75,6 +75,8 @@ export function describe(e, opts) {
   return d
     .split('\n')
     .filter(l => !(o.noAssumption && l.startsWith(PROJECTED)))
+    // opts.brief (the list of onot under its own heading): the reasons only, without the line that every row would repeat
+    .filter(l => !(o.brief && e.kind === 'onah' && l.startsWith('Separation')))
     .map(l => (l.startsWith(PROJECTED) ? cap1(l.slice(PROJECTED.length)) : l))
     .join('\n')
     .replace(/^\n+|\n+$/g, '')

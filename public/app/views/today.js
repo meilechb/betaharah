@@ -229,7 +229,7 @@ let showAll = false;
 /** A row of "Coming up": the mark, the title with its label, when, and the server's lines (its reasons, for an onah). */
 function itemRow(it, extra) {
   const e = withGrid(it);
-  const desc = describe(it, { noAssumption: true });
+  const desc = describe(it, { noAssumption: true, brief: true });
   return h(
     'li',
     { class: 'up-row up-' + it.kind },

@@ -51,6 +51,8 @@ import type { BeginInput, ChatContext, ChatState, ConfirmAction, ConverseInput, 
 
 /** The options of a message are kept this long. */
 export const CHAT_TTL_MS = 24 * 3_600_000;
+/** A YES-or-NO question about something that cannot be undone (deleting the account, leaving it, replacing a link) is open for 30 minutes only. */
+export const CONFIRM_TTL_MS = 30 * 60_000;
 /** Days a code for adding another phone stays valid. */
 export const INVITE_DAYS = 7;
 /** Texts longer than this are not read at all. */
@@ -1205,6 +1207,7 @@ export function converse(input: ConverseInput): ConverseOutput {
   const r = new Reply(input, me);
   let chat = validChat(input.chat);
   if (chat && (input.now - chat.at > CHAT_TTL_MS || chat.at - input.now > CHAT_TTL_MS)) chat = null;
+  if (chat && chat.ctx.action && input.now - chat.at > CONFIRM_TTL_MS) chat = null;
 
   // RCS: a shared location.
   if (input.location) {

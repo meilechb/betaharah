@@ -177,19 +177,28 @@ describe('reading a reply', () => {
     expect(p.say('where am I')).toBe('Tehorah.');
     expect(p.say('I started bleeding')).toBe('When did it begin?');
   });
-  it('options last 24 hours; after that the reply is read by the general words only', () => {
+  it('options last 24 hours; a YES-or-NO question about something that cannot be undone only 30 minutes', () => {
     expect(CHAT_TTL_MS).toBe(24 * 3_600_000);
     const data = household();
     const p = new Phone(data);
-    p.send('history');
+    // a confirmation answered within the half hour
     p.send('delete account');
-    p.wait(23 * 60);
+    p.wait(29);
     expect(p.say('no')).toBe('Nothing was changed.');
+    // after it, YES deletes nothing
     p.send('delete account');
+    p.wait(31);
+    const late = p.send('YES');
+    expect(bodies(late)).toBe('Not understood; nothing was changed.');
+    expect(late.effects).toEqual([]);
+    expect(data.entries.length).toBeGreaterThanOrEqual(0);
+    // ordinary options stay for a day, and not longer
+    p.send('period');
+    p.wait(23 * 60);
+    expect(bodies(p.send('another day'))).not.toBe('Not understood; nothing was changed.');
+    p.send('period');
     p.wait(24 * 60 + 1);
-    const out = p.send('YES');
-    expect(bodies(out)).toBe('Not understood; nothing was changed.');
-    expect(out.effects).toEqual([]);
+    expect(bodies(p.send('another day'))).toBe('Not understood; nothing was changed.');
   });
   it('a malformed or older stored state counts as none', () => {
     expect(validChat({ v: 1, at: NOW, setup: false, q: { kind: 'zip' } })).toBeNull();
