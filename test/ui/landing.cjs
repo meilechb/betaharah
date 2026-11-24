@@ -248,9 +248,14 @@ async function metaAndHeaders() {
     const tw = /name="twitter:image" content="([^"]+)"/.exec(html);
     if (!tw || tw[1] !== image[1]) fail(where, 'twitter:image differs from og:image');
   }
-  for (const path of ['/app/', '/admin/', '/help', '/privacy', '/terms', '/site.css']) {
+  for (const path of ['/app/', '/admin/', '/help', '/site.css']) {
     const tag = (await fetch(base + path)).headers.get('x-robots-tag') || '';
     if (!/noindex/i.test(tag)) fail(where, `${path} is no longer sent with X-Robots-Tag: noindex`);
+  }
+  // Privacy and Terms may be indexed (Google's sign-in review reads them), so they carry no noindex.
+  for (const path of ['/privacy', '/terms']) {
+    const tag = (await fetch(base + path)).headers.get('x-robots-tag') || '';
+    if (/noindex/i.test(tag)) fail(where, `${path} is sent with X-Robots-Tag: ${tag}`);
   }
 }
 

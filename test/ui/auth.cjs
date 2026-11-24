@@ -19,7 +19,9 @@ const quick = process.argv[4] === 'quick';
 const ADMIN_PASSWORD = 'local-test-password';
 const ACCOUNT_PASSWORD = 'a good long password';
 const TEXTING = '+17329990000';
-const CONSENT_CODE = 'By asking for a code you agree to receive it by text message at this number. Message and data rates may apply. Reminders are sent only if you turn them on later.';
+// Filed with the phone carrier's review; shown under every phone field from which a code is texted.
+const CONSENT_CODE = 'Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Privacy and Terms.';
+const GOOGLE_EMAIL = 'ada@example.com';
 const CONSENT_REMINDERS =
   'By saving, the owner of this phone agrees to receive the reminders chosen below by text message from Betaharah. Message frequency varies. Message and data rates may apply. Reply STOP to stop, HELP for help.';
 
@@ -91,7 +93,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
   // ----- the site: texting "works" (stand-in keys), sign-up open, texting sign-up on -----
   await step('operator settings', async () => {
     await api('POST', '/api/admin/login', { password: ADMIN_PASSWORD });
-    await api('PUT', '/api/admin/secrets', { telnyxApiKey: 'stand-in', telnyxPublicKey: 'stand-in', telnyxNumber: TEXTING });
+    await api('PUT', '/api/admin/secrets', { telnyxApiKey: 'stand-in', telnyxPublicKey: 'stand-in', telnyxNumber: TEXTING, googleClientId: null, googleClientSecret: null });
     await config({ signup: 'open', smsEnabled: true, textSignup: true, householdMonthlyLimit: 0, contactName: 'The site owner', contactEmail: 'owner@example.com' });
   });
 
@@ -112,9 +114,13 @@ async function variant(browser, name, width, scheme, offset, shots) {
   await step('number screen: wording, consent, links, texting sign-up', async () => {
     await page.goto(base + '/app/');
     await heading('Sign in or sign up');
-    const t = await page.textContent('form.login');
-    if (!t.includes(CONSENT_CODE)) throw new Error('consent wording missing');
-    for (const href of ['/terms', '/privacy', '/help']) if ((await page.locator(`form.login a[href="${href}"]`).count()) !== 1) throw new Error('no link to ' + href);
+    // the consent wording is the phone field's own help text, right under the input
+    const help = await page.textContent('#number-help');
+    if (help !== CONSENT_CODE) throw new Error('consent wording: ' + help);
+    if (!((await page.getAttribute('#number', 'aria-describedby')) || '').includes('number-help')) throw new Error('consent not tied to the field');
+    for (const href of ['/terms', '/privacy']) if ((await page.locator(`#number-help a[href="${href}"]`).count()) !== 1) throw new Error('no consent link to ' + href);
+    for (const href of ['/terms', '/privacy', '/help']) if ((await page.locator(`form.login .legal a[href="${href}"]`).count()) !== 1) throw new Error('no link to ' + href);
+    if (/google/i.test(await page.innerHTML('#root'))) throw new Error('Google is mentioned while it is not offered');
     const aside = await page.textContent('.auth-aside');
     if (!aside.includes('No internet at home? Text JOIN to (732) 999-0000 and set everything up by text.')) throw new Error('aside: ' + aside);
     const input = page.locator('#number');
@@ -148,6 +154,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     const pretty = '(' + local(signInNumber).slice(0, 3) + ') ' + local(signInNumber).slice(3, 6) + '-' + local(signInNumber).slice(6);
     if (!t.includes('If this number can sign in here, a 6-digit code is on its way to ' + pretty + '.')) throw new Error('wording: ' + t.slice(0, 200));
     if (!t.includes('The code works for 10 minutes.')) throw new Error('code lifetime missing');
+    if (/google/i.test(await page.innerHTML('#root'))) throw new Error('Google is mentioned while it is not offered');
     if (!/You can ask for a new code in 0:0[1-4]\./.test(t)) throw new Error('countdown missing');
     const code = page.locator('#code');
     if ((await code.getAttribute('autocomplete')) !== 'one-time-code' || (await code.getAttribute('inputmode')) !== 'numeric') throw new Error('code attributes');
@@ -248,6 +255,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     if ((await page.getAttribute('#pw', 'aria-invalid')) !== 'true') throw new Error('not marked invalid');
     await page.check('#show-pw');
     if ((await page.getAttribute('#pw', 'type')) !== 'text') throw new Error('show password');
+    if (/google/i.test(await page.innerHTML('#root'))) throw new Error('Google is mentioned while it is not offered');
     await shot('07-password-error');
   });
 
@@ -416,6 +424,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.click('#setup-skip');
     await heading('Your spouse’s phone');
     await expectText('.setup-card', 'Add only a phone whose owner has agreed.');
+    if ((await page.textContent('#sp-number-help')) !== CONSENT_CODE) throw new Error('consent wording missing under the spouse’s number');
     let calls = 0;
     await page.route('**/api/phones/code', async route => {
       calls += 1;
@@ -527,6 +536,151 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.reload();
     await heading('Your customs');
     await signOut();
+  });
+
+  // ----- Google: offered only when the operator saved its keys -----
+  // The real round trip to Google cannot run here: stand-in keys turn the button on, and its link is checked.
+  await step('Google: "Continue with Google" under the phone form, with its link', async () => {
+    await api('PUT', '/api/admin/secrets', { googleClientId: 'stand-in.apps.example', googleClientSecret: 'stand-in' });
+    await page.goto(base + '/app/');
+    await heading('Sign in or sign up');
+    const g = page.locator('form.login a#google-start');
+    if ((await g.count()) !== 1) throw new Error('no Google button');
+    if ((await g.getAttribute('href')) !== '/api/auth/google/start') throw new Error('href: ' + (await g.getAttribute('href')));
+    if ((await g.textContent()).trim() !== 'Continue with Google') throw new Error('label: ' + (await g.textContent()));
+    if ((await page.locator('form.login .auth-or').count()) !== 1) throw new Error('no "or" divider');
+    const img = page.locator('#google-start img');
+    if ((await img.getAttribute('src')) !== '/app/google-g.svg') throw new Error('logo source');
+    await page.waitForFunction(() => document.querySelector('#google-start img').naturalWidth > 0);
+    // below the phone form's own button
+    const order = await page.evaluate(() => {
+      const submit = document.querySelector('form.login button[type=submit]');
+      return Boolean(submit.compareDocumentPosition(document.getElementById('google-start')) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    if (!order) throw new Error('the Google button is not after the phone form');
+    const box = await g.boundingBox();
+    if (box.height < 44) throw new Error('Google button is ' + box.height + 'px high');
+    if ((await page.textContent('#number-help')) !== CONSENT_CODE) throw new Error('consent wording missing');
+    await shot('13-google');
+    await page.click('text=Sign in with a password instead');
+    await heading('Sign in with a password');
+    if ((await page.locator('a#google-start[href="/api/auth/google/start"]').count()) !== 1) throw new Error('no Google button on the password form');
+    await shot('14-google-password');
+  });
+
+  await step('Google: with an invitation, the invitation goes along to Google', async () => {
+    const { link } = await api('POST', '/api/admin/invites', { kind: 'signup' });
+    const code = new URL(link).searchParams.get('invite');
+    await page.goto(base + '/app/?invite=' + code);
+    await heading('Create your account');
+    const href = await page.getAttribute('a#google-start', 'href');
+    if (href !== '/api/auth/google/start?invite=' + encodeURIComponent(code)) throw new Error('href: ' + href);
+  });
+
+  await step('Google: an error from Google is shown on the form and taken out of the address', async () => {
+    const message = 'This Google account is not linked to an account here.';
+    await page.goto(base + '/app/?google_error=' + encodeURIComponent(message));
+    await heading('Sign in or sign up');
+    await expectText('form.login .alert.bad', message);
+    if (page.url().includes('google_error')) throw new Error('still in the address: ' + page.url());
+    await shot('15-google-error');
+    // gone once something else is done on the form
+    await page.click('text=Sign in with a password instead');
+    await heading('Sign in with a password');
+    if ((await page.locator('form.login .alert.bad').count()) !== 0) throw new Error('the error stayed');
+  });
+
+  await step('Google: the whole setup as an account with no phone and no location', async () => {
+    const n = number(5);
+    await openAccount(n);
+    // The state is changed on its way to the page: no number, no phones, signed in with Google.
+    let phones = [];
+    const asGoogle = st => ({
+      ...st,
+      account: { ...st.account, number: null, method: 'google', hasPassword: false, googleEmail: GOOGLE_EMAIL, fresh: true, welcomed: st.account.welcomed },
+      phones: phones.map(p => ({ ...p })),
+    });
+    const added = '+1732555' + String(1000 + offset);
+    const freshState = async () => (await api('GET', '/api/state')).state;
+    await page.route('**/api/**', async route => {
+      const url = new URL(route.request().url());
+      const path = url.pathname;
+      const method = route.request().method();
+      if (path === '/api/public' || path.startsWith('/api/auth/')) return route.fallback();
+      if (path === '/api/phones/code') return route.fulfill({ json: { ok: true, number: added } });
+      if (path === '/api/phones/verify') {
+        phones = [{ number: added, name: '', me: false, verified: true, texts: false, optedOut: false, canUpdate: true, reminders: ['hefsek', 'mikvah'] }];
+        return route.fulfill({ json: { state: asGoogle(await freshState()) } });
+      }
+      if (path === '/api/phones' && method === 'PUT') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        if (body.number !== added) return route.fulfill({ status: 404, json: { error: 'No such phone on this account.' } });
+        phones = phones.map(p => ({ ...p, texts: body.texts, reminders: body.reminders }));
+        return route.fulfill({ json: { state: asGoogle(await freshState()) } });
+      }
+      const r = await route.fetch();
+      let json = null;
+      try {
+        json = await r.json();
+      } catch (e) {
+        return route.fulfill({ response: r });
+      }
+      if (json && json.state) json = { ...json, state: asGoogle(json.state) };
+      return route.fulfill({ response: r, json });
+    });
+    const clean = async label => {
+      const t = await page.textContent('#root');
+      if (/undefined|\bnull\b|NaN|\[object/.test(t)) throw new Error(label + ': the page says ' + (t.match(/.{0,40}(undefined|\bnull\b|NaN|\[object).{0,20}/) || [''])[0]);
+      await shot(label);
+    };
+    await page.goto(base + '/app/');
+    await heading('Welcome to Betaharah');
+    await expectText('.setup-account', 'Signed in with Google (' + GOOGLE_EMAIL + ')');
+    await clean('40-google-welcome');
+    await page.click('#setup-start');
+    await heading('Where do you live?');
+    await clean('41-google-place');
+    await page.click('#setup-skip');
+    await heading('Your customs');
+    await page.click('#setup-skip');
+    await heading('Your most recent dates');
+    await clean('42-google-dates');
+    await page.click('#setup-skip');
+    await heading('See the dates in your calendar app');
+    await clean('43-google-calendar');
+    await page.click('#setup-skip');
+    await heading('Your phone');
+    await expectText('.setup-card', 'to get reminders by text and to record by text');
+    if ((await page.textContent('#sp-own-number-help')) !== CONSENT_CODE) throw new Error('consent wording missing under the number');
+    await clean('44-google-phone');
+    await page.fill('#sp-own-number', local(added));
+    await page.click('#sp-own-send');
+    await page.waitForSelector('#sp-own-code');
+    await clean('45-google-phone-code');
+    await page.locator('#sp-own-code').pressSequentially('135790');
+    await heading('Text reminders to your phone');
+    await clean('46-google-reminders');
+    await page.click('#sp-turn-on');
+    await expectText('#sp-on', 'Text reminders are on for (732) 555-');
+    await page.click('#setup-main');
+    await heading('Your spouse’s phone');
+    await clean('47-google-spouse');
+    await page.click('#setup-skip');
+    await heading('The setup is finished');
+    await clean('48-google-done');
+    // without any phone, after a reload: resumes at the last screen, and going back reaches the phone step again
+    phones = [];
+    await page.reload();
+    await heading('The setup is finished');
+    await clean('49-google-done-no-phone');
+    await page.click('#setup-back');
+    await heading('Your spouse’s phone');
+    await page.click('#setup-back');
+    await heading('Your phone');
+    await clean('50-google-phone-again');
+    await page.unroute('**/api/**');
+    await signOut();
+    await api('PUT', '/api/admin/secrets', { googleClientId: null, googleClientSecret: null });
   });
 
   // ----- notes: invitation only, closed, texting not available -----
