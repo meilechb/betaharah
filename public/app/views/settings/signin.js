@@ -1,11 +1,12 @@
-/* Settings: the Signing in card (password, sessions, the guided setup). */
-import { alert, api, button, card, cardSection, confirmDialog, h, pretty, textField, toast } from '../../lib.js';
+/* Settings: Sign-in and security (how this phone signs in, the password, signing out). */
+import { alert, api, button, confirmDialog, h, pretty, textField, toast } from '../../lib.js';
 import { S, adopt, render, restart, signOutLocally } from '../../store.js';
-import { openGuidedSetup } from '../../onboarding.js';
 import { attempt, refresh, region } from '../shared.js';
+import { blockRow, group, infoRow } from './ui.js';
 
 /** The password form and its errors. */
 let pw = { a: '', b: '', errA: '', errB: '', error: '' };
+let pwOpen = false;
 
 function signOut(e) {
   attempt(() => api('POST', '/api/auth/logout'), {
@@ -17,20 +18,20 @@ function signOut(e) {
   });
 }
 
-function passwordPart() {
+/** How this phone can sign in, in words. */
+function ways() {
   const acc = S.account;
-  if (!acc.fresh) {
-    return h(
-      'p',
-      { class: 'help' },
-      (acc.hasPassword ? 'A password is set. To change or remove it' : 'No password is set; you sign in with a texted code. To set a password') +
-        ', sign out and sign in again, then come back here within 15 minutes. Signing in again confirms it is you.',
-    );
-  }
+  if (S.sms.ready) return acc.hasPassword ? 'A code by text, or the password' : 'A code by text · no password';
+  return acc.hasPassword ? 'Password' : 'No password set';
+}
+
+function passwordForm() {
+  const acc = S.account;
   return region('pw-form', () =>
     h(
       'form',
       {
+        class: 'st-form',
         novalidate: true,
         onsubmit: e => {
           e.preventDefault();
@@ -52,6 +53,7 @@ function passwordPart() {
               button: e.submitter || document.getElementById('pw-save'),
               done: r => {
                 pw = { a: '', b: '', errA: '', errB: '', error: '' };
+                pwOpen = false;
                 adopt(r.state);
                 render();
                 toast((had ? 'The password is changed.' : 'The password is set.') + ' Other devices signed in with this phone were signed out.');
@@ -65,40 +67,22 @@ function passwordPart() {
           );
         },
       },
-      h('p', { class: 'help' }, acc.hasPassword ? 'A password is set. You can change it here.' : 'Optional. With a password you can sign in without waiting for a text.'),
-      textField({ id: 'npw1', label: 'New password', type: 'password', autocomplete: 'new-password', value: pw.a, help: 'At least 10 characters.', error: pw.errA, oninput: e => (pw.a = e.target.value) }),
+      textField({ id: 'npw1', label: acc.hasPassword ? 'New password' : 'Password', type: 'password', autocomplete: 'new-password', value: pw.a, help: 'At least 10 characters. A few words in a row are easy to remember.', error: pw.errA, oninput: e => (pw.a = e.target.value) }),
       textField({ id: 'npw2', label: 'The same password again', type: 'password', autocomplete: 'new-password', value: pw.b, error: pw.errB, oninput: e => (pw.b = e.target.value) }),
       pw.error ? alert({ kind: 'bad', role: 'alert' }, pw.error) : null,
       h(
         'div',
         { class: 'actions' },
-        button({ label: acc.hasPassword ? 'Change password' : 'Set password', type: 'submit', icon: 'lock', attrs: { id: 'pw-save' } }),
-        acc.hasPassword && S.sms.ready
+        button({ label: acc.hasPassword ? 'Change password' : 'Set password', type: 'submit', variant: 'primary', icon: 'lock', attrs: { id: 'pw-save' } }),
+        acc.hasPassword
           ? button({
-              label: 'Remove password',
-              variant: 'danger',
-              attrs: { id: 'pw-remove' },
-              onclick: async e => {
-                const btn = e.currentTarget;
-                if (!(await confirmDialog({ title: 'Remove the password?', body: 'You will sign in with a texted code only.', confirmLabel: 'Remove password', danger: true }))) return;
-                attempt(
-                  async () => {
-                    await api('DELETE', '/api/password');
-                    return api('GET', '/api/state');
-                  },
-                  {
-                    button: btn,
-                    done: r => {
-                      adopt(r.state);
-                      render();
-                      toast('The password was removed.');
-                    },
-                    fail: message => {
-                      pw.error = message;
-                      refresh('pw-form');
-                    },
-                  },
-                );
+              label: 'Cancel',
+              attrs: { id: 'pw-cancel' },
+              onclick: () => {
+                pw = { a: '', b: '', errA: '', errB: '', error: '' };
+                pwOpen = false;
+                render();
+                document.getElementById('pw-change')?.focus();
               },
             })
           : null,
@@ -107,38 +91,125 @@ function passwordPart() {
   );
 }
 
-export function signInCard() {
-  return card(
-    { title: 'Signing in', icon: 'lock' },
-    h('p', {}, 'Signed in with ' + pretty(S.account.number) + '.'),
-    cardSection({ title: 'Password' }, passwordPart()),
-    cardSection(
-      { title: 'Sessions' },
-      h(
-        'div',
-        { class: 'actions' },
-        button({ label: 'Sign out', icon: 'log-out', attrs: { id: 'sign-out' }, onclick: signOut }),
-        button({
-          label: 'Sign out everywhere',
-          attrs: { id: 'sign-out-all' },
-          onclick: async e => {
-            const btn = e.currentTarget;
-            if (!(await confirmDialog({ title: 'Sign out everywhere?', body: 'This signs out this phone number on every device, this one included.', confirmLabel: 'Sign out everywhere' }))) return;
-            attempt(() => api('POST', '/api/auth/logout-all'), {
-              button: btn,
-              done: () => {
-                signOutLocally();
-                restart();
-              },
-            });
+function removeButton() {
+  return button({
+    label: 'Remove password',
+    variant: 'danger',
+    attrs: { id: 'pw-remove' },
+    onclick: async e => {
+      const btn = e.currentTarget;
+      if (!(await confirmDialog({ title: 'Remove the password?', body: 'You will sign in with a texted code only.', confirmLabel: 'Remove password', danger: true }))) return;
+      attempt(
+        async () => {
+          await api('DELETE', '/api/password');
+          return api('GET', '/api/state');
+        },
+        {
+          button: btn,
+          done: r => {
+            adopt(r.state);
+            render();
+            toast('The password was removed.');
           },
-        }),
+          fail: message => {
+            pw.error = message;
+            render();
+          },
+        },
+      );
+    },
+  });
+}
+
+function passwordGroup() {
+  const acc = S.account;
+  const state = infoRow({ icon: 'lock', leadKind: acc.hasPassword ? 'ok' : null, title: acc.hasPassword ? 'A password is set' : 'No password', summary: acc.hasPassword ? 'You can sign in with it instead of waiting for a text.' : 'Optional. With a password you can sign in without waiting for a text.' });
+  if (!acc.fresh) {
+    return group(
+      { title: 'Password', id: 'sec-password' },
+      state,
+      blockRow(
+        alert(
+          { kind: 'info', title: 'Sign in again first' },
+          'To ' + (acc.hasPassword ? 'change or remove the password' : 'set a password') + ', sign out and sign in again, then come back here within 15 minutes. Signing in again confirms that it is you, and not someone using a device you left signed in.',
+        ),
+        h('div', { class: 'actions' }, button({ label: 'Sign out to sign in again', icon: 'log-out', attrs: { id: 'pw-relogin' }, onclick: signOut })),
       ),
-    ),
-    cardSection(
-      { title: 'Guided setup' },
-      h('p', { class: 'help' }, 'The steps shown when the account was new: location, customs and the first dates.'),
-      button({ label: 'Open the guided setup again', variant: 'link', attrs: { id: 'open-setup' }, onclick: () => openGuidedSetup() }),
-    ),
+    );
+  }
+  const showForm = !acc.hasPassword || pwOpen;
+  return group(
+    { title: 'Password', id: 'sec-password' },
+    state,
+    showForm
+      ? blockRow(passwordForm())
+      : blockRow(
+          h(
+            'div',
+            { class: 'actions' },
+            button({
+              label: 'Change password',
+              icon: 'lock',
+              attrs: { id: 'pw-change' },
+              onclick: () => {
+                pwOpen = true;
+                render();
+                document.getElementById('npw1')?.focus();
+              },
+            }),
+            S.sms.ready ? removeButton() : null,
+          ),
+          !S.sms.ready ? h('p', { class: 'help' }, 'Sign-in by text message is not available on this site yet, so the password is the only way in and cannot be removed.') : null,
+          pw.error ? alert({ kind: 'bad', role: 'alert' }, pw.error) : null,
+        ),
   );
 }
+
+function view() {
+  return {
+    title: 'Sign-in and security',
+    parent: '',
+    body: [
+      group(
+        { title: 'This phone', id: 'sec-phone' },
+        infoRow({ icon: 'phone', title: 'Signed in with ' + pretty(S.account.number), summary: 'Ways to sign in: ' + ways().replace(' · ', '; ').replace(/^./, c => c.toLowerCase()) + '.' }),
+      ),
+      passwordGroup(),
+      group(
+        { title: 'Sessions', id: 'sec-sessions' },
+        blockRow(
+          h('p', { class: 'help' }, 'Sign out here, or on every device where this phone number is signed in, for example after using a shared computer.'),
+          h(
+            'div',
+            { class: 'actions' },
+            button({ label: 'Sign out', icon: 'log-out', attrs: { id: 'sign-out' }, onclick: signOut }),
+            button({
+              label: 'Sign out everywhere',
+              attrs: { id: 'sign-out-all' },
+              onclick: async e => {
+                const btn = e.currentTarget;
+                if (!(await confirmDialog({ title: 'Sign out everywhere?', body: 'This signs out this phone number on every device, this one included. Other phones on the account stay signed in.', confirmLabel: 'Sign out everywhere' }))) return;
+                attempt(() => api('POST', '/api/auth/logout-all'), {
+                  button: btn,
+                  done: () => {
+                    signOutLocally();
+                    restart();
+                  },
+                });
+              },
+            }),
+          ),
+        ),
+      ),
+    ],
+  };
+}
+
+export const signInSection = {
+  id: 'security',
+  title: 'Sign-in and security',
+  icon: 'lock',
+  summary: ways,
+  flag: () => null,
+  view,
+};
