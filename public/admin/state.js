@@ -1,8 +1,8 @@
 /*
  * Shared state of the operator console: the state from the server (S), the
  * drafts of the forms, and small helpers for numbers, dates and money.
- * The console never receives any account's data; S holds the site's own
- * settings, counts and times only.
+ * S holds the site's own settings, counts and times only. One account's
+ * phones and recent texts are read only when it is opened (sections/accounts.js).
  */
 import { api, toast, setBusy } from '/app/lib.js';
 
@@ -129,12 +129,12 @@ export function dayLabel(day, withYear) {
 /** The pages of the console, in the order of the navigation. */
 export const PAGES = [
   { id: 'overview', label: 'Overview', icon: 'info', group: '', desc: 'How the site is doing, and what is left to set up.' },
-  { id: 'accounts', label: 'Accounts', icon: 'user', group: 'People', desc: 'Every account, by an internal id and its dates.' },
+  { id: 'accounts', label: 'Accounts', icon: 'user', group: 'People', desc: 'Every account, by an internal id and its dates. Open one to see its phones and recent texts.' },
   { id: 'invites', label: 'Invitations', icon: 'link', group: 'People', desc: 'Links and words that let people sign up while sign-up is by invitation, and accounts for one number.' },
   { id: 'usage', label: 'Usage and cost', icon: 'message', group: 'Texting', desc: 'Texts and sign-in codes against the limits, what they cost, and the last 30 days.' },
   { id: 'simulator', label: 'Text simulator', icon: 'phone', group: 'Texting', desc: 'Try sign-up and every text command from a made-up number. Nothing is sent and nothing is charged.' },
   { id: 'settings', label: 'Site settings', icon: 'settings', group: 'Setup', desc: 'Who may sign up, the switches for texting, and the limits that cap the bill.' },
-  { id: 'keys', label: 'Keys and connections', icon: 'lock', group: 'Setup', desc: 'Telnyx for texts, RCS, and Google Calendar. Keys are write-only.' },
+  { id: 'keys', label: 'Keys and connections', icon: 'lock', group: 'Setup', desc: 'Telnyx for texts, RCS, and Google for sign-in and the calendar. Keys are write-only.' },
   { id: 'test', label: 'Test account', icon: 'calendar', group: 'Tools', desc: 'A made-up household for trying every feature. It never texts a real phone.' },
   { id: 'tools', label: 'Tools', icon: 'bell', group: 'Tools', desc: 'A test text to your own phone, and the public pages.' },
 ];

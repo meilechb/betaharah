@@ -9,7 +9,7 @@ import { showSignIn } from './signin.js';
 import { adopt, call, configure, forget, PAGES, run, S, time } from './state.js';
 import { overviewPage } from './sections/overview.js';
 import { usagePage, loadHistory } from './sections/usage.js';
-import { accountsPage, loadAccounts } from './sections/accounts.js';
+import { accountsPage, accountsTitle, loadAccountsPage } from './sections/accounts.js';
 import { settingsPage } from './sections/settings.js';
 import { keysPage } from './sections/keys.js';
 import { invitesPage } from './sections/invites.js';
@@ -29,14 +29,21 @@ const BUILDERS = {
   tools: toolsPage,
 };
 
-/** What each page loads when it is opened. */
-const LOADS = { overview: [loadHistory], usage: [loadHistory], accounts: [loadAccounts] };
+/** What each page loads when it is opened; each is called with the part of the address after the page's id. */
+const LOADS = { overview: [() => loadHistory()], usage: [() => loadHistory()], accounts: [loadAccountsPage] };
+
+/** Pages with their own heading for a part of the address (#accounts/<id>). */
+const TITLES = { accounts: accountsTitle };
 
 let current = 'overview';
+/** The part of the address after the page's id, e.g. an account id in #accounts/<id>; '' for none. */
+let sub = '';
 
-function pageFromHash() {
-  const id = location.hash.slice(1);
-  return BUILDERS[id] ? id : 'overview';
+/** "#accounts/abc" → ['accounts', 'abc']. Only Accounts has a second part. */
+function fromHash() {
+  const [id, rest] = location.hash.slice(1).split('/');
+  if (!BUILDERS[id]) return ['overview', ''];
+  return [id, id === 'accounts' && rest ? decodeURIComponent(rest) : ''];
 }
 
 function signedOut(notice) {
@@ -56,7 +63,7 @@ async function start() {
     mount([h('div', { class: 'alert bad', role: 'alert' }, e.message || 'The console could not be loaded.')]);
     return;
   }
-  current = pageFromHash();
+  [current, sub] = fromHash();
   render();
 }
 
@@ -66,11 +73,12 @@ function signOut(btn) {
 
 function go(id) {
   if (location.hash.slice(1) !== id) location.hash = id;
-  else show(id);
+  else show([id, '']);
 }
 
-function show(id, focusHeading) {
+function show([id, part], focusHeading) {
   current = id;
+  sub = part;
   render();
   window.scrollTo(0, 0);
   if (focusHeading) {
@@ -143,7 +151,8 @@ function topBar() {
 
 function render() {
   if (!S) return;
-  const page = PAGES.find(p => p.id === current);
+  const base = PAGES.find(p => p.id === current);
+  const page = (TITLES[current] && TITLES[current](sub)) || base;
   const active = document.activeElement;
   const id = active && active.id ? active.id : null;
   const caret = active && 'selectionStart' in active ? active.selectionStart : null;
@@ -160,7 +169,7 @@ function render() {
           { class: 'app-main', id: 'main' },
           phoneSwitcher(),
           h('div', { class: 'page-head' }, h('h1', { id: 'page-title', tabindex: '-1' }, page.label), h('p', { class: 'page-desc' }, page.desc)),
-          h('div', { class: 'page', id: current }, BUILDERS[current]()),
+          h('div', { class: 'page', id: current }, BUILDERS[current](sub)),
         ),
       ),
     ],
@@ -181,12 +190,12 @@ function render() {
       }
     }
   }
-  for (const load of LOADS[current] || []) load();
+  for (const load of LOADS[current] || []) load(sub);
 }
 
 // A page's own data arrived: redraw it (the event names the part that changed).
 window.addEventListener('admin:section', () => render());
-window.addEventListener('hashchange', () => show(pageFromHash(), true));
+window.addEventListener('hashchange', () => show(fromHash(), true));
 window.addEventListener('unhandledrejection', () => toast('Something went wrong. Reload the page.', true));
 
 start();

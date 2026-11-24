@@ -26,6 +26,11 @@ async function api(method, path, body, cookie) {
 async function seed() {
   const op = (await api('POST', '/api/admin/login', { password: PASSWORD })).cookie;
   if (!op) throw new Error('could not sign in to seed');
+  // The test account (two phones), with a few texts from its phones; the second phone replies STOP.
+  if ((await api('POST', '/api/admin/demo', null, op)).status !== 200) throw new Error('could not open the test account');
+  for (const [from, text] of [['(732) 555-0100', '?'], ['(732) 555-0100', 'MENU'], ['(732) 555-0199', 'STOP']]) {
+    if ((await api('POST', '/api/admin/simulate', { from, text }, op)).status !== 200) throw new Error('could not text ' + text + ' from the test account');
+  }
   const suffix = String(Date.now()).slice(-4).replace(/^0/, '1');
   for (const n of ['21', '22', '23']) {
     const number = '+1732' + suffix.slice(0, 1) + n + suffix.slice(1);
@@ -35,7 +40,7 @@ async function seed() {
   }
   // the console's starting point for the steps below
   const state = (await api('GET', '/api/admin/state', null, op)).json;
-  await api('PUT', '/api/admin/config', { ...state.config, signup: 'open', smsEnabled: true, contactName: '', allowedPrefixes: ['+1'], rcsEnabled: false }, op);
+  await api('PUT', '/api/admin/config', { ...state.config, signup: 'open', smsEnabled: true, textSignup: false, contactName: '', allowedPrefixes: ['+1'], rcsEnabled: false }, op);
   await api('PUT', '/api/admin/secrets', { telnyxApiKey: '', telnyxPublicKey: '', telnyxNumber: '', rcsAgentId: '', googleClientId: '', googleClientSecret: '' }, op);
   await api('PUT', '/api/admin/notes', { tollFreeSubmitted: false, tollFreeVerified: false, centsPerText: 1 }, op);
 }
@@ -44,6 +49,7 @@ async function seed() {
   await seed();
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 360, height: 800 }, deviceScaleFactor: 1 });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -132,7 +138,7 @@ async function seed() {
   await step('accounts: listed by id and dates, searched, sorted, deleted with DELETE typed', async () => {
     await open('accounts');
     await page.waitForSelector('#accounts table.accounts tbody tr');
-    if (!(await page.textContent('#accounts')).includes('Nobody, including you in this console, can read it here')) throw new Error('no privacy note');
+    if (!(await page.textContent('#accounts')).includes('The dates people record are encrypted. This console does not show them.')) throw new Error('no privacy note');
     const before = await page.locator('#accounts table.accounts tbody tr').count();
     if (before < 3) throw new Error('only ' + before + ' accounts');
     const id = (await page.textContent('#accounts table.accounts tbody tr >> nth=0 >> .mono')).trim();
@@ -156,7 +162,110 @@ async function seed() {
     await noSideways();
   });
 
+  // ----- one account -----
+  await step('accounts: one account opened, its phones and texts, no recorded dates, Back, not found', async () => {
+    await open('accounts');
+    await page.waitForSelector('#accounts table.accounts tbody tr');
+    const testRow = page.locator('#accounts table.accounts tbody tr:has(.tag:text-is("test account"))');
+    const testId = (await testRow.locator('.mono').textContent()).trim();
+    // the id is a link, and Open goes to the same address
+    if ((await testRow.locator('a.mono').getAttribute('href')) !== '#accounts/' + testId) throw new Error('the id is not a link');
+    const [res] = await Promise.all([page.waitForResponse(r => r.url().endsWith('/api/admin/accounts/' + testId)), testRow.locator('a:has-text("Open")').click()]);
+    if (res.status() !== 200) throw new Error('status ' + res.status());
+    await page.waitForSelector('#page-title:text-is("One account")');
+    if (!page.url().endsWith('#accounts/' + testId)) throw new Error('address: ' + page.url());
+    await page.waitForSelector('#accounts ul.phones > li');
+    const phones = page.locator('#accounts ul.phones > li');
+    if ((await phones.count()) !== 2) throw new Error('not two phones');
+    const first = await phones.nth(0).textContent();
+    const second = await phones.nth(1).textContent();
+    for (const w of ['(732) 555-0100', 'Verified by a code', 'Agreed to reminder texts', 'Has not replied STOP']) if (!first.includes(w)) throw new Error('first phone: no "' + w + '"');
+    for (const w of ['(732) 555-0199', 'Replied STOP: nothing is sent to it']) if (!second.includes(w)) throw new Error('second phone: no "' + w + '"');
+    // every fact has an icon next to its words
+    if ((await page.locator('#accounts ul.flags li.flag svg').count()) !== 6) throw new Error('facts without icons');
+    if (!(await page.textContent('#accounts')).includes('This account does not sign in with Google.')) throw new Error('no Google line');
+    const texts = page.locator('#accounts ul.messages > li');
+    if ((await texts.count()) < 5) throw new Error('only ' + (await texts.count()) + ' texts');
+    const newest = await texts.nth(0).textContent();
+    if (!newest.includes('Received from the phone ending 0199') || !newest.includes('STOP') || !newest.includes('Status: simulated')) throw new Error('newest text: ' + newest);
+    if ((await texts.locator('.title:has-text("Sent to the phone ending 0100")').count()) < 2) throw new Error('no sent texts');
+    // no recorded date: apart from the texts themselves, no date appears on the page
+    const rest = await page.evaluate(() => {
+      const copy = document.querySelector('.page#accounts').cloneNode(true);
+      copy.querySelectorAll('ul.messages').forEach(n => n.remove());
+      return copy.textContent;
+    });
+    if (!rest.includes('It does not show the dates recorded')) throw new Error('no sentence about the dates');
+    if (/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}\b|\b\d{1,2}\/\d{1,2}\b|\b20\d\d-\d\d-\d\d\b/.test(rest)) throw new Error('a date appears outside the texts');
+    await noSideways();
+    // Back returns to the list
+    await page.goBack();
+    await page.waitForSelector('#page-title:text-is("Accounts")');
+    await page.waitForSelector('#accounts table.accounts tbody tr');
+    if (!page.url().endsWith('#accounts')) throw new Error('back: ' + page.url());
+    // the row opens by keyboard too
+    await page.focus('#accounts table.accounts tbody tr:has(.tag:text-is("test account")) a.mono');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#page-title:text-is("One account")');
+    await page.waitForSelector('#accounts ul.phones > li');
+    await page.click('#accounts p.back a');
+    await page.waitForSelector('#accounts table.accounts tbody tr');
+    // a made-up id shows the server's message
+    await page.evaluate(() => (location.hash = 'accounts/noSuchAccount123'));
+    await page.waitForSelector('#accounts .alert.bad:has-text("This account no longer exists, or it cannot be read.")');
+    await page.click('#accounts p.back a');
+    await page.waitForSelector('#accounts table.accounts tbody tr');
+  });
+
+  await step('accounts: an account that signs in with Google (response rewritten)', async () => {
+    await page.route('**/api/admin/accounts/googleExample1', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: { id: 'googleExample1', test: false, phones: [{ number: '+17325550142', verified: false, texts: false, optedOut: false }], googleEmail: 'someone@example.com', googleName: 'Example Person', messages: [] },
+        }),
+      }),
+    );
+    await page.evaluate(() => (location.hash = 'accounts/googleExample1'));
+    await page.waitForSelector('#accounts dl.facts dd:text-is("someone@example.com")');
+    await page.waitForSelector('#accounts dl.facts dd:text-is("Example Person")');
+    const phone = await page.textContent('#accounts ul.phones > li');
+    for (const w of ['Not verified', 'Has not agreed to reminder texts', 'Has not replied STOP']) if (!phone.includes(w)) throw new Error('phone: no "' + w + '"');
+    await page.waitForSelector('#accounts p:has-text("No texts to or from this account")');
+    await page.unroute('**/api/admin/accounts/googleExample1');
+    await page.click('#accounts p.back a');
+    await page.waitForSelector('#accounts table.accounts tbody tr');
+  });
+
+  await step('accounts: deleted from the opened account', async () => {
+    const before = await page.locator('#accounts table.accounts tbody tr').count();
+    const row = page.locator('#accounts table.accounts tbody tr:not(:has(.tag:text-is("test account"))) >> nth=0');
+    const id = (await row.locator('.mono').textContent()).trim();
+    await row.locator('a:has-text("Open")').click();
+    await page.waitForSelector('#accounts h2:has-text("Delete this account")');
+    if ((await page.locator('#accounts ul.phones > li').count()) !== 1) throw new Error('not one phone');
+    await page.click('#accounts button:has-text("Delete this account")');
+    await page.waitForSelector('dialog[open] h2:has-text("Delete this account")');
+    await page.fill('dialog input', 'DELETE');
+    await page.click('dialog button[type=submit]');
+    await toast('The account was deleted');
+    await page.waitForFunction(() => location.hash === '#accounts');
+    await page.waitForFunction(n => document.querySelectorAll('#accounts table.accounts tbody tr').length === n - 1, before);
+    if ((await page.locator(`#accounts table.accounts .mono:text-is("${id}")`).count()) !== 0) throw new Error('still listed');
+  });
+
   // ----- settings -----
+  await step('sign-up by text: off at first, the simulator says so, the help line points to the guide', async () => {
+    await open('settings');
+    if (await page.isChecked('#textSignup')) throw new Error('sign-up by text is on');
+    const note = await page.textContent('#textSignup-note');
+    for (const w of ['Leave it off until the toll-free verification covers signing up by text', 'docs/OPERATOR.md', 'Suggested answers for the toll-free verification form']) if (!note.includes(w)) throw new Error('note: no "' + w + '"');
+    if (!(await page.textContent('#settings .caps')).includes('except to HELP and START')) throw new Error('caps: HELP and START');
+    await open('simulator');
+    await page.waitForSelector('#simulator .alert:has-text("Sign-up by text is off under Site settings.")');
+  });
+
   await step('settings: field errors, a lock-out warning, then saved', async () => {
     await open('settings');
     await page.fill('#prefixes', '1');
@@ -173,9 +282,12 @@ async function seed() {
     await page.waitForSelector('dialog[open] h2:has-text("Save settings that keep people out?")');
     await page.click('dialog button:has-text("Cancel")');
     await page.selectOption('#signup', 'open');
+    // sign-up by text on, for the simulator below
+    await page.check('#textSignup');
     await page.click('button:has-text("Save settings")');
     await toast('Settings saved');
     if ((await page.inputValue('#cname')) !== 'Local Tester') throw new Error('not kept');
+    if (!(await page.isChecked('#textSignup'))) throw new Error('sign-up by text not saved');
     await open('overview');
     if ((await stepStatus('Contact details for the public pages')) !== 'Done') throw new Error('contact step not done');
     if ((await stepStatus('Sign-up policy chosen')) !== 'Done') throw new Error('sign-up step not done');
@@ -226,6 +338,23 @@ async function seed() {
     await noSideways();
   });
 
+  await step('keys: both Google redirect addresses, labelled and copyable', async () => {
+    await open('keys');
+    const signIn = (await page.textContent('#redirect-signin')).trim();
+    const calendar = (await page.textContent('#redirect-calendar')).trim();
+    if (!signIn.endsWith('/api/auth/google/callback')) throw new Error('sign-in address: ' + signIn);
+    if (!calendar.endsWith('/api/google/callback')) throw new Error('calendar address: ' + calendar);
+    if (!(await page.textContent('.redirect:has(#redirect-signin) .redirect-label')).includes('Sign in with Google')) throw new Error('sign-in label');
+    if (!(await page.textContent('.redirect:has(#redirect-calendar) .redirect-label')).includes('Google Calendar')) throw new Error('calendar label');
+    if (!(await page.textContent('#keys')).includes('Both go on the same OAuth client, as authorized redirect URIs.')) throw new Error('no sentence about the client');
+    for (const [label, value] of [['Sign in with Google', signIn], ['Google Calendar', calendar]]) {
+      await page.click(`button[aria-label="Copy the ${label} redirect address"]`);
+      await toast(`The ${label} redirect address was copied`);
+      const copied = await page.evaluate(() => navigator.clipboard.readText());
+      if (copied !== value) throw new Error('copied ' + copied);
+    }
+  });
+
   // ----- invitations -----
   await step('invitations: both kinds, the link shown once, cancel', async () => {
     await open('invites');
@@ -266,6 +395,11 @@ async function seed() {
   // ----- the text simulator -----
   await step('simulator: a complete sign-up by text, then DELETE ACCOUNT', async () => {
     await open('simulator');
+    if ((await page.locator('#simulator .alert:has-text("Sign-up by text is off")').count()) !== 0) throw new Error('the note stayed after switching it on');
+    // the HELP and START replies as filed (docs/OPERATOR.md)
+    const words = await page.textContent('#simulator dl.texting-words');
+    if (!words.includes('Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.')) throw new Error('HELP wording');
+    if (!words.includes("Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.")) throw new Error('START wording');
     const n = String(10 + (Date.now() % 80)).padStart(2, '0');
     await page.click('button:has-text("Start over with another number")');
     await page.fill('#sim-from', '(732) 555-01' + n);
@@ -289,6 +423,9 @@ async function seed() {
     await page.screenshot({ path: out + '/admin-simulator.png', fullPage: false });
     await say('DELETE ACCOUNT');
     await say('YES');
+    // the account list reloads after the deletion and redraws the page; wait for it before typing
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(300);
     await page.fill('#sim-from', '(732) 444-0101');
     await page.fill('#sim-text', 'JOIN');
     await page.click('.sim-form button[type=submit]');
@@ -300,7 +437,7 @@ async function seed() {
   await step('tools: the test text needs texting; the pages are linked', async () => {
     await open('tools');
     if (!(await page.isDisabled('button:has-text("Send a test text")'))) throw new Error('test text enabled without texting');
-    for (const href of ['/', '/help', '/privacy', '/terms', '/sms-opt-in-1.png', '/sms-opt-in-2.png', '/app/']) {
+    if (!/^Texts sent this month: [\d,]+ of at most [\d,]+\.$/.test((await page.textContent('#month-total')).trim())) throw new Error('no monthly total');    for (const href of ['/', '/help', '/privacy', '/terms', '/sms-opt-in-1.png', '/sms-opt-in-2.png', '/app/']) {
       if ((await page.locator(`#tools a[href$="${href}"]`).count()) === 0) throw new Error('no link to ' + href);
     }
   });

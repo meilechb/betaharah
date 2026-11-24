@@ -33,13 +33,21 @@ on a computer, a menu at the top on a phone):
   the limits, received texts, new and deleted accounts, an estimate in
   dollars at a price per text you set, and the last 30 days.
 - **Accounts**: internal ids, dates, number of phones and whether a
-  reminder is waiting; search by id; delete with DELETE typed.
+  reminder is waiting; search by id; delete with DELETE typed. Open an
+  account (its id, or Open) to see its phone numbers (each: verified or
+  not, agreed to reminder texts or not, replied STOP or not), the Google
+  email and name it signs in with, and its last 15 texts. The account can
+  be deleted from there too. The dates recorded, the customs and the
+  settings are not shown.
 - **Site settings**: the contact for the public pages, who may sign up,
-  sign-up by text, "Send text messages", the allowed prefixes and the
-  limits, each with what it protects against.
+  sign-up by text (off at first; see "Sign-up by text" below), "Send text
+  messages", the allowed prefixes and the limits, each with what it
+  protects against.
 - **Keys and connections**: Telnyx, RCS and Google. Keys are write-only;
   each shows whether it is saved, can be cleared, and has a Check button
-  that makes a read-only call (it sends nothing).
+  that makes a read-only call (it sends nothing). The Google part shows
+  both redirect addresses to add to the OAuth client (Sign in with Google,
+  and Google Calendar).
 - **Invitations**: a link for sign-up on the website, a word for sign-up by
   text (JOIN and the word), or an account for one number with a password.
 - **Test account**: open, reset or delete it.
@@ -132,11 +140,20 @@ site can send is 3,000 texts a month.
    → Keys & Credentials → Public Key) and the **number**. Use "Send a test
    text".
 
-Once this works, people can sign up by texting JOIN to the number (unless
-you switch "sign-up by text" off, or close sign-up). What they receive is
-in [TEXTING.md](TEXTING.md). While sign-up is by invitation, they text
-JOIN and an invitation word that you make under Invitations (a word of 6
-to 24 letters and digits, any case).
+Once this works, people sign up on the website with a texted code.
+
+### Sign-up by text
+
+Signing up by texting JOIN to the number is **off** at first (console →
+Site settings → "People can create an account by texting JOIN to the
+number"). Switch it on only after the toll-free verification has been
+amended to cover it (the table after "Suggested answers for the toll-free
+verification form" below). What people receive is in
+[TEXTING.md](TEXTING.md). While sign-up is by invitation, they text JOIN
+and an invitation word that you make under Invitations (a word of 6 to 24
+letters and digits, any case). The console's Text simulator follows the
+same switch: while it is off, JOIN from a new number gets no reply there
+either.
 
 ## RCS (when the agent is approved)
 
@@ -203,7 +220,7 @@ The answers above describe opting in on the website, and they are what was
 filed. Sign-up by text (texting `JOIN`) is a second way to opt in and is
 **off** until you turn it on under Settings in the console. Before turning it
 on, amend the verification with Telnyx to add the keyword opt-in and these
-messages:
+messages (the console's switch points here):
 
 | Field | Addition for sign-up by text |
 | --- | --- |
@@ -263,8 +280,11 @@ and privacy policy above and proof that you own the domain.
   site sends at most 50 such replies a day and creates at most 25 accounts
   a day by text; past those, nothing is sent. More than 30 texts an hour
   from one number are ignored. While sign-up is closed, or sign-up by text
-  is off, a number without an account gets no reply at all (except a phone
-  joining an existing account with its code).
+  is off, a number without an account gets no reply (except a phone
+  joining an existing account with its code). HELP and START are always
+  answered, also from a number without an account, with the fixed replies
+  filed for the verification (the HELP reply above; START gets sample
+  message 2), within their own daily limits.
 - Telnyx's portal has its own spending limit and usage alerts; set them.
 
 ## What you can and cannot see

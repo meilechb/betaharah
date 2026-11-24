@@ -52,8 +52,8 @@ function inbound() {
 
 function google() {
   const c = S.checks.google;
-  if (!S.googleReady) return row('Google Calendar', null, 'Not set up', 'Google Calendar is not set up. This is optional: accounts can still use the calendar subscription link.');
-  return row('Google Calendar', c && !c.ok ? 'bad' : 'ok', c && !c.ok ? 'Problem' : 'Set up', 'People can connect their Google Calendar.', c ? 'Last check, ' + ago(c.at, S.now) + ': ' + c.message : 'Use "Check Google" under Keys and connections to test the keys.');
+  if (!S.googleReady) return row('Google', null, 'Not set up', 'Google is not set up. This is optional: people sign in with their phone and can still use the calendar subscription link.');
+  return row('Google', c && !c.ok ? 'bad' : 'ok', c && !c.ok ? 'Problem' : 'Set up', 'People can sign in with Google and connect their Google Calendar.', c ? 'Last check, ' + ago(c.at, S.now) + ': ' + c.message : 'Use "Check Google" under Keys and connections to test the keys.');
 }
 
 function rcs() {

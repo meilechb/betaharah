@@ -1,6 +1,6 @@
 /* Tools: a test text, and links to the public pages and the consent screenshots. */
-import { button, card, cardSection, h, icon, setFieldError, textField, toast } from '/app/lib.js';
-import { adopt, call, draft, render, run, S } from '../state.js';
+import { alert, button, card, cardSection, h, icon, setFieldError, textField, toast } from '/app/lib.js';
+import { adopt, call, draft, num, render, run, S } from '../state.js';
 import { simulator } from './simulator.js';
 
 let error = '';
@@ -51,12 +51,17 @@ function testText() {
     },
     f,
     h('div', { class: 'actions' }, button({ label: 'Send a test text', type: 'submit', icon: 'message', disabled: !S.smsReady })),
+    h('p', { class: 'small muted', id: 'month-total', 'aria-live': 'polite' }, 'Texts sent this month: ' + num(S.usage.textsThisMonth) + ' of at most ' + num(S.config.monthlyMessageLimit) + '.'),
   );
 }
 
 function link(href, label, note) {
   return h('li', {}, h('a', { href, target: '_blank', rel: 'noopener' }, label, ' ', icon('chevron-right', { size: 'sm' })), note ? h('span', { class: 'small muted' }, ' ' + note) : null);
 }
+
+/** The fixed replies to START and HELP, as filed for the toll-free verification (docs/OPERATOR.md; src/app/service.ts). */
+const START_TEXT = '“Betaharah: you\'re subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.”';
+const HELP_TEXT = '“Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.”';
 
 /** The words people text, in short. The full reference is docs/TEXTING.md in the repository. */
 function whatPeopleText() {
@@ -67,16 +72,26 @@ function whatPeopleText() {
     ['9, 0, ?', '9 status, 0 undo the last entry, ? the short list of digits.'],
     ['REMINDERS ON', 'Turns reminders on for that phone. That text is the consent; reminders are off until then.'],
     ['WEB', 'Texts back a one-time link that signs in on the website.'],
-    ['STOP, START, HELP', 'STOP ends all texts to that phone until it texts START. HELP gets a short help text.'],
+    ['STOP, START, HELP', 'STOP ends all texts to that phone until it texts START. START gets the reply filed with the toll-free verification: ' + START_TEXT + ' HELP gets: ' + HELP_TEXT + ' HELP and START are answered also from a number without an account.'],
   ];
   return h('dl', { class: 'texting-words' }, rows.map(([word, what]) => h('div', {}, h('dt', {}, h('code', {}, word)), h('dd', {}, what))));
+}
+
+/** The simulator follows the site's settings: say so when sign-up by text would get no reply. */
+function signupOffNote() {
+  const c = S.config;
+  if (c.textSignup && c.signup !== 'closed') return null;
+  return alert(
+    { kind: 'info', title: c.signup === 'closed' ? 'Sign-up is closed under Site settings.' : 'Sign-up by text is off under Site settings.' },
+    h('p', {}, 'So JOIN from a new number gets no reply here, as on a real phone. HELP and START are still answered, and a phone can still join an account with a code from ADD. ', h('a', { href: '#settings' }, 'Open Site settings')),
+  );
 }
 
 export function simulatorCards() {
   return h(
     'div',
     { class: 'grid-2 sim-grid' },
-    card({ title: 'Try signing up by text', icon: 'phone' }, simulator()),
+    card({ title: 'Try signing up by text', icon: 'phone' }, signupOffNote(), simulator()),
     card({ title: 'What people can text', icon: 'list', intro: 'Capitals or not does not matter. The full list, with every reply, is docs/TEXTING.md in the repository.' }, whatPeopleText()),
   );
 }

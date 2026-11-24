@@ -698,6 +698,81 @@ dl.periods dd {
   gap: var(--space-1);
   margin-top: var(--space-1);
 }
+.actions-cell .button + .button {
+  margin-left: var(--space-2);
+}
+
+/* one account */
+p.back {
+  margin: 0;
+}
+p.back a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+}
+.account-id {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+ul.flags {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+}
+ul.flags li.flag {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+  border: none;
+  font-size: var(--text-sm);
+}
+ul.flags li.flag .icon {
+  flex: none;
+  color: var(--muted);
+}
+ul.flags li.flag.ok .icon {
+  color: var(--ok);
+}
+ul.flags li.flag.warn .icon {
+  color: var(--warn-line);
+}
+ul.flags li.flag.bad .icon {
+  color: var(--bad);
+}
+ul.list li > .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.message-body {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+dl.facts {
+  margin: 0;
+}
+dl.facts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 6em) minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+dl.facts > div:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+dl.facts dt {
+  color: var(--muted);
+}
+dl.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 
 /* ===================== settings ===================== */
 .settings-form > .card + .card {
@@ -718,6 +793,13 @@ dl.periods dd {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
+}
+p.text-signup-note {
+  margin: 0 0 var(--space-3);
+}
+p.text-signup-note .icon {
+  vertical-align: -0.15em;
+  color: var(--muted);
 }
 .caps {
   margin-top: var(--space-3);
@@ -746,6 +828,13 @@ dl.periods dd {
 .keys-form label .tag {
   margin-left: var(--space-1);
   vertical-align: middle;
+}
+.redirect + .redirect {
+  margin-top: var(--space-3);
+}
+.redirect-label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
 }
 .clear-key {
   margin-top: var(--space-1);

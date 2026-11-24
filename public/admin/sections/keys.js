@@ -210,6 +210,16 @@ function rcs() {
   );
 }
 
+/** One redirect address with its label and a Copy button named for it. */
+function redirectField(label, value, id) {
+  const f = copyField({ value, label: 'Copy', copiedMessage: 'The ' + label + ' redirect address was copied.' });
+  const code = f.querySelector('code');
+  code.id = id;
+  const copy = f.querySelector('button');
+  if (copy) copy.setAttribute('aria-label', 'Copy the ' + label + ' redirect address');
+  return h('div', { class: 'redirect' }, h('p', { class: 'redirect-label' }, h('strong', {}, label)), f);
+}
+
 function google() {
   const keys = ['googleClientId', 'googleClientSecret'];
   return h(
@@ -225,18 +235,20 @@ function google() {
     h(
       'div',
       { class: 'card-body' },
-      h('h2', {}, 'Google Calendar (optional)'),
-      h('p', {}, 'Without this, people can still use the calendar subscription link, which Google refreshes on its own schedule (up to about 12 hours). With it, a connected Google calendar is updated within about a minute. Free.'),
+      h('h2', {}, 'Google: sign-in and Calendar (optional)'),
+      h('p', {}, 'One Google OAuth client does two things: people can sign in with Google, and they can connect a Google calendar. Without it, people sign in with their phone and can still use the calendar subscription link, which Google refreshes on its own schedule (up to about 12 hours). With it, a connected Google calendar is updated within about a minute. Free.'),
       h(
         'ol',
         { class: 'small how' },
         h('li', {}, 'In Google Cloud Console, create a project and enable the Google Calendar API.'),
-        h('li', {}, 'Set up the consent screen: audience External, published to production, with the home page, privacy and terms addresses of this site. The only scope is calendar.app.created.'),
-        h('li', {}, 'Create an OAuth client of type “Web application” with the redirect address below.'),
+        h('li', {}, 'Set up the consent screen: audience External, published to production, with the home page, privacy and terms addresses of this site. Add the scopes openid, email and profile (for sign-in) and calendar.app.created (for the calendar).'),
+        h('li', {}, 'Create one OAuth client of type “Web application” and add both redirect addresses below as authorized redirect URIs.'),
         h('li', {}, 'Paste the client ID and secret here, save, and press Check Google.'),
       ),
-      h('h4', {}, 'Redirect address'),
-      copyField({ value: S.urls.redirect, label: 'Copy', copiedMessage: 'The redirect address was copied.' }),
+      h('h4', {}, 'Redirect addresses'),
+      h('p', { class: 'help' }, 'Both go on the same OAuth client, as authorized redirect URIs. Sign-in or the calendar fails with a “redirect_uri_mismatch” error from Google if one is missing.'),
+      redirectField('Sign in with Google', S.urls.signInRedirect, 'redirect-signin'),
+      redirectField('Google Calendar', S.urls.redirect, 'redirect-calendar'),
       secretField('googleClientId', 'text'),
       secretField('googleClientSecret'),
       h('div', { class: 'actions' }, button({ label: 'Save Google keys', variant: 'primary', type: 'submit' }), button({ label: 'Check Google', icon: 'refresh', onclick: e => check('google', e.currentTarget) })),

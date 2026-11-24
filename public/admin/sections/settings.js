@@ -1,5 +1,5 @@
 /* Site settings: the contact for the public pages, who may sign up, the texting switches, the prefixes and the limits. */
-import { alert, button, card, cardSection, checkRow, confirmDialog, field, h, selectField, setFieldError, textField } from '/app/lib.js';
+import { alert, button, card, cardSection, checkRow, confirmDialog, field, h, icon, selectField, setFieldError, textField } from '/app/lib.js';
 import { call, draft, num, render, run, S, saved } from '../state.js';
 
 const SIGNUP_HELP = {
@@ -145,7 +145,11 @@ function textCaps() {
       h('li', {}, 'At most ' + num(t.strangerRepliesPerDay) + ' such replies a day for the whole site. Today: ' + num(t.strangerRepliesToday) + '.'),
       h('li', {}, 'At most ' + num(t.textSignupsPerDay) + ' accounts created by text a day. Today: ' + num(t.textSignupsToday) + '.'),
     ),
-    h('p', { class: 'help' }, 'While sign-up is closed, or this switch is off, a number without an account gets no reply at all.'),
+    h(
+      'p',
+      { class: 'help' },
+      'While sign-up is closed, or sign-up by text is off, a number without an account gets no reply, except to HELP and START. Those two always get the fixed replies filed with the toll-free verification, within their own daily limits.',
+    ),
   );
 }
 
@@ -194,6 +198,12 @@ export function settingsPage() {
         checked: c.textSignup,
         onchange: ev => ((c.textSignup = ev.target.checked), touch()),
       }),
+      h(
+        'p',
+        { class: 'help text-signup-note', id: 'textSignup-note' },
+        icon('info', { size: 'sm' }),
+        ' Off at first. Leave it off until the toll-free verification covers signing up by text: the verification filed with Telnyx describes signing up on the website only. What to add to it is in the operator guide (docs/OPERATOR.md), in the table after “Suggested answers for the toll-free verification form”.',
+      ),
       textCaps(),
     ),
     card(
