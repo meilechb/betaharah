@@ -32,3 +32,22 @@ export function onboardingCard() {
     ),
   );
 }
+
+/*
+ * The guided setup. main.js asks needsGuidedSetup() on every draw; while it
+ * is true the guided setup is shown in place of the tabs. These three
+ * functions are the whole contract with main.js and the dashboard views.
+ */
+
+/** True while the guided setup should be on screen in place of the dashboard. */
+export function needsGuidedSetup() {
+  return false;
+}
+
+/** The guided setup's content, for mount(). Only called while needsGuidedSetup() is true. */
+export function guidedSetupView() {
+  return null;
+}
+
+/** Opens the guided setup again (from a link in Settings), then redraws. */
+export function openGuidedSetup() {}

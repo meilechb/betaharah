@@ -11,6 +11,7 @@
 import { api, configureApi, h, alert, mount, pageLoading, tabs, tabPanel, toast } from './lib.js';
 import { P, S, adopt, connect, setPublic, signOutLocally } from './store.js';
 import { renderAuth, setAuthMessage, showSignIn } from './auth.js';
+import { guidedSetupView, needsGuidedSetup } from './onboarding.js';
 import { viewToday } from './views/today.js';
 import { viewLog } from './views/log.js';
 import { viewCustoms } from './views/customs.js';
@@ -29,6 +30,11 @@ let tab = TAB_IDS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 't
 /** Draws the signed-in page. Keeps the focus on the same control (by id) across the redraw. */
 function render() {
   if (!S) return;
+  if (needsGuidedSetup()) {
+    // The guided setup takes the place of the tabs until it is finished or skipped.
+    mount(guidedSetupView(), { wide: false });
+    return;
+  }
   const active = document.activeElement;
   const focusId = active && active !== document.body && active.id ? active.id : null;
   const current = TABS.find(x => x.id === tab);
