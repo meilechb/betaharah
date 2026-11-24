@@ -63,6 +63,7 @@ export class FakeGoogle {
       this.calls.push(`token:${params.get('grant_type')}`);
       if (params.get('client_id') !== 'client-id' || params.get('client_secret') !== 'client-secret') return json(401, { error: 'invalid_client' });
       if (params.get('grant_type') === 'authorization_code') {
+        if (params.get('code') === 'login-code') return json(200, { access_token: 'login-access', expires_in: 3599 });
         if (params.get('code') !== 'good-code') return json(400, { error: 'invalid_grant' });
         return json(200, { access_token: 'access-1', refresh_token: 'refresh-1', expires_in: 3599 });
       }
@@ -71,6 +72,12 @@ export class FakeGoogle {
         return json(200, { access_token: 'access-2', expires_in: 3599 });
       }
       return json(400, { error: 'unsupported_grant_type' });
+    }
+    if (url.href.startsWith('https://openidconnect.googleapis.com/v1/userinfo')) {
+      const auth = new Headers(init?.headers).get('authorization');
+      this.calls.push('userinfo');
+      if (auth !== 'Bearer login-access') return json(401, { error: 'bad token' });
+      return json(200, { sub: 'google-sub-1', email: 'ada@example.com', email_verified: true, name: 'Ada' });
     }
     if (!url.href.startsWith('https://www.googleapis.com/calendar/v3')) return null;
     const auth = new Headers(init?.headers).get('authorization');

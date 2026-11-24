@@ -24,6 +24,7 @@ import {
   loadSite,
   phoneHash,
   putCode,
+  saveHealth,
   saveHousehold,
   setRefresh,
   spendCode,
@@ -426,4 +427,5 @@ export async function tick(env: Env, deps: Deps): Promise<void> {
     }
   }
   if (Math.floor(now / MINUTE) % 180 === 0) await sweep(env.DB, now);
+  await saveHealth(env.DB, { lastTickAt: now, lastTickError: null }, now);
 }

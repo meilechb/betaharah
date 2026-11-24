@@ -211,10 +211,10 @@ function renderAuth() {
       },
       h('h2', {}, 'Sign in'),
       notes,
-      !P.sms ? h('p', { class: 'muted' }, 'Sign-in by text message is not available yet. Sign in with your password.') : null,
+      !P.sms ? h('p', { class: 'muted' }, 'Sign-in by text message is not available yet. Sign in with Google, or with a password.') : null,
       field('Your mobile number', numberInput),
       field('Password', p),
-      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'submit', disabled: a.busy }, 'Sign in')),
+      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'submit', disabled: a.busy }, 'Sign in'), googleButton(a)),
       P.sms ? h('p', {}, h('button', { class: 'link', type: 'button', onclick: () => set({ mode: 'code', step: 'number', message: '' }) }, 'Sign in with a texted code instead')) : null,
       legal(),
     );
@@ -233,7 +233,7 @@ function renderAuth() {
       notes,
       h('p', { class: 'muted' }, 'Enter your mobile number. We text you a 6-digit code. That is all it takes, the first time and every time.'),
       field('Your mobile number', numberInput),
-      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'submit', disabled: a.busy }, 'Text me a code')),
+      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'submit', disabled: a.busy }, 'Text me a code'), googleButton(a)),
       h('p', {}, h('button', { class: 'link', type: 'button', onclick: () => set({ mode: 'password', message: '' }) }, 'Sign in with a password instead')),
       h(
         'p',
@@ -287,6 +287,12 @@ function legal() {
   return h('p', { class: 'muted small' }, h('a', { href: '/terms' }, 'Terms'), ' · ', h('a', { href: '/privacy' }, 'Privacy'), ' · ', h('a', { href: '/help' }, 'Help'));
 }
 
+function googleButton(a) {
+  if (!P.google) return null;
+  const href = '/api/auth/google/start' + (a.invite ? '?invite=' + encodeURIComponent(a.invite) : '');
+  return h('a', { class: 'button', href }, 'Sign in with Google');
+}
+
 function showFatal(e) {
   root.replaceChildren(h('div', { class: 'card login' }, h('h2', {}, 'Could not load'), h('p', {}, (e && e.message) || 'Unknown error')));
 }
@@ -302,6 +308,7 @@ async function start() {
     adopt((await api('GET', '/api/state')).state);
     if (params.get('google_error')) toast(params.get('google_error'), true);
     if (params.get('google') === 'connected') toast('Google Calendar is connected. It fills in within a minute.');
+    if (params.get('google') === 'signed-in') toast('You can sign in with Google from now on.');
     if (location.search) history.replaceState(null, '', location.pathname + location.hash);
     render();
     return;
@@ -316,7 +323,8 @@ async function start() {
       auth.message = e.message;
     }
   }
-  if (!P.sms && auth.inviteKind !== 'setup') auth.mode = 'password';
+  if (!P.sms && !P.google && auth.inviteKind !== 'setup') auth.mode = 'password';
+  if (params.get('google_error')) auth.message = params.get('google_error');
   renderAuth();
 }
 
@@ -1245,8 +1253,15 @@ function signOut() {
 
 function signInCard() {
   const acc = S.account;
+  const googleLine = acc.googleEmail
+    ? h('p', {}, 'Google sign-in: ' + acc.googleEmail)
+    : S.calendar.google.available
+      ? h('p', {}, h('a', { href: '/api/auth/google/start' }, 'Also allow sign-in with Google'))
+      : null;
   let passwordPart;
-  if (!acc.fresh) {
+  if (acc.method === 'google') {
+    passwordPart = h('p', { class: 'muted' }, 'You are signed in with Google. A password can be set for a phone after you add one and sign in with that phone.');
+  } else if (!acc.fresh) {
     passwordPart = h(
       'p',
       { class: 'muted' },
@@ -1302,7 +1317,8 @@ function signInCard() {
     'section',
     { class: 'card' },
     h('h2', {}, 'Signing in'),
-    h('p', {}, 'Signed in with ' + pretty(acc.number) + '.'),
+    h('p', {}, acc.number ? 'Signed in with ' + pretty(acc.number) + '.' : 'Signed in with Google' + (acc.googleEmail ? ' (' + acc.googleEmail + ').' : '.')),
+    googleLine,
     h('h3', {}, 'Password'),
     passwordPart,
     h('h3', {}, 'Sessions'),

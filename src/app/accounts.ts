@@ -9,7 +9,7 @@
 import { DEFAULT_SITE_CONFIG, MAX_PHONES, newHousehold, type SiteConfig } from './model';
 import { parsePhoneNumber, REMINDER_KINDS, ValidationError, type PhoneRecord } from './settings';
 import type { Env } from './env';
-import { changeHousehold, createHousehold, deleteHousehold, deletePhone, getPhone, insertPhone, phoneHash, type PhoneRow } from './store';
+import { changeHousehold, createHousehold, deleteHousehold, deletePhone, getGoogleId, getPhone, insertGoogleId, insertPhone, phoneHash, type GoogleRow, type PhoneRow } from './store';
 
 /**
  * Tidies a number as people type it. A ten-digit number, or eleven digits
@@ -60,6 +60,39 @@ export async function createAccount(env: Env, args: { number: string; verified: 
   return { ok: true, phone };
 }
 
+export type GoogleCreated = { ok: true; row: GoogleRow; created: boolean } | { ok: false; reason: 'taken' };
+
+/**
+ * Attaches a Google account to a household, or reports that it already
+ * belongs to one. `created` is false when this household already had it.
+ */
+export async function attachGoogle(env: Env, householdId: string, hash: string, profile: { email: string; name: string }, now: number): Promise<GoogleCreated> {
+  const existing = await getGoogleId(env.DB, hash);
+  if (existing && existing.household_id !== householdId) return { ok: false, reason: 'taken' };
+  if (!existing && !(await insertGoogleId(env.DB, hash, householdId, now))) return { ok: false, reason: 'taken' };
+  await changeHousehold(env, householdId, now, data => {
+    data.googleLogin = profile;
+  });
+  const row = await getGoogleId(env.DB, hash);
+  if (!row) throw new Error('google row missing after insert');
+  return { ok: true, row, created: !existing };
+}
+
+/** Creates a household that is signed in with Google and has no phone yet. */
+export async function createGoogleAccount(env: Env, hash: string, profile: { email: string; name: string }, now: number): Promise<GoogleCreated> {
+  if (await getGoogleId(env.DB, hash)) return { ok: false, reason: 'taken' };
+  const data = newHousehold();
+  data.googleLogin = profile;
+  const household = await createHousehold(env, data, now);
+  if (!(await insertGoogleId(env.DB, hash, household.id, now))) {
+    await deleteHousehold(env.DB, household.id);
+    return { ok: false, reason: 'taken' };
+  }
+  const row = await getGoogleId(env.DB, hash);
+  if (!row) throw new Error('google row missing after insert');
+  return { ok: true, row, created: true };
+}
+
 /** Notes that a phone's number has now been proved by a texted code. */
 export async function markVerified(env: Env, householdId: string, number: string, now: number): Promise<void> {
   await changeHousehold(env, householdId, now, data => {
@@ -99,7 +132,8 @@ export type Removed = { ok: true; hash: string } | { ok: false; reason: 'missing
 export async function removePhone(env: Env, householdId: string, number: string, now: number): Promise<Removed> {
   const changed = await changeHousehold(env, householdId, now, data => {
     if (!data.phones.some(p => p.number === number)) return 'missing' as const;
-    if (data.phones.length <= 1) return 'last' as const;
+    // A Google sign-in is another way into the account, so the last phone may go.
+    if (data.phones.length <= 1 && !data.googleLogin) return 'last' as const;
     data.phones = data.phones.filter(p => p.number !== number);
     data.queue = data.queue.filter(q => q.to !== number); // nothing more waits for it
     return 'ok' as const;

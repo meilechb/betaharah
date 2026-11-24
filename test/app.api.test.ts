@@ -234,11 +234,14 @@ describe('pages and request rules', () => {
       expect(r.res.headers.get('x-frame-options')).toBe('DENY');
       expect(r.res.headers.get('x-content-type-options')).toBe('nosniff');
       expect(r.res.headers.get('referrer-policy')).toBe('no-referrer');
-      expect(r.res.headers.get('x-robots-tag')).toBe('noindex');
+      expect(r.res.headers.get('x-robots-tag')).toBe(path === '/help' ? 'noindex' : null);
       expect(r.res.headers.get('content-security-policy')).toContain("default-src 'none'");
     }
     const privacy = (await new Client().get('/privacy')).text;
     expect(privacy).toContain('Mr. &lt;b&gt;Test&lt;/b&gt;');
+    expect(privacy).toContain('privacy@betaharah.com');
+    expect(privacy).toContain('Limited Use');
+    expect(privacy).toContain('https://www.googleapis.com/auth/calendar.app.created');
     expect(privacy).toContain('No mobile information is shared with third parties or affiliates for marketing or promotional purposes.');
     const terms = (await new Client().get('/terms')).text;
     for (const phrase of ['STOP', 'HELP', 'Message and data rates may apply', 'frequency varies']) expect(terms).toContain(phrase);
@@ -277,7 +280,7 @@ describe('pages and request rules', () => {
 
   it('says what the site allows, and nothing about anyone', async () => {
     await site({ config: { signup: 'invite', contactName: 'M', contactEmail: '' } });
-    expect((await new Client().get('/api/public')).json).toEqual({ configured: true, signedIn: false, signup: 'invite', sms: true, prefixes: ['+1'], contactName: 'M', contactEmail: '' });
+    expect((await new Client().get('/api/public')).json).toEqual({ configured: true, signedIn: false, signup: 'invite', sms: true, google: false, prefixes: ['+1'], contactName: 'M', contactEmail: '' });
   });
 });
 
@@ -302,7 +305,7 @@ describe('signing up and signing in with a phone number', () => {
 
     const s = await c.state();
     expect(s.phones).toEqual([{ number: HUSBAND, name: '', canUpdate: true, reminders: expect.any(Array), verified: true, texts: false, optedOut: false, me: true }]);
-    expect(s.account).toEqual({ number: HUSBAND, hasPassword: false, fresh: true });
+    expect(s.account).toEqual({ number: HUSBAND, method: 'code', hasPassword: false, googleEmail: null, fresh: true });
     expect(s.terms).toBe('en');
     expect(s.status).toBeNull(); // no location yet
     expect(s.setup.map((x: any) => [x.key, x.done])).toEqual([['place', false], ['customs', false], ['entry', false], ['calendar', false], ['texts', false]]);
@@ -1668,13 +1671,18 @@ describe('the operator\'s console', () => {
     expect(r.json.urls).toEqual({
       webhook: 'https://cal.example/webhooks/telnyx',
       redirect: 'https://cal.example/api/google/callback',
+      signInRedirect: 'https://cal.example/api/auth/google/callback',
       home: 'https://cal.example/',
       privacy: 'https://cal.example/privacy',
       terms: 'https://cal.example/terms',
     });
     expect(r.json.smsReady).toBe(true);
     expect(r.json.googleReady).toBe(true);
-    for (const hidden of ['7325550101', '7325550102', 'Private name', 'a private note', 'Lakewood', 'telnyx-key', 'client-secret', 'Tehorah']) {
+    expect(r.text).toContain('+17325550101');
+    expect(r.text).toContain('+17325550102');
+    const accountRow = r.json.accounts.find((a: { phones: Array<{ number: string }> }) => a.phones.some(p => p.number === HUSBAND));
+    expect(accountRow.messages.some((m: { body: string }) => m.body === '9')).toBe(true);
+    for (const hidden of ['Private name', 'a private note', 'Lakewood', 'telnyx-key', 'client-secret']) {
       expect(r.text.includes(hidden), hidden).toBe(false);
     }
   });
@@ -1715,5 +1723,58 @@ describe('the operator\'s console', () => {
     expect(world.google.revoked).toEqual(['refresh-1']);
     expect((await other.get('/api/state')).status).toBe(200);
     expect((await op.del('/api/admin/households/no-such-id')).status).toBe(200);
+  });
+});
+
+describe('Sign in with Google', () => {
+  async function googleSignIn(client = new Client()): Promise<Client> {
+    const start = await client.get('/api/auth/google/start');
+    expect(start.status).toBe(302);
+    const u = new URL(start.res.headers.get('location') as string);
+    expect(u.searchParams.get('scope')).toBe('openid email profile');
+    expect(u.searchParams.get('access_type')).toBeNull();
+    expect(u.searchParams.get('redirect_uri')).toBe('https://cal.example/api/auth/google/callback');
+    const state = u.searchParams.get('state') as string;
+    const back = await client.get(`/api/auth/google/callback?code=login-code&state=${encodeURIComponent(state)}`);
+    expect(back.status).toBe(302);
+    expect(back.res.headers.get('location')).toBe('/app/');
+    expect(client.cookies.has('bt_session')).toBe(true);
+    return client;
+  }
+
+  it('creates an account from a verified Google email and signs in again as the same account', async () => {
+    await site({ sms: false, google: true });
+    const first = await googleSignIn();
+    const state = await first.state();
+    expect(state.account.method).toBe('google');
+    expect(state.account.googleEmail).toBe('ada@example.com');
+    expect(state.account.number).toBeNull();
+    expect(state.phones).toEqual([]);
+    const id = (await testDb.db.prepare('SELECT id FROM households').first<{ id: string }>())!.id;
+    first.cookies.clear();
+    const again = await googleSignIn(new Client('203.0.113.50'));
+    expect((await again.state()).account.googleEmail).toBe('ada@example.com');
+    expect(await count('households')).toBe(1);
+    expect((await loadHousehold(env, id))!.data.googleLogin).toEqual({ email: 'ada@example.com', name: 'Ada' });
+    const stored = await testDb.db.prepare('SELECT hash FROM google_ids').all<{ hash: string }>();
+    expect(JSON.stringify(stored)).not.toContain('ada@example.com');
+    expect(JSON.stringify(stored)).not.toContain('google-sub-1');
+  });
+
+  it('does not ask for a calendar refresh token, and a closed sign-up refuses a new Google account', async () => {
+    await site({ sms: false, google: true, config: { signup: 'closed' } });
+    const start = await new Client().get('/api/auth/google/start');
+    const state = new URL(start.res.headers.get('location') as string).searchParams.get('state') as string;
+    const back = await new Client().get(`/api/auth/google/callback?code=login-code&state=${encodeURIComponent(state)}`);
+    expect(back.res.headers.get('location')).toContain('google_error=');
+    expect(await count('households')).toBe(0);
+  });
+
+  it('records when the minute job last ran', async () => {
+    await site({ sms: false });
+    const op = await operator();
+    expect((await op.get('/api/admin/state')).json.health.lastTickAt).toBeNull();
+    await tick(env, world.deps);
+    expect((await op.get('/api/admin/state')).json.health).toEqual({ lastTickAt: START, lastTickError: null });
   });
 });

@@ -15,7 +15,7 @@ For the person who operates betaharah.com.
 ## The operator's console
 
 Open **https://betaharah.com/admin/** and sign in with `DASHBOARD_PASSWORD`.
-It shows totals, never any account's data. There you:
+It lists accounts, their phone numbers, the Google email used to sign in, and recent texts. It does not list the stored dates. There you:
 
 1. **Set the contact** shown on the Help, Privacy and Terms pages (a name,
    and an email address if you want one public).
@@ -94,19 +94,12 @@ works with Google Calendar too (Google refreshes subscribed calendars on its
 own schedule, up to about 12 hours). With it, an account's Google calendar
 is updated within about a minute.
 
-In [Google Cloud Console](https://console.cloud.google.com/):
-
-1. Create a project and enable the **Google Calendar API**.
-2. Set up the consent screen: user type **External**; app name Betaharah;
-   home page `https://betaharah.com`; privacy policy
-   `https://betaharah.com/privacy`; terms `https://betaharah.com/terms`.
-   Add the one scope the site uses,
-   `https://www.googleapis.com/auth/calendar.app.created`.
-3. Set the publishing status to **In production**. In "Testing" status
-   Google ends each person's access after seven days.
-4. Create an OAuth client of type **Web application** with the redirect
-   address the console shows (`https://betaharah.com/api/google/callback`).
-5. Paste the client ID and client secret into the console.
+The exact scopes and the two redirect URIs are in
+[GOOGLE_SETUP.md](GOOGLE_SETUP.md). In short: one Web client, redirect
+`https://betaharah.com/api/auth/google/callback` for sign-in (`openid email
+profile`) and `https://betaharah.com/api/google/callback` for the calendar
+(`https://www.googleapis.com/auth/calendar.app.created`). Paste the client
+ID and secret into the console. Publishing status **In production**.
 
 Until Google has verified the app, people see a "Google hasn't verified this
 app" page when they connect, and can continue past it; Google also limits an
@@ -128,11 +121,10 @@ and privacy policy above and proof that you own the domain.
 
 ## What you can and cannot see
 
-The console lists accounts by an internal id, with dates and the number of
-phones. It cannot show whose they are. The database holds each account's
-data encrypted; the key is the Worker's `ENCRYPTION_KEY` secret. Because you
-control the Cloudflare account you have the technical means to decrypt; the
-Privacy page tells users so.
+The console lists each account's phone numbers, Google email, and recent
+texts. The dates themselves stay in the encrypted record and are not listed.
+The key is the Worker's `ENCRYPTION_KEY` secret. The Privacy page tells
+users what the console shows.
 
 Worker logs record errors only (the kind of error and where in the code),
 not the addresses requested and not any account's data.

@@ -13,13 +13,13 @@ It is a calculation aid. It does not rule on anything; see
 [docs/HALACHA.md](docs/HALACHA.md) for exactly what it calculates and what it
 leaves to a rav.
 
-If you run the site, read [docs/OPERATOR.md](docs/OPERATOR.md).
+If you run the site, read [docs/OPERATOR.md](docs/OPERATOR.md). The Google Cloud settings are in [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md).
 
 ## How people use it
 
 | Step | What happens |
 |---|---|
-| Sign up, and sign in each time | Enter a mobile number, get a six-digit code by text, type it in. Nothing else is asked. A password can be set as well, under Settings. |
+| Sign up, and sign in each time | Sign in with Google, or enter a mobile number and the six-digit code texted to it. A password can be set for a phone, under Settings. |
 | Location and customs | Sunrise, sunset and nightfall are calculated for the place chosen. Every point on which customs differ is a setting; until they are saved the stricter option of each is used. |
 | Recording | On the website, or by text: `1` flow, `2` hefsek, `3` count broken, `4` immersed, `5` stain, `9` status, `0` undo, `?` commands. After `1`, `3`, `5`: `day`, `night`, `yesterday night`, or a time such as `6:40am`. After `2`, `4`: `yesterday`. |
 | Husband and wife | A second phone is added to the account with a code texted to it. Up to four phones share one account; each chooses its own reminders. |
@@ -64,7 +64,7 @@ money.
   calendar link, never from anything typed. The tests under `one account
   never sees another` check this, including copying one account's stored
   data over another's (it fails to decrypt).
-- **The operator's console shows no account's data**, only totals.
+- **The operator's console** lists each account's phone numbers, the Google email used to sign in, and recent texts, so the service can be supported. It does not list the stored dates. The Privacy page says so.
 - **What this does not do:** the server can decrypt, because it has to read
   the dates to calculate and to send reminders. Whoever controls the
   Cloudflare account can therefore read an account. Text messages are read

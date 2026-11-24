@@ -57,7 +57,7 @@ async function best(run: () => unknown | Promise<unknown>, batches = 16, each = 
 
 describe('cost of one request', () => {
   const now = localToInstant({ y: 2026, m: 12, d: 1, hh: 12, mi: 0, ss: 0 }, 'America/New_York');
-  const session: Session = { phoneHash: 'x', householdId: 'h', method: 'code', startedAt: now, phone: { hash: 'x', household_id: 'h', password: null, session_epoch: 0, created_at: 0 } };
+  const session: Session = { phoneHash: 'x', householdId: 'h', method: 'code', startedAt: now, kind: 'phone', phone: { hash: 'x', household_id: 'h', password: null, session_epoch: 0, created_at: 0 }, google: null };
 
   it('the whole calculation for three years of history: a few milliseconds', async () => {
     const data = longHistory(now);

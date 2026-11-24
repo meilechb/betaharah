@@ -12,14 +12,17 @@ import { Hono, type Context } from 'hono';
 import { absToUtcMidnightMs } from '../engine/civil';
 import { parseHalachicSettings, SettingsError } from '../engine/settings';
 import { NoSunError } from '../engine/zmanim';
-import { addPhone, createAccount, markVerified, prefixAllowed, prefixMessage, removePhone, tidyNumber } from './accounts';
+import { addPhone, attachGoogle, createAccount, createGoogleAccount, markVerified, prefixAllowed, prefixMessage, removePhone, tidyNumber } from './accounts';
 import {
   ADMIN_COOKIE,
   adminLogin,
   clearedCookie,
+  googleSessionCookie,
   hasAdminSession,
   isConfigured,
+  makeLoginState,
   makeOAuthState,
+  readLoginState,
   readOAuthState,
   readSession,
   SESSION_COOKIE,
@@ -29,7 +32,7 @@ import {
 import { checkPassword, fingerprint, hashPassword, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, randomToken } from './crypto';
 import { dashboardState, draftFromForm, FRESH_MS } from './dashboard';
 import { realDeps, type Deps, type Env } from './env';
-import { authorizationUrl, exchangeCode, GoogleCalendar, GoogleError, revokeToken } from './google';
+import { authorizationUrl, exchangeCode, fetchGoogleIdentity, GoogleCalendar, GoogleError, revokeToken, SIGN_IN_SCOPE } from './google';
 import { compute, confirmationText, recordEntry, rejectionText, removeEntry, whereOf, type Computed } from './household';
 import { toICalendar } from './ics';
 import { addMessage, DEFAULT_SITE_CONFIG, googleReady, lastFour, MAX_PHONES, SITE_SECRET_KEYS, smsReady, type Site } from './model';
@@ -57,13 +60,17 @@ import {
   createInvite,
   deleteHousehold,
   deleteInvite,
+  endGoogleSessions,
   endSessions,
+  getGoogleId,
   getInvite,
   getPhone,
+  googleHash,
   householdIdByLink,
   inviteHash,
   listHouseholds,
   listInvites,
+  loadHealth,
   loadHousehold,
   loadSite,
   phoneHash,
@@ -164,7 +171,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     h.set('X-Content-Type-Options', 'nosniff');
     h.set('Referrer-Policy', 'no-referrer');
     h.set('X-Frame-Options', 'DENY');
-    h.set('X-Robots-Tag', 'noindex');
+    if (c.req.path !== '/privacy' && c.req.path !== '/terms') h.set('X-Robots-Tag', 'noindex');
     h.set('Strict-Transport-Security', 'max-age=31536000');
     if (!h.has('Cache-Control')) h.set('Cache-Control', 'no-store');
     if ((h.get('Content-Type') ?? '').startsWith('text/html')) {
@@ -240,6 +247,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       signedIn: session !== null,
       signup: site.config.signup,
       sms: smsReady(site),
+      google: googleReady(site),
       prefixes: site.config.allowedPrefixes,
       contactName: site.config.contactName,
       contactEmail: site.config.contactEmail,
@@ -367,6 +375,84 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     return c.json({ ok: true });
   });
 
+  // Sign in with Google. A separate redirect and a separate scope from Calendar connect.
+  app.get('/api/auth/google/start', async c => {
+    const site = await loadSite(c.env);
+    if (!googleReady(site) || !site.secrets.googleClientId) {
+      return c.redirect(`/app/?google_error=${encodeURIComponent('Sign-in with Google is not available on this site yet.')}`, 302);
+    }
+    const now = deps.now();
+    const session = await readSession(c.env, c.req.header('cookie'), now);
+    const invite = c.req.query('invite') ?? null;
+    return c.redirect(
+      authorizationUrl({
+        clientId: site.secrets.googleClientId,
+        redirectUri: `${originOf(c)}/api/auth/google/callback`,
+        state: await makeLoginState(c.env, { householdId: session?.householdId ?? null, invite, now }),
+        scope: SIGN_IN_SCOPE,
+        offline: false,
+        prompt: 'select_account',
+      }),
+      302,
+    );
+  });
+
+  app.get('/api/auth/google/callback', async c => {
+    const now = deps.now();
+    const fail = (message: string) => c.redirect(`/app/?google_error=${encodeURIComponent(message)}`, 302);
+    const state = await readLoginState(c.env, c.req.query('state'), now);
+    if (!state) return fail('The sign-in took too long or did not start here. Try again.');
+    if (c.req.query('error')) return fail('Google sign-in was not completed.');
+    const code = c.req.query('code');
+    if (!code) return fail('Google did not return a code.');
+    const site = await loadSite(c.env);
+    const { googleClientId, googleClientSecret } = site.secrets;
+    if (!googleClientId || !googleClientSecret) return fail('Sign-in with Google is not available on this site yet.');
+    try {
+      const tokens = await exchangeCode(deps, {
+        clientId: googleClientId,
+        clientSecret: googleClientSecret,
+        redirectUri: `${originOf(c)}/api/auth/google/callback`,
+        code,
+        requireRefresh: false,
+      });
+      const profile = await fetchGoogleIdentity(deps, tokens.accessToken);
+      const hash = await googleHash(c.env, profile.sub);
+      const existing = await getGoogleId(c.env.DB, hash);
+      if (existing) {
+        if (state.householdId && state.householdId !== existing.household_id) {
+          return fail('That Google account is already used by another Betaharah account.');
+        }
+        const row = existing;
+        c.header('Set-Cookie', await googleSessionCookie(c.env, row, now, isSecure(c)));
+        await changeHousehold(c.env, row.household_id, now, data => {
+          data.googleLogin = profile;
+        });
+        return c.redirect('/app/', 302);
+      }
+      const session = await readSession(c.env, c.req.header('cookie'), now);
+      const linkTo = state.householdId && session && session.householdId === state.householdId ? state.householdId : null;
+      if (linkTo) {
+        const attached = await attachGoogle(c.env, linkTo, hash, profile, now);
+        if (!attached.ok) return fail('That Google account is already used by another Betaharah account.');
+        c.header('Set-Cookie', await googleSessionCookie(c.env, attached.row, now, isSecure(c)));
+        return c.redirect('/app/?google=signed-in#settings', 302);
+      }
+      if (site.config.signup === 'closed') return fail('New sign-ups are closed.');
+      if (site.config.signup === 'invite') {
+        const invite = state.invite ? await getInvite(c.env.DB, await inviteHash(c.env, state.invite), now) : null;
+        if (!invite || invite.kind !== 'signup') return fail('New accounts are by invitation.');
+        if (!(await useInvite(c.env.DB, invite.hash, now))) return fail('This invitation is not valid any more.');
+      }
+      const made = await createGoogleAccount(c.env, hash, profile, now);
+      if (!made.ok) return fail('That Google account is already used by another Betaharah account.');
+      c.header('Set-Cookie', await googleSessionCookie(c.env, made.row, now, isSecure(c)));
+      return c.redirect('/app/', 302);
+    } catch (e) {
+      return fail(e instanceof GoogleError ? e.message : 'Google sign-in failed.');
+    }
+  });
+
   // ----- the operator's console: the site's settings, never a household's data -----
 
   app.post('/api/admin/login', async c => {
@@ -387,6 +473,31 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     await next();
   });
 
+  /** Phones, the Google sign-in, and recent texts. The operator asked to see these in order to run the service. */
+  const adminAccounts = async (env: Env) => {
+    const rows = await listHouseholds(env.DB);
+    const out = [];
+    for (const row of rows.slice(0, 80)) {
+      const household = await loadHousehold(env, row.id).catch(() => null);
+      if (!household) {
+        out.push({ id: row.id, createdAt: row.created_at, updatedAt: row.updated_at, unreadable: true, phones: [], googleEmail: null, googleName: null, messages: [] });
+        continue;
+      }
+      const d = household.data;
+      out.push({
+        id: row.id,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        unreadable: false,
+        phones: d.phones.map(p => ({ number: p.number, verified: p.verifiedAt !== null, texts: p.consentAt !== null, optedOut: p.optedOut })),
+        googleEmail: d.googleLogin?.email ?? null,
+        googleName: d.googleLogin?.name ?? null,
+        messages: d.messages.slice(0, 15),
+      });
+    }
+    return out;
+  };
+
   const adminState = async (c: C) => {
     const now = deps.now();
     const site = await loadSite(c.env);
@@ -402,11 +513,14 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
         textsThisMonth: await readCounter(c.env.DB, textsThisMonthKey(now), now),
         codesToday: await readCounter(c.env.DB, codesTodayKey(now), now),
       },
+      health: await loadHealth(c.env.DB),
       households: await listHouseholds(c.env.DB),
+      accounts: await adminAccounts(c.env),
       invites: (await listInvites(c.env.DB, now)).map(i => ({ id: i.hash, kind: i.kind, note: i.note, createdAt: i.created_at, expiresAt: i.expires_at, maxUses: i.max_uses, uses: i.uses })),
       urls: {
         webhook: `${origin}/webhooks/telnyx`,
         redirect: `${origin}/api/google/callback`,
+        signInRedirect: `${origin}/api/auth/google/callback`,
         home: `${origin}/`,
         privacy: `${origin}/privacy`,
         terms: `${origin}/terms`,
@@ -504,6 +618,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       const household = await loadHousehold(c.env, session.householdId);
       if (!household) return fail('Please sign in again.');
       const tokens = await exchangeCode(deps, { clientId: googleClientId, clientSecret: googleClientSecret, redirectUri: `${originOf(c)}/api/google/callback`, code });
+      if (!tokens.refreshToken) return fail('Google did not return a refresh token.');
       const calendar = new GoogleCalendar(deps, tokens.accessToken);
       let calendarId = household.data.google?.calendarId ?? null;
       if (calendarId && !(await calendar.calendarExists(calendarId))) calendarId = null;
@@ -514,7 +629,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
         session.householdId,
         now,
         data => {
-          data.google = { calendarId: id, refreshToken: tokens.refreshToken, connectedAt: now };
+          data.google = { calendarId: id, refreshToken: tokens.refreshToken as string, connectedAt: now };
           data.sync = { dirty: true, lastRunAt: null, lastOkAt: null, lastError: null };
         },
         now, // the periodic job fills the calendar within a minute
@@ -576,7 +691,9 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
   app.get('/api/state', async c => c.json({ state: await stateOf(c, await loadSite(c.env), await mine(c)) }));
 
   app.post('/api/auth/logout-all', async c => {
-    await endSessions(c.env.DB, c.get('session').phoneHash);
+    const session = c.get('session');
+    if (session.kind === 'google') await endGoogleSessions(c.env.DB, session.phoneHash);
+    else await endSessions(c.env.DB, session.phoneHash);
     c.header('Set-Cookie', clearedCookie(SESSION_COOKIE, isSecure(c)));
     return c.json({ ok: true });
   });
@@ -769,14 +886,16 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
   /** After the way of signing in changed: ends every other session of this phone and keeps this one. */
   const renewSession = async (c: C): Promise<void> => {
     const session = c.get('session');
+    if (session.kind === 'google') throw new HttpError(400, 'A password belongs to a phone number. Add a phone, sign in with it, and set the password there.');
     await endSessions(c.env.DB, session.phoneHash);
     const phone = await getPhone(c.env.DB, session.phoneHash);
     if (!phone) throw new HttpError(404, 'This account no longer exists.');
-    c.header('Set-Cookie', await sessionCookie(c.env, phone, session.method, session.startedAt, isSecure(c)));
+    c.header('Set-Cookie', await sessionCookie(c.env, phone, session.method === 'google' ? 'password' : session.method, session.startedAt, isSecure(c)));
     c.set('session', { ...session, phone });
   };
 
   app.put('/api/password', async c => {
+    if (c.get('session').kind === 'google') throw new HttpError(400, 'A password belongs to a phone number. Add a phone, sign in with it, and set the password there.');
     requireFresh(c);
     const body = await readBody(c);
     const password = parsePassword(body.password);
@@ -787,6 +906,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
   });
 
   app.delete('/api/password', async c => {
+    if (c.get('session').kind === 'google') throw new HttpError(400, 'A password belongs to a phone number. Add a phone, sign in with it, and set the password there.');
     requireFresh(c);
     const site = await loadSite(c.env);
     if (!smsReady(site)) throw new HttpError(400, 'Sign-in by text message is not available yet, so the password is the only way in and cannot be removed.');

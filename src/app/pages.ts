@@ -4,7 +4,7 @@
  * console.
  */
 import { HELP_TEXT } from './commands';
-import { MAX_MESSAGES_KEPT, MAX_PHONES, MAX_REMOVED_KEPT, smsReady, type Site } from './model';
+import { ADMIN_EMAIL, MAX_MESSAGES_KEPT, MAX_PHONES, MAX_REMOVED_KEPT, PRIVACY_EMAIL, smsReady, type Site } from './model';
 
 export const LAST_UPDATED = 'November 24, 2026';
 
@@ -12,13 +12,13 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function layout(title: string, body: string): string {
+function layout(title: string, body: string, indexable = false): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
+<meta name="robots" content="${indexable ? 'index,follow' : 'noindex'}">
 <title>${escapeHtml(title)} · Betaharah</title>
 <link rel="stylesheet" href="/site.css">
 </head>
@@ -39,13 +39,11 @@ ${body}
 /** Who runs the site, as a sentence fragment, and how to reach them. */
 function contact(site: Site): { who: string; how: string } {
   const name = site.config.contactName.trim();
-  const email = site.config.contactEmail.trim();
-  const who = name ? escapeHtml(name) : 'the person who invited you';
-  const how = email
-    ? `Write to <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>.`
-    : name
-      ? `Contact ${escapeHtml(name)} directly.`
-      : 'Contact the person who invited you.';
+  const who = name ? escapeHtml(name) : 'Betaharah';
+  const extra = site.config.contactEmail.trim();
+  const listed = new Set([PRIVACY_EMAIL, ADMIN_EMAIL]);
+  const more = extra && !listed.has(extra) ? ` You can also write to <a href="mailto:${escapeHtml(extra)}">${escapeHtml(extra)}</a>.` : '';
+  const how = `Privacy questions: <a href="mailto:${PRIVACY_EMAIL}">${PRIVACY_EMAIL}</a>. The person who runs the site: <a href="mailto:${ADMIN_EMAIL}">${ADMIN_EMAIL}</a>.${more}`;
   return { who, how };
 }
 
@@ -62,7 +60,7 @@ export function helpPage(site: Site): string {
 
 <h2>Getting started</h2>
 <ol>
-  <li><strong>Sign in with your phone number.</strong> You get a six-digit code by text message and type it in. There is nothing else to fill in. If you like, you can also set a password under Settings, and sign in with that.</li>
+  <li><strong>Sign in with Google, or with your phone number.</strong> With Google, nothing else is asked. With a phone, you get a six-digit code by text and type it in. If you like, you can also set a password for a phone under Settings.</li>
   <li><strong>Choose your location.</strong> Sunrise, sunset and nightfall are calculated for it.</li>
   <li><strong>Review your customs.</strong> Every point on which customs differ is a setting. Until you save them, the calendar uses the stricter option for each. Go over them with your rav.</li>
   <li><strong>Record the most recent dates</strong>: when the last period began, and the hefsek taharah and immersion that followed.</li>
@@ -93,7 +91,7 @@ ${number ? `<p>Text <strong>${escapeHtml(number)}</strong> from a phone that is 
 <h2>Seeing it in your calendar</h2>
 <p>There are two ways, both optional.</p>
 <ul>
-  <li><strong>Google Calendar.</strong> Under Settings, connect your Google account. The site creates one new calendar there and keeps it up to date within about a minute of each change. It can see and change only that one calendar, nothing else in your Google account. To share it with your spouse, share that calendar from Google Calendar.</li>
+  <li><strong>Google Calendar.</strong> Under Settings, connect Google Calendar. That is separate from signing in. The site creates one new calendar and keeps it up to date within about a minute of each change. It can see and change only that one calendar. To share it with your spouse, share that calendar from Google Calendar.</li>
   <li><strong>A subscription link</strong>, for Apple Calendar, Outlook, or Google Calendar without connecting an account. Under Settings, create the link and add it in your calendar app as a subscribed calendar (in Google Calendar: Other calendars, +, From URL). The calendar app decides how often it looks for changes; Google says it can take up to 12 hours. Anyone who has the link can read the calendar, so treat it like a password. You can replace or remove it at any time.</li>
 </ul>
 <p>Event titles can be written in words or as symbols only, for a calendar other people may see.</p>
@@ -122,14 +120,15 @@ export function privacyPage(site: Site): string {
 
 <h2>What is kept</h2>
 <ul>
-  <li><strong>Your phone number</strong>, and the number of any phone you add to your account.</li>
+  <li><strong>Your phone number</strong>, if you add one, and the number of any other phone on the account.</li>
+  <li><strong>If you sign in with Google:</strong> the email address and name on that Google account, used only to recognize you. The site asks Google for <code>openid</code>, <code>email</code> and <code>profile</code> for sign-in, and nothing else at that step.</li>
   <li><strong>Your settings</strong>: location, customs, reminder choices.</li>
   <li><strong>The dates you record</strong>, and the last ${MAX_REMOVED_KEPT} entries you removed (so that a mistake can be traced).</li>
   <li><strong>The last ${MAX_MESSAGES_KEPT} text messages</strong> between your phones and the service.</li>
   <li><strong>If you set a password</strong>: a salted, keyed hash of it, from which the password cannot be read.</li>
-  <li><strong>If you connect Google Calendar</strong>: a token from Google that lets the site manage the one calendar it creates. The site cannot see your other calendars, your email, your contacts or your name.</li>
+  <li><strong>If you connect Google Calendar</strong>: a token from Google that lets the site manage the one calendar it creates. The only calendar permission asked for is <code>https://www.googleapis.com/auth/calendar.app.created</code>. The site cannot see your other calendars or your contacts.</li>
 </ul>
-<p>Nothing else is asked for: no name, no email address, no date of birth.</p>
+<p>A name or email is kept only when you sign in with Google. A date of birth is never asked for.</p>
 
 <h2>How it is protected</h2>
 <ul>
@@ -139,14 +138,15 @@ export function privacyPage(site: Site): string {
   <li>Each account can be read only through its own sign-in, a text from one of its own phones, or its own calendar link. One account cannot read another.</li>
   <li>All connections use HTTPS. The only cookie is the one that keeps you signed in.</li>
 </ul>
-<p><strong>What encryption does not do.</strong> The encryption key is held by the server, apart from the database. That protects your data if the database alone is copied or looked through. It does not hide your data from the server itself: the server has to read your dates to work out the calendar and send reminders. So the person who operates the site has the technical means to decrypt an account. The operator's console shows no account's data, only totals.</p>
+<p><strong>What encryption does not do.</strong> The encryption key is held by the server, apart from the database. That protects your data if the database alone is copied or looked through. It does not hide your data from the server itself: the server has to read your dates to work out the calendar and send reminders. The person who operates the site can open an account. The operator's console lists each account's phone numbers, the Google email used to sign in, and the recent text messages (a reply can include a date you recorded). It does not list the stored calendar entries themselves.</p>
 
 <h2>Who else handles it</h2>
 <ul>
   <li><strong>Cloudflare</strong> hosts the site and the database. The database contents are encrypted as described above. Cloudflare handles each request, including your network address, in order to deliver it.</li>
   <li><strong>Telnyx</strong> and the mobile carriers deliver the text messages, so they handle your phone number and the words of each text. If that matters to you, choose the "discreet" wording for reminders, which uses letters and times only.</li>
-  <li><strong>Google</strong>, only if you connect Google Calendar: the events are written to your own calendar there.</li>
+  <li><strong>Google</strong>, if you sign in with Google or connect a calendar. Sign-in receives the email and name on that account. Connecting a calendar writes the events into a calendar the site creates in your Google account.</li>
 </ul>
+<p><strong>Limited Use.</strong> Betaharah's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. Information received from Google is used only to sign you in and, if you connect it, to keep the one calendar this site creates. It is not sold, not used for advertising, and not used to train a model.</p>
 <p>Your information is not sold, rented or given to anyone else. No mobile information is shared with third parties or affiliates for marketing or promotional purposes. Text-message opt-in data and consent are not shared with any third party.</p>
 
 <h2>Logs and limits</h2>
@@ -163,7 +163,8 @@ export function privacyPage(site: Site): string {
 <p>This service is for adults.</p>
 
 <h2>Changes and contact</h2>
-<p>If this page changes in a way that matters, the change is noted here with a new date. Questions: ${c.how}</p>`,
+<p>If this page changes in a way that matters, the change is noted here with a new date. ${c.how}</p>`,
+    true,
   );
 }
 
@@ -208,5 +209,6 @@ export function termsPage(site: Site): string {
 
 <h2>Contact</h2>
 <p>${c.how}</p>`,
+    true,
   );
 }

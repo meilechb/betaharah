@@ -168,7 +168,9 @@ export function dashboardState(args: StateArgs) {
     maxPhones: MAX_PHONES,
     account: {
       number: args.myNumber,
-      hasPassword: session.phone.password !== null,
+      method: session.method,
+      hasPassword: session.phone?.password != null,
+      googleEmail: data.googleLogin?.email ?? null,
       // Whether this session began recently enough to set, change or remove the password.
       fresh: now - session.startedAt < FRESH_MS,
     },

@@ -115,7 +115,7 @@ async function load() {
 
 function render() {
   root.replaceChildren(
-    h('header', { class: 'top' }, h('h1', {}, 'Betaharah operator console'), h('div', { class: 'today' }, 'No account’s data is shown here.')),
+    h('header', { class: 'top' }, h('h1', {}, 'Betaharah operator console'), h('div', { class: 'today' }, 'Accounts, phones and recent texts. Cycle entries are not listed.')),
     statusCard(),
     signupCard(),
     keysCard(),
@@ -132,7 +132,8 @@ function statusCard() {
     { class: 'card' },
     h('h2', {}, 'Status'),
     h('div', { class: 'alert ' + (S.smsReady ? 'ok' : 'info') }, S.smsReady ? 'Text messaging is working: codes, replies and reminders are sent from ' + S.textingNumber + '.' : 'Text messaging is off or not set up. People can sign in only with a password, and only accounts you create by invitation can exist.'),
-    h('div', { class: 'alert ' + (S.googleReady ? 'ok' : 'info') }, S.googleReady ? 'Google Calendar connection is available to accounts.' : 'Google Calendar connection is not set up. Accounts can still use the subscription link.'),
+    h('div', { class: 'alert ' + (S.googleReady ? 'ok' : 'info') }, S.googleReady ? 'Google sign-in and Google Calendar are available.' : 'Google is not set up. Accounts can still use a password and the calendar subscription link.'),
+    h('p', { class: 'small muted' }, S.health && S.health.lastTickAt ? 'The minute job last ran ' + new Date(S.health.lastTickAt).toLocaleString('en-US') + (S.health.lastTickError ? ' (last error: ' + S.health.lastTickError + ')' : '.') : 'The minute job has not run yet.'),
     h(
       'table',
       {},
@@ -259,8 +260,9 @@ function keysCard() {
       'ol',
       { class: 'small' },
       h('li', {}, 'In Google Cloud Console, create a project and enable the Google Calendar API.'),
-      h('li', {}, 'Set up the consent screen (audience: External; publish it to production) with the website, privacy and terms addresses above. The only scope the site asks for is calendar.app.created.'),
-      h('li', {}, 'Create an OAuth client of type “Web application” with this authorized redirect URI:', h('code', { class: 'copy' }, S.urls.redirect)),
+      h('li', {}, 'Set up the consent screen (audience: External; publish it to production) with the website, privacy and terms addresses above.'),
+      h('li', {}, 'Add two scopes: openid, email and profile for sign-in, and calendar.app.created for the calendar.'),
+      h('li', {}, 'Create an OAuth client of type “Web application” with both redirect URIs:', h('code', { class: 'copy' }, S.urls.signInRedirect), h('code', { class: 'copy' }, S.urls.redirect)),
       h('li', {}, 'Paste the client ID and client secret here.'),
     ),
     secretField('googleClientId', 'Client ID', 'text'),
@@ -328,17 +330,37 @@ function householdsCard() {
     'section',
     { class: 'card' },
     h('h2', {}, 'Accounts'),
-    h('p', { class: 'help' }, 'Only what is not encrypted is listed: an internal id, dates, and how many phones. Deleting an account removes all of its data; it cannot be undone.'),
-    S.households.length === 0
+    h('p', { class: 'help' }, 'Phone numbers, the Google email used to sign in, and the recent texts. The stored dates themselves are not listed. Deleting an account removes all of its data; it cannot be undone.'),
+    !S.accounts || S.accounts.length === 0
       ? h('p', { class: 'muted' }, 'None yet.')
       : h(
           'ul',
           { class: 'list' },
-          S.households.map(a =>
+          S.accounts.map(a =>
             h(
               'li',
               {},
-              h('div', { class: 'main' }, h('div', { class: 'mono' }, a.id), h('div', { class: 'when' }, 'Created ' + date(a.created_at) + ' · last changed ' + date(a.updated_at) + ' · ' + a.phones + (a.phones === 1 ? ' phone' : ' phones'))),
+              h(
+                'div',
+                { class: 'main' },
+                h('div', { class: 'mono' }, a.id),
+                h('div', { class: 'when' }, 'Created ' + date(a.createdAt) + ' · last changed ' + date(a.updatedAt)),
+                a.unreadable
+                  ? h('div', { class: 'alert bad' }, 'This account could not be read.')
+                  : h(
+                      'div',
+                      {},
+                      a.googleEmail ? h('div', {}, 'Google: ' + a.googleEmail + (a.googleName ? ' (' + a.googleName + ')' : '')) : null,
+                      a.phones.length === 0 ? h('div', { class: 'muted' }, 'No phone yet.') : a.phones.map(p => h('div', {}, p.number + (p.optedOut ? ' · STOP' : p.texts ? ' · reminders on' : '') + (p.verified ? '' : ' · not verified'))),
+                      a.messages.length === 0
+                        ? null
+                        : h(
+                            'ul',
+                            { class: 'list' },
+                            a.messages.map(m => h('li', {}, h('div', { class: 'main' }, h('div', { class: 'when' }, (m.direction === 'in' ? 'In' : 'Out') + ' ···' + m.phone + ' · ' + m.status + ' · ' + new Date(m.at).toLocaleString('en-US')), h('div', {}, m.body)))),
+                          ),
+                    ),
+              ),
               h(
                 'button',
                 {

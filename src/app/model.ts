@@ -72,6 +72,8 @@ export interface HouseholdData {
   usage: { month: string; texts: number };
   /** Ids of the latest received texts, so that one delivered twice is acted on once. */
   seenTexts: string[];
+  /** The Google account that can sign in, if one was connected. The subject id is not stored here. */
+  googleLogin: { email: string; name: string } | null;
 }
 
 export function newHousehold(): HouseholdData {
@@ -90,6 +92,7 @@ export function newHousehold(): HouseholdData {
     queue: [],
     usage: { month: '', texts: 0 },
     seenTexts: [],
+    googleLogin: null,
   };
 }
 
@@ -139,9 +142,13 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   dailyCodeLimit: 150,
   monthlyMessageLimit: 3000,
   householdMonthlyLimit: 200,
-  contactName: '',
-  contactEmail: '',
+  contactName: 'Betaharah',
+  contactEmail: 'privacy@betaharah.com',
 };
+
+/** Standing mailboxes. They are live even when the operator has not typed a contact. */
+export const PRIVACY_EMAIL = 'privacy@betaharah.com';
+export const ADMIN_EMAIL = 'admin@betaharah.com';
 
 export interface SiteSecrets {
   googleClientId?: string;

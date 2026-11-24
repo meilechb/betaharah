@@ -10,7 +10,7 @@
  */
 import { constantTimeEqual, sign, verifySigned } from './crypto';
 import type { Env } from './env';
-import { bump, getPhone, readCounter, type PhoneRow } from './store';
+import { bump, getGoogleId, getPhone, readCounter, type GoogleRow, type PhoneRow } from './store';
 
 export const SESSION_COOKIE = 'bt_session';
 export const ADMIN_COOKIE = 'bt_admin';
@@ -42,21 +42,30 @@ export function readCookie(header: string | null | undefined, name: string): str
 
 // ---------- people ----------
 
-export type SignInMethod = 'code' | 'password';
+export type SignInMethod = 'code' | 'password' | 'google';
 
 export interface Session {
+  /** Fingerprint of the phone number, or of the Google subject id. */
   phoneHash: string;
   householdId: string;
   /** How this session was started, and when. */
   method: SignInMethod;
   startedAt: number;
-  /** The phone's row as it is now. */
-  phone: PhoneRow;
+  kind: 'phone' | 'google';
+  /** The phone's row as it is now. Null when the session is a Google sign-in. */
+  phone: PhoneRow | null;
+  google: GoogleRow | null;
 }
 
 /** A session cookie for a phone that has just proved who it is. */
 export async function sessionCookie(env: Env, phone: PhoneRow, method: SignInMethod, now: number, secure: boolean): Promise<string> {
-  const payload = JSON.stringify({ p: phone.hash, h: phone.household_id, e: phone.session_epoch, m: method, t: now, x: now + SESSION_DAYS * 86_400_000 });
+  const payload = JSON.stringify({ k: 'phone', p: phone.hash, h: phone.household_id, e: phone.session_epoch, m: method, t: now, x: now + SESSION_DAYS * 86_400_000 });
+  return cookie(SESSION_COOKIE, await sign(env.ENCRYPTION_KEY, 'session', payload), SESSION_DAYS * 86_400, secure);
+}
+
+/** A session cookie for a Google account that has just proved who it is. */
+export async function googleSessionCookie(env: Env, row: GoogleRow, now: number, secure: boolean): Promise<string> {
+  const payload = JSON.stringify({ k: 'google', p: row.hash, h: row.household_id, e: row.session_epoch, m: 'google', t: now, x: now + SESSION_DAYS * 86_400_000 });
   return cookie(SESSION_COOKIE, await sign(env.ENCRYPTION_KEY, 'session', payload), SESSION_DAYS * 86_400, secure);
 }
 
@@ -76,18 +85,25 @@ export async function readSession(env: Env, cookieHeader: string | null | undefi
   if (!token) return null;
   const payload = await verifySigned(env.ENCRYPTION_KEY, 'session', token);
   if (!payload) return null;
-  let parsed: { p?: unknown; h?: unknown; e?: unknown; m?: unknown; t?: unknown; x?: unknown };
+  let parsed: { k?: unknown; p?: unknown; h?: unknown; e?: unknown; m?: unknown; t?: unknown; x?: unknown };
   try {
     parsed = JSON.parse(payload) as typeof parsed;
   } catch {
     return null;
   }
   if (typeof parsed.p !== 'string' || typeof parsed.h !== 'string' || typeof parsed.e !== 'number' || typeof parsed.x !== 'number') return null;
-  if ((parsed.m !== 'code' && parsed.m !== 'password') || typeof parsed.t !== 'number') return null;
-  if (parsed.x <= now) return null;
+  if (typeof parsed.t !== 'number' || parsed.x <= now) return null;
+  // Cookies issued before Google sign-in have no k; they are phone sessions.
+  if (parsed.k === 'google') {
+    if (parsed.m !== 'google') return null;
+    const google = await getGoogleId(env.DB, parsed.p);
+    if (!google || google.household_id !== parsed.h || google.session_epoch !== parsed.e) return null;
+    return { phoneHash: google.hash, householdId: google.household_id, method: 'google', startedAt: parsed.t, kind: 'google', phone: null, google };
+  }
+  if (parsed.m !== 'code' && parsed.m !== 'password') return null;
   const phone = await getPhone(env.DB, parsed.p);
   if (!phone || phone.household_id !== parsed.h || phone.session_epoch !== parsed.e) return null;
-  return { phoneHash: phone.hash, householdId: phone.household_id, method: parsed.m, startedAt: parsed.t, phone };
+  return { phoneHash: phone.hash, householdId: phone.household_id, method: parsed.m, startedAt: parsed.t, kind: 'phone', phone, google: null };
 }
 
 // ---------- the operator ----------
@@ -128,7 +144,25 @@ export async function hasAdminSession(env: Env, cookieHeader: string | null | un
 
 // ---------- the Google sign-in round trip ----------
 
-/** A short-lived signed value carried through Google and back, tied to the household that started it. */
+/** A short-lived signed value carried through Google sign-in. `householdId` is set when an existing account is connecting Google. */
+export async function makeLoginState(env: Env, args: { householdId: string | null; invite: string | null; now: number }): Promise<string> {
+  return sign(env.ENCRYPTION_KEY, 'oauth-login', JSON.stringify({ h: args.householdId, i: args.invite, x: args.now + 10 * 60_000 }));
+}
+
+export async function readLoginState(env: Env, state: string | undefined, now: number): Promise<{ householdId: string | null; invite: string | null } | null> {
+  if (!state) return null;
+  const payload = await verifySigned(env.ENCRYPTION_KEY, 'oauth-login', state);
+  if (!payload) return null;
+  try {
+    const { h, i, x } = JSON.parse(payload) as { h?: unknown; i?: unknown; x?: unknown };
+    if (typeof x !== 'number' || x <= now) return null;
+    return { householdId: typeof h === 'string' ? h : null, invite: typeof i === 'string' ? i : null };
+  } catch {
+    return null;
+  }
+}
+
+/** A short-lived signed value carried through Google Calendar connect, tied to the household that started it. */
 export async function makeOAuthState(env: Env, householdId: string, now: number): Promise<string> {
   return sign(env.ENCRYPTION_KEY, 'oauth', JSON.stringify({ h: householdId, x: now + 10 * 60_000 }));
 }
