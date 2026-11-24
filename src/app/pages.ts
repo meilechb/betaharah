@@ -1,10 +1,11 @@
 /**
- * The Help, Privacy and Terms pages. They are written by the server so that
- * they can name the person who runs the site, as set in the operator's
- * console. Every value the operator sets goes through escapeHtml.
+ * The Help, Privacy, Terms and Donate pages. They are written by the server so
+ * that they can name the person who runs the site, and list the ways to give,
+ * as set in the operator's console. Every value the operator sets goes
+ * through escapeHtml.
  */
 import { HELP_TEXT } from './commands';
-import { ADMIN_EMAIL, googleReady, MAX_MESSAGES_KEPT, MAX_PHONES, MAX_REMOVED_KEPT, PRIVACY_EMAIL, smsReady, type Site } from './model';
+import { ADMIN_EMAIL, donateReady, googleReady, MAX_MESSAGES_KEPT, MAX_PHONES, MAX_REMOVED_KEPT, PRIVACY_EMAIL, smsReady, type Site } from './model';
 
 export const LAST_UPDATED = 'November 24, 2026';
 
@@ -28,6 +29,8 @@ interface Doc {
   indexable?: boolean;
   /** The page's own address, for the share tags: '/help'. */
   path: string;
+  /** Whether the Donate page exists, and so is linked from the navigation. */
+  donate: boolean;
   sections: Section[];
 }
 
@@ -38,6 +41,7 @@ function layout(doc: Doc): string {
   const full = `${doc.title} · Betaharah`;
   const toc = doc.sections.map(s => `<li><a href="#${s.id}">${s.title}</a></li>`).join('');
   const sections = doc.sections.map(s => `<section id="${s.id}" aria-labelledby="${s.id}-h">\n<h2 id="${s.id}-h">${s.title}</h2>\n${s.body}\n</section>`).join('\n\n');
+  const donate = doc.donate ? '<a href="/donate">Donate</a>' : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -69,7 +73,7 @@ function layout(doc: Doc): string {
 <a class="skip" href="#main">Skip to the content</a>
 <header class="site">
   <a class="brand" href="/"><img class="mark" src="/favicon.svg" alt="" width="28" height="28">Betaharah</a>
-  <nav aria-label="Site"><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a class="button" href="/app/">Sign in</a></nav>
+  <nav aria-label="Site"><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>${donate}<a class="button" href="/app/">Sign in</a></nav>
 </header>
 <main class="doc" id="main">
 <header class="doc-head">
@@ -84,7 +88,7 @@ ${doc.updated ? `<p class="updated">Last updated ${LAST_UPDATED}</p>` : ''}
 ${sections}
 <p class="to-top"><a href="#main">Back to the top</a></p>
 </main>
-<footer class="site"><a href="/">Home</a><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
+<footer class="site"><a href="/">Home</a><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>${donate}</footer>
 </body>
 </html>
 `;
@@ -138,6 +142,7 @@ export function helpPage(site: Site): string {
   return layout({
     title: 'Help',
     path: '/help',
+    donate: donateReady(site),
     intro: 'How to start, how to record by text message, and how to see the dates in your calendar.',
     sections: [
       {
@@ -235,6 +240,7 @@ export function privacyPage(site: Site): string {
   return layout({
     title: 'Privacy',
     path: '/privacy',
+    donate: donateReady(site),
     updated: true,
     indexable: true,
     intro: `Betaharah is a free service run by ${c.who}. It has no advertising, no analytics and no tracking. This page says exactly what is kept and who can see it.`,
@@ -279,7 +285,7 @@ export function privacyPage(site: Site): string {
   <li><strong>Cloudflare</strong> hosts the site and the database. The database contents are encrypted as described above. Cloudflare handles each request, including your network address, in order to deliver it.</li>
   <li><strong>Telnyx</strong> and the mobile carriers deliver the text messages, so they handle your phone number and the words of each text. If that matters to you, choose the "discreet" wording for reminders, which uses letters and times only.</li>
   <li><strong>Google</strong>, if you sign in with Google or connect a calendar. Sign-in receives the email and name on that account. Connecting a calendar writes the events into a calendar the site creates in your Google account.</li>
-</ul>
+${donateReady(site) ? '  <li><strong>Payment services</strong>, if you donate: the links on the <a href="/donate">Donate page</a> lead to other sites, which have their own terms and privacy policies. The payment is made there; this site never sees card or bank details.</li>\n' : ''}</ul>
 <p><strong>Limited Use.</strong> Betaharah's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. Information received from Google is used only to sign you in and, if you connect it, to keep the one calendar this site creates. It is not sold, not used for advertising, and not used to train a model.</p>
 <p>Your information is not sold, rented or given to anyone else. No mobile information is shared with third parties or affiliates for marketing or promotional purposes. Text-message opt-in data and consent are not shared with any third party.</p>`,
       },
@@ -313,11 +319,66 @@ export function privacyPage(site: Site): string {
   });
 }
 
+/** Where a link leads, for the line under its button: 'www.paypal.com'. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * The ways to give that the operator entered in the console. The site takes
+ * no payment: each way is a plain link to the operator's own payment page, or
+ * the note (for a way without a link). Only called when donateReady(site).
+ */
+export function donatePage(site: Site): string {
+  const { links, note } = site.config.donate;
+  const buttons = links.length
+    ? `<ul class="give-links">
+${links.map(l => `  <li><a class="button give-link" href="${escapeHtml(l.url)}" rel="noopener noreferrer">${escapeHtml(l.label)}</a><span class="give-host">Opens ${escapeHtml(hostOf(l.url))}</span></li>`).join('\n')}
+</ul>`
+    : '';
+  const written = note ? `<p class="give-note">${escapeHtml(note)}</p>` : '';
+  const elsewhere = links.length ? "Each link opens the payment service's own site. The payment is made there, under that service's terms and privacy policy. " : '';
+  return layout({
+    title: 'Donate',
+    path: '/donate',
+    donate: true,
+    intro: 'Betaharah is free. This page lists ways to give toward what it costs to run, for anyone who wants to.',
+    sections: [
+      {
+        id: 'costs',
+        title: 'What it costs to run',
+        body: `<p>The site has no charge, no advertising and nothing to buy. The person who runs it pays for:</p>
+<ul>
+  <li>every text message, sent or received: about 1 cent each. Sign-in codes, replies and reminders are all text messages.</li>
+  <li>the phone number the texts come from: about $1 a month.</li>
+</ul>`,
+      },
+      {
+        id: 'optional',
+        title: 'Giving is optional',
+        body: '<p>The service is the same for everyone, whether or not they give. Nothing on the site depends on it, and the site is not told who gives.</p>',
+      },
+      {
+        id: 'ways',
+        title: 'Ways to give',
+        body: `${buttons}
+${written}
+<p>${elsewhere}Betaharah never sees card or bank details.</p>`,
+      },
+    ],
+  });
+}
+
 export function termsPage(site: Site): string {
   const c = contact(site);
   return layout({
     title: 'Terms',
     path: '/terms',
+    donate: donateReady(site),
     updated: true,
     indexable: true,
     intro: `Betaharah is a free service run by ${c.who}. By using it you agree to the following.`,

@@ -818,6 +818,30 @@ p.text-signup-note .icon {
   margin-bottom: 0;
 }
 
+/* the ways to give (Donations) */
+fieldset.give-row {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+fieldset.give-row legend {
+  padding: 0 var(--space-1);
+  font-weight: var(--weight-medium);
+}
+.give-note-field {
+  margin-top: var(--space-4);
+}
+.give-note-field textarea {
+  width: 100%;
+  resize: vertical;
+}
+.give-note-field textarea[aria-invalid='true'] {
+  border-color: var(--bad);
+  box-shadow: inset 0 0 0 1px var(--bad);
+}
+
 /* ===================== keys ===================== */
 .keys-form + .keys-form {
   margin-top: var(--space-5);

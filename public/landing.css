@@ -2208,6 +2208,11 @@ body.lp {
   position: relative;
   padding-left: 18px;
 }
+.faq-donate {
+  margin: var(--space-5) 4px 0;
+  color: var(--muted);
+  font-size: 0.9875rem;
+}
 .faq .ans li::before {
   content: '';
   position: absolute;

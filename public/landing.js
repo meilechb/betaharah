@@ -2,6 +2,7 @@
 //  - asks the server what the site allows (GET /api/public) and shows the
 //    number to text JOIN to when there is one, or why sign-up is limited;
 //  - says "Open my calendar" instead of "Sign in" to someone signed in;
+//  - shows the links to the Donate page only when the server says it exists;
 //  - draws a line under the navigation once the page is scrolled;
 //  - fades sections in as they come into view (not with reduced motion).
 
@@ -91,6 +92,15 @@ async function fromServer() {
   signupNote(info);
   prefixes(info);
   if (info.signedIn) signedIn();
+  if (info.donate === true) donate();
+}
+
+/** The line under the questions and the footer link; both stay hidden until the server says the page exists. */
+function donate() {
+  for (const id of ['faq-donate', 'foot-donate']) {
+    const node = byId(id);
+    if (node) node.hidden = false;
+  }
 }
 
 function navLine() {

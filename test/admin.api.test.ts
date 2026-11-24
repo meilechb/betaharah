@@ -494,6 +494,21 @@ describe('notes, price and validation', () => {
     expect(saved.json.config.textSignup).toBe(false);
     expect(saved.json.ops.configSavedAt).toBe(START);
   });
+
+  it('names the donation field that is wrong, down to the link', async () => {
+    const op = await site();
+    const donate = (d: unknown) => op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, donate: d });
+    const link = { label: 'PayPal', url: 'https://www.paypal.com/donate?id=1' };
+    const url = await donate({ links: [link, { label: 'Card', url: 'http://pay.example.com/x' }], note: '' });
+    expect(url.status).toBe(400);
+    expect(url.json).toEqual({ error: 'donate.links.2.url: The address of link 2 must begin with https://.', field: 'donate.links.2.url' });
+    expect((await donate({ links: [{ label: ' ', url: link.url }], note: '' })).json.field).toBe('donate.links.1.label');
+    expect((await donate({ links: [link], note: 'x'.repeat(401) })).json.field).toBe('donate.note');
+    expect((await donate({ links: [link, link, link, link, link], note: '' })).json.field).toBe('donate.links');
+    const ok = await donate({ links: [link], note: ' Zelle: give@example.org ' });
+    expect(ok.status).toBe(200);
+    expect(ok.json.config.donate).toEqual({ links: [link], note: 'Zelle: give@example.org' });
+  });
 });
 
 describe('texting status', () => {

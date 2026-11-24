@@ -14,7 +14,9 @@ import { decrypt, encrypt, fingerprint, randomId } from './crypto';
 import type { Env } from './env';
 import {
   DEFAULT_SITE_CONFIG,
+  MAX_DONATE_LINKS,
   SITE_SECRET_KEYS,
+  type DonateConfig,
   type HouseholdData,
   type Site,
   type SiteConfig,
@@ -64,7 +66,58 @@ export function parseSiteConfig(input: unknown): SiteConfig {
     householdMonthlyLimit: int(o.householdMonthlyLimit, 'householdMonthlyLimit', 0, 10_000),
     contactName: text(o.contactName, 'contactName', 80),
     contactEmail,
+    donate: parseDonate(o.donate),
   };
+}
+
+/** Control characters, and the characters that reverse the direction of text. A line break is allowed only in the note. */
+const NOT_PLAIN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f‪-‮⁦-⁩]/;
+
+/**
+ * The ways to give (see SiteConfig.donate). Each error names its field
+ * ("donate.links.2.url: ..."), so that the console can show it beside that
+ * field. A configuration saved before this setting existed has none: no page.
+ */
+function parseDonate(v: unknown): DonateConfig {
+  if (v === undefined) return { links: [], note: '' };
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new ValidationError('donate: expected links and a note');
+  const o = v as Record<string, unknown>;
+  if (!Array.isArray(o.links)) throw new ValidationError('donate.links: expected a list of links');
+  if (o.links.length > MAX_DONATE_LINKS) throw new ValidationError(`donate.links: at most ${MAX_DONATE_LINKS} links`);
+  const links = o.links.map((raw, i) => {
+    const n = i + 1;
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new ValidationError(`donate.links.${n}: expected a label and an address`);
+    const link = raw as Record<string, unknown>;
+    if (typeof link.label !== 'string') throw new ValidationError(`donate.links.${n}.label: Link ${n} needs a label.`);
+    const label = link.label.trim();
+    if (label === '') throw new ValidationError(`donate.links.${n}.label: Link ${n} needs a label, for example "PayPal".`);
+    if (label.length > 40) throw new ValidationError(`donate.links.${n}.label: The label of link ${n} has more than 40 characters.`);
+    if (NOT_PLAIN.test(label) || label.includes('\n')) throw new ValidationError(`donate.links.${n}.label: The label of link ${n} must be plain text on one line.`);
+    return { label, url: donateUrl(link.url, n) };
+  });
+  if (typeof o.note !== 'string') throw new ValidationError('donate.note: expected text');
+  const note = o.note.replace(/\r\n?/g, '\n').trim();
+  if (note.length > 400) throw new ValidationError('donate.note: The note has more than 400 characters.');
+  if (NOT_PLAIN.test(note)) throw new ValidationError('donate.note: The note must be plain text.');
+  return { links, note };
+}
+
+function donateUrl(v: unknown, n: number): string {
+  const field = `donate.links.${n}.url`;
+  if (typeof v !== 'string' || v.trim() === '') throw new ValidationError(`${field}: Link ${n} needs the address of the page that takes the payment.`);
+  const url = v.trim();
+  if (url.length > 300) throw new ValidationError(`${field}: The address of link ${n} has more than 300 characters.`);
+  if (/\s/.test(url)) throw new ValidationError(`${field}: The address of link ${n} must not contain spaces.`);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new ValidationError(`${field}: The address of link ${n} is not a web address. Copy it from the payment service; it begins with https://.`);
+  }
+  if (parsed.protocol !== 'https:') throw new ValidationError(`${field}: The address of link ${n} must begin with https://.`);
+  if (parsed.username !== '' || parsed.password !== '') throw new ValidationError(`${field}: The address of link ${n} must not contain a user name or password.`);
+  if (!parsed.hostname.includes('.')) throw new ValidationError(`${field}: The address of link ${n} has no domain name (such as example.com) after https://.`);
+  return url;
 }
 
 async function putSite(db: D1Database, key: string, value: string, now: number): Promise<void> {

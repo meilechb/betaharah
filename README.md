@@ -47,7 +47,7 @@ number from 555-0100 to 555-0199.
 | The two forms of each halachic term | `src/engine/terms.ts` |
 | Wording of calendar events; wording of text messages | `src/engine/calendar.ts`, `src/engine/present.ts` |
 | Accounts, sign-in, storage, text commands, reminders, Google Calendar | `src/app/` |
-| Help, Privacy and Terms pages | `src/app/pages.ts` |
+| Help, Privacy and Terms pages, and the Donate page (`/donate`, only once the operator has entered a way to give) | `src/app/pages.ts` |
 | The public page, the dashboard (`/app/`), the operator's console (`/admin/`) | `public/` |
 | Tests (`npm test`) | `test/` |
 

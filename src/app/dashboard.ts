@@ -9,7 +9,7 @@ import type { Session } from './auth';
 import { HELP_TEXT, resolveHefsekDay } from './commands';
 import { buildGrid, isoDate, type Grid } from './grid';
 import type { Computed, DraftEntry, Where } from './household';
-import { canText, googleReady, MAX_PHONES, smsReady, type HouseholdData, type Site } from './model';
+import { canText, donateReady, googleReady, MAX_PHONES, smsReady, type HouseholdData, type Site } from './model';
 import { textsThisMonth } from './queue';
 import { PLACES, REMINDER_KINDS, ValidationError } from './settings';
 import { entryText, noteText, patternText, statusLines, warningText } from './wording';
@@ -250,6 +250,8 @@ export function dashboardState(args: StateArgs) {
       commandNote: TEXT_COMMANDS_NOTE,
     },
     messages: data.messages,
+    /** Whether the site has a Donate page (Settings, Your data, links to it). */
+    donate: donateReady(site),
   };
 }
 

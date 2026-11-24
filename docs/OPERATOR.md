@@ -42,7 +42,7 @@ on a computer, a menu at the top on a phone):
 - **Site settings**: the contact for the public pages, who may sign up,
   sign-up by text (off at first; see "Sign-up by text" below), "Send text
   messages", the allowed prefixes and the limits, each with what it
-  protects against.
+  protects against, and the ways to give (see "Donations" below).
 - **Keys and connections**: Telnyx, RCS and Google. Keys are write-only;
   each shows whether it is saved, can be cleared, and has a Check button
   that makes a read-only call (it sends nothing). The Google part shows
@@ -262,6 +262,31 @@ unverified app to 100 people. Whether Google asks for verification of this
 scope is shown in the Cloud Console's consent-screen pages. If you want the
 warning gone, submit the app for verification there; it needs the home page
 and privacy policy above and proof that you own the domain.
+
+## Donations (optional)
+
+The site can show a Donate page (`/donate`) that lists ways to give toward
+its costs. The site takes no payment itself: it shows links to payment pages
+you set up yourself, and a note.
+
+1. Choose a payment service and create your own account with it (for
+   example a PayPal donation button or a Stripe payment link). Its fees,
+   receipts and refunds are that service's, under its terms.
+2. Console → Site settings → **Donations**: add up to four links, each with
+   the words for its button (1 to 40 characters) and the address of your
+   payment page (it must begin with `https://`, at most 300 characters).
+   For ways without a link, such as Zelle or an address for cheques, write
+   a note (at most 400 characters; it is shown as written).
+3. Press **Save settings**, then "Open the Donate page" to check it.
+
+Once a link or a note is saved, the page exists and is linked from the home
+page, the footer and header of Help, Privacy and Terms, and Settings → Your
+data in the signed-in page. Privacy then also says that the links lead to
+other sites with their own terms. Remove every link and the note, and save,
+to take the page and all its links down. Nothing about donating appears in
+texts, reminders or the Today tab. The page does not say that a gift is tax
+deductible or promise anything in return; do not add that to the note
+unless it is true for you.
 
 ## Keeping the bill and the site safe
 

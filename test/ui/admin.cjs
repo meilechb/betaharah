@@ -293,6 +293,78 @@ async function seed() {
     if ((await stepStatus('Sign-up policy chosen')) !== 'Done') throw new Error('sign-up step not done');
   });
 
+  // ----- donations -----
+  await step('donations: no page at first; two links and a note, the field messages, saved, previewed; removed again', async () => {
+    const status = async path => (await fetch(base + path)).status;
+    const publicDonate = async () => (await (await fetch(base + '/api/public')).json()).donate;
+    if ((await status('/donate')) !== 404) throw new Error('/donate exists before anything is saved');
+    if ((await publicDonate()) !== false) throw new Error('/api/public says donate before anything is saved');
+    await open('settings');
+    await page.waitForSelector('#donate-card');
+    const intro = await page.textContent('#donate-card');
+    for (const w of ['appear once at least one link or a note is saved', 'handled entirely by the service you link to', 'Nothing is saved yet, so there is no Donate page']) if (!intro.includes(w)) throw new Error('card: no "' + w + '"');
+    if ((await page.locator('#don-preview').count()) !== 0) throw new Error('a preview link before anything is saved');
+    // two rows, filled wrongly first
+    await page.click('#don-add');
+    if ((await page.evaluate(() => document.activeElement && document.activeElement.id)) !== 'don-label-1') throw new Error('Add a link did not move to the new label');
+    await page.fill('#don-label-1', 'PayPal');
+    await page.fill('#don-url-1', 'http://www.paypal.com/donate');
+    await page.click('#don-add');
+    await page.fill('#don-url-2', 'https://me:secret@buy.stripe.com/x');
+    await page.fill('#don-note', 'Zelle: give@example.org\nCheques: 1 Main St, Lakewood NJ');
+    await page.click('button:has-text("Save settings")');
+    await page.waitForSelector('#don-row-1 .error:has-text("must begin with https://")');
+    await page.waitForSelector('#don-row-2 .error:has-text("needs a label")');
+    await page.waitForSelector('#don-row-2 .error:has-text("must not contain a user name or password")');
+    if ((await page.getAttribute('#don-url-1', 'aria-invalid')) !== 'true') throw new Error('the address is not marked invalid');
+    if ((await page.evaluate(() => document.activeElement && document.activeElement.id)) !== 'don-url-1') throw new Error('focus is not on the first wrong field');
+    if ((await status('/donate')) !== 404) throw new Error('saved although the fields were wrong');
+    // a third row, then removed: the add button takes the focus
+    await page.click('#don-add');
+    await page.click('#don-remove-3');
+    if ((await page.locator('#donate-card fieldset.give-row').count()) !== 2) throw new Error('the row was not removed');
+    if ((await page.evaluate(() => document.activeElement && document.activeElement.id)) !== 'don-add') throw new Error('focus after removing a row');
+    // a message from the server lands beside its field (the page's own check is skipped for this one request)
+    await page.fill('#don-url-1', 'https://www.paypal.com/donate/?hosted_button_id=LOCALTEST');
+    await page.fill('#don-label-2', 'Card <b>(Stripe)</b>');
+    await page.fill('#don-url-2', 'https://buy.stripe.com/test_local');
+    await page.route('**/api/admin/config', async route => {
+      const body = JSON.parse(route.request().postData());
+      body.donate.links[1].url = 'https://buy.stripe.com/a b';
+      await route.continue({ postData: JSON.stringify(body) });
+    });
+    await page.click('button:has-text("Save settings")');
+    await page.waitForSelector('#don-row-2 .error:has-text("must not contain spaces")');
+    if ((await page.textContent('#don-row-2 .error')).includes('donate.links')) throw new Error('the field name is shown to the operator');
+    await page.unroute('**/api/admin/config');
+    // (an earlier "Settings saved" toast may still be on screen, so wait for this save's answer and the redraw)
+    const [answer] = await Promise.all([page.waitForResponse(r => r.url().endsWith('/api/admin/config')), page.click('button:has-text("Save settings")')]);
+    if (answer.status() !== 200) throw new Error('save answered ' + answer.status());
+    await page.waitForSelector('#don-status:has-text("The page is published")');
+    if ((await page.locator('#donate-card .error').count()) !== 0) throw new Error('messages left after saving');
+    if ((await status('/donate')) !== 200) throw new Error('/donate does not answer 200 after saving');
+    if ((await publicDonate()) !== true) throw new Error('/api/public does not say donate after saving');
+    await noSideways();
+    // the preview opens the saved page
+    const preview = page.locator('#don-preview');
+    if ((await preview.getAttribute('href')) !== '/donate') throw new Error('no preview link');
+    const [tab] = await Promise.all([context.waitForEvent('page'), preview.click()]);
+    await tab.waitForLoadState();
+    const buttons = await tab.$$eval('a.give-link', as => as.map(a => [a.textContent, a.getAttribute('href'), a.getAttribute('rel')]));
+    if (JSON.stringify(buttons) !== JSON.stringify([['PayPal', 'https://www.paypal.com/donate/?hosted_button_id=LOCALTEST', 'noopener noreferrer'], ['Card <b>(Stripe)</b>', 'https://buy.stripe.com/test_local', 'noopener noreferrer']])) throw new Error('the page shows ' + JSON.stringify(buttons));
+    if (!(await tab.textContent('.give-note')).includes('Cheques: 1 Main St, Lakewood NJ')) throw new Error('no note on the page');
+    await tab.close();
+    if (out) await page.locator('#donate-card').screenshot({ path: out + '/admin-donations-360.png' });
+    // removed again: no links and no note, and the page is gone
+    await page.click('#don-remove-2');
+    await page.click('#don-remove-1');
+    await page.fill('#don-note', '');
+    await page.click('button:has-text("Save settings")');
+    await page.waitForSelector('#don-status:has-text("Nothing is saved yet")');
+    if ((await status('/donate')) !== 404) throw new Error('/donate still answers after removing everything');
+    if ((await publicDonate()) !== false) throw new Error('/api/public still says donate');
+  });
+
   // ----- keys -----
   await step('keys: checks without keys, a wrong number, saved, cleared, notes to self, RCS switch', async () => {
     await open('keys');

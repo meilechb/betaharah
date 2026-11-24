@@ -32,7 +32,14 @@ function view() {
           h('div', { class: 'actions' }, button({ label: 'Open the guided setup again', attrs: { id: 'open-setup' }, onclick: () => openGuidedSetup() })),
         ),
       ),
-      group({ title: 'Help and policies', id: 'data-links' }, linkRow('/help', 'Help', 'How the site and the texts work'), linkRow('/privacy', 'Privacy', 'What is kept, and who can see it'), linkRow('/terms', 'Terms', 'The terms of use')),
+      group(
+        { title: 'Help and policies', id: 'data-links' },
+        linkRow('/help', 'Help', 'How the site and the texts work'),
+        linkRow('/privacy', 'Privacy', 'What is kept, and who can see it'),
+        linkRow('/terms', 'Terms', 'The terms of use'),
+        // only when the operator has set up the page
+        S.donate ? linkRow('/donate', 'Donate', 'Ways to help pay for running the site') : null,
+      ),
       group(
         { title: 'Delete the account', id: 'data-delete', className: 'danger' },
         blockRow(

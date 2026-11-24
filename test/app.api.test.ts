@@ -295,6 +295,7 @@ describe('pages and request rules', () => {
       prefixes: ['+1'],
       contactName: 'M',
       contactEmail: '',
+      donate: false,
       codeMinutes: 10,
       resendSeconds: 60,
     });
@@ -305,10 +306,109 @@ describe('pages and request rules', () => {
     await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, textSignup: true, signup: 'closed' });
     expect((await new Client().get('/api/public')).json.textingNumber).toBeNull();
     // a configuration saved before these settings existed still loads, with their defaults
-    const { textSignup: _a, rcsEnabled: _b, ...older } = DEFAULT_SITE_CONFIG;
+    const { textSignup: _a, rcsEnabled: _b, donate: _c, ...older } = DEFAULT_SITE_CONFIG;
     const saved = await op.put('/api/admin/config', older);
     expect(saved.status).toBe(200);
-    expect(saved.json.config).toMatchObject({ textSignup: false, rcsEnabled: false });
+    expect(saved.json.config).toMatchObject({ textSignup: false, rcsEnabled: false, donate: { links: [], note: '' } });
+  });
+
+  it('a configuration stored before the donation setting existed still loads, with no Donate page', async () => {
+    await site();
+    const { donate: _d, ...older } = DEFAULT_SITE_CONFIG;
+    // written straight into the database, as an older version of the site left it
+    await testDb.db
+      .prepare("INSERT INTO site (key, value, updated_at) VALUES ('config', ?, 0) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+      .bind(JSON.stringify({ ...older, contactName: 'Older' }))
+      .run();
+    expect((await new Client().get('/api/public')).json).toMatchObject({ configured: true, contactName: 'Older', donate: false });
+    expect((await new Client().get('/donate')).status).toBe(404);
+    expect((await new Client().get('/help')).status).toBe(200);
+    const op = await operator();
+    expect((await op.get('/api/admin/state')).json.config.donate).toEqual({ links: [], note: '' });
+  });
+});
+
+describe('the Donate page', () => {
+  const LINKS = [
+    { label: 'PayPal', url: 'https://www.paypal.com/donate/?hosted_button_id=ABC123' },
+    { label: 'Card <b>(Stripe)</b>', url: 'https://buy.stripe.com/test_aaa?x=1&y="2"' },
+  ];
+  const NOTE = 'Zelle: give@example.org\nCheques: <PO Box 1>, Lakewood NJ';
+
+  it('does not exist, and is linked from nowhere, until the operator enters a way to give', async () => {
+    await site();
+    const c = new Client();
+    const missing = await c.get('/donate');
+    const unknown = await c.get('/nothing-here');
+    expect(missing.status).toBe(404);
+    expect(missing.text).toBe(unknown.text);
+    expect(missing.res.headers.get('content-type')).toBe(unknown.res.headers.get('content-type'));
+    expect((await c.get('/api/public')).json.donate).toBe(false);
+    for (const path of ['/help', '/privacy', '/terms']) {
+      const page = (await c.get(path)).text;
+      expect(page).not.toContain('/donate');
+      expect(page).not.toMatch(/donat/i);
+    }
+    // nor before the site is set up at all
+    expect((await c.get('/donate', { env: { DB: testDb.db } as unknown as Env })).status).toBe(404);
+    // nor in the signed-in page's state
+    expect((await (await signIn(HUSBAND)).state()).donate).toBe(false);
+  });
+
+  it('lists the links and the note, escaped, with the site\'s headers, and is linked from every page', async () => {
+    const op = await site({ config: { donate: { links: LINKS, note: NOTE } } });
+    const r = await new Client().get('/donate');
+    expect(r.status).toBe(200);
+    expect(r.res.headers.get('content-type')).toContain('text/html');
+    expect(r.res.headers.get('x-robots-tag')).toBe('noindex');
+    expect(r.text).toContain('<meta name="robots" content="noindex">');
+    const csp = r.res.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("form-action 'none'");
+    expect(r.res.headers.get('x-frame-options')).toBe('DENY');
+    expect(r.res.headers.get('referrer-policy')).toBe('no-referrer');
+    // each way to give is a plain link that leaves for the operator's page; nothing else
+    const anchors = [...r.text.matchAll(/<a class="button give-link" href="([^"]*)" rel="([^"]*)">([^<]*)<\/a>/g)];
+    expect(anchors.map(a => [a[1], a[2], a[3]])).toEqual([
+      ['https://www.paypal.com/donate/?hosted_button_id=ABC123', 'noopener noreferrer', 'PayPal'],
+      ['https://buy.stripe.com/test_aaa?x=1&amp;y=&quot;2&quot;', 'noopener noreferrer', 'Card &lt;b&gt;(Stripe)&lt;/b&gt;'],
+    ]);
+    expect(r.text).not.toContain('<b>(Stripe)</b>');
+    expect(r.text).toContain('Opens www.paypal.com');
+    expect(r.text).toContain('Opens buy.stripe.com');
+    expect(r.text).toContain('<p class="give-note">Zelle: give@example.org\nCheques: &lt;PO Box 1&gt;, Lakewood NJ</p>');
+    expect(r.text).not.toContain('<PO Box 1>');
+    expect(r.text).not.toMatch(/<form|<script|<style|style="|<iframe/i);
+    for (const phrase of ['Betaharah is free.', 'about 1 cent each', 'about $1 a month', 'Giving is optional', 'Betaharah never sees card or bank details.']) expect(r.text).toContain(phrase);
+    // it promises nothing and claims no status
+    expect(r.text).not.toMatch(/tax|deductib|charit|501|receipt|thank/i);
+    // linked from the other pages, and from the home page through /api/public, and from the signed-in page's state
+    for (const path of ['/help', '/privacy', '/terms', '/donate']) {
+      const page = (await new Client().get(path)).text;
+      expect(page.match(/<a href="\/donate">Donate<\/a>/g), path).toHaveLength(2);
+    }
+    expect((await new Client().get('/privacy')).text).toContain('which have their own terms and privacy policies');
+    expect((await new Client().get('/api/public')).json.donate).toBe(true);
+    expect((await (await signIn(HUSBAND)).state()).donate).toBe(true);
+    // removing every way to give removes the page and its links again
+    await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, donate: { links: [], note: '' } });
+    expect((await new Client().get('/donate')).status).toBe(404);
+    expect((await new Client().get('/help')).text).not.toContain('/donate');
+    expect((await new Client().get('/api/public')).json.donate).toBe(false);
+  });
+
+  it('a note alone is enough, and a link alone is enough', async () => {
+    const op = await site({ config: { donate: { links: [], note: 'Cheques to 1 Main St.' } } });
+    const noteOnly = await new Client().get('/donate');
+    expect(noteOnly.status).toBe(200);
+    expect(noteOnly.text).toContain('Cheques to 1 Main St.');
+    expect(noteOnly.text).not.toContain('give-links');
+    expect(noteOnly.text).not.toContain('Each link opens');
+    await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, donate: { links: [LINKS[0]!], note: '' } });
+    const linkOnly = await new Client().get('/donate');
+    expect(linkOnly.status).toBe(200);
+    expect(linkOnly.text).not.toContain('give-note');
+    expect(linkOnly.text).toContain('Each link opens');
   });
 });
 

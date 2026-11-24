@@ -237,6 +237,61 @@ describe('app settings', () => {
     expect(parseSiteConfig({ ...DEFAULT_SITE_CONFIG, allowedPrefixes: ['+1', '+44', '+1'] }).allowedPrefixes).toEqual(['+1', '+44']);
   });
 
+  it('checks the ways to give, field by field', () => {
+    const link = { label: 'PayPal', url: 'https://www.paypal.com/donate/?hosted_button_id=ABC' };
+    const parse = (donate: unknown) => parseSiteConfig({ ...DEFAULT_SITE_CONFIG, donate }).donate;
+    const problem = (donate: unknown): string => {
+      try {
+        parse(donate);
+      } catch (e) {
+        expect(e).toBeInstanceOf(ValidationError);
+        return (e as Error).message;
+      }
+      throw new Error('accepted: ' + JSON.stringify(donate));
+    };
+    // a configuration saved before this setting existed has none
+    const { donate: _d, ...older } = DEFAULT_SITE_CONFIG;
+    expect(parseSiteConfig(older).donate).toEqual({ links: [], note: '' });
+    // what is kept: labels, addresses and the note trimmed, line breaks in the note kept
+    expect(parse({ links: [{ label: ' PayPal ', url: ` ${link.url} ` }], note: ' Zelle: give@example.org\r\nCheques: 1 Main St ' })).toEqual({
+      links: [link],
+      note: 'Zelle: give@example.org\nCheques: 1 Main St',
+    });
+    expect(parse({ links: [link, link, link, link], note: '' }).links).toHaveLength(4);
+    // HTML is text like any other; the page escapes it
+    expect(parse({ links: [{ label: '<b>Give</b>', url: link.url }], note: '' }).links[0]!.label).toBe('<b>Give</b>');
+    // the shape
+    expect(problem('yes')).toMatch(/^donate: /);
+    expect(problem({ links: 'none', note: '' })).toMatch(/^donate\.links: /);
+    expect(problem({ links: [link, link, link, link, link], note: '' })).toBe('donate.links: at most 4 links');
+    expect(problem({ links: ['https://x.example.com'], note: '' })).toMatch(/^donate\.links\.1: /);
+    // labels
+    expect(problem({ links: [{ label: '', url: link.url }], note: '' })).toBe('donate.links.1.label: Link 1 needs a label, for example "PayPal".');
+    expect(problem({ links: [link, { label: 'x'.repeat(41), url: link.url }], note: '' })).toBe('donate.links.2.label: The label of link 2 has more than 40 characters.');
+    expect(problem({ links: [{ label: 'Pay\nPal', url: link.url }], note: '' })).toBe('donate.links.1.label: The label of link 1 must be plain text on one line.');
+    expect(problem({ links: [{ label: 'Pay‮Pal', url: link.url }], note: '' })).toMatch(/^donate\.links\.1\.label: /);
+    expect(parse({ links: [{ label: 'x'.repeat(40), url: link.url }], note: '' }).links[0]!.label).toHaveLength(40);
+    // addresses
+    const url = (u: unknown) => problem({ links: [{ label: 'Give', url: u }], note: '' });
+    expect(url('')).toBe('donate.links.1.url: Link 1 needs the address of the page that takes the payment.');
+    expect(url(42)).toMatch(/^donate\.links\.1\.url: /);
+    expect(url('http://www.paypal.com/donate')).toBe('donate.links.1.url: The address of link 1 must begin with https://.');
+    expect(url('javascript:alert(1)')).toBe('donate.links.1.url: The address of link 1 must begin with https://.');
+    expect(url('data:text/html,hi')).toBe('donate.links.1.url: The address of link 1 must begin with https://.');
+    expect(url('www.paypal.com/donate')).toMatch(/is not a web address/);
+    expect(url('https://me:secret@pay.example.com/')).toBe('donate.links.1.url: The address of link 1 must not contain a user name or password.');
+    expect(url('https://me@pay.example.com/')).toMatch(/user name or password/);
+    expect(url('https://pay.example.com/a b')).toMatch(/must not contain spaces/);
+    expect(url('https://paypal')).toMatch(/no domain name/);
+    expect(url('https://pay.example.com/' + 'x'.repeat(300))).toBe('donate.links.1.url: The address of link 1 has more than 300 characters.');
+    expect(parse({ links: [{ label: 'Give', url: 'https://pay.example.com/' + 'x'.repeat(276) }], note: '' }).links[0]!.url).toHaveLength(300);
+    // the note
+    expect(problem({ links: [], note: 'x'.repeat(401) })).toBe('donate.note: The note has more than 400 characters.');
+    expect(problem({ links: [], note: 'Zelle\u0007' })).toBe('donate.note: The note must be plain text.');
+    expect(problem({ links: [] })).toMatch(/^donate\.note: /);
+    expect(parse({ links: [], note: 'x'.repeat(400) }).note).toHaveLength(400);
+  });
+
   it('rejects bad values', () => {
     const bad = (patch: Record<string, unknown>) => () => parseAppSettings({ ...valid, ...patch });
     expect(bad({ place: { ...PLACES[0], latitude: 91 } })).toThrow(ValidationError);

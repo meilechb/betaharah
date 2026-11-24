@@ -1,4 +1,4 @@
-/* The Help, Privacy and Terms pages (src/app/pages.ts). See docs/UI.md. Use the tokens from /site.css. */
+/* The Help, Privacy, Terms and Donate pages (src/app/pages.ts). See docs/UI.md. Use the tokens from /site.css. */
 
 .skip {
   position: absolute;
@@ -213,6 +213,47 @@ table.commands td:first-child code {
     margin: 0;
     border-top: 1px solid var(--line);
   }
+}
+
+/* ---------- the ways to give (/donate) ---------- */
+
+main.doc ul.give-links {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-4) 0;
+  display: grid;
+  gap: var(--space-4);
+}
+main.doc ul.give-links li {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.give-link {
+  font-size: var(--text-lg);
+  min-width: 12em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.give-host {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 519px) {
+  .give-link {
+    width: 100%;
+  }
+}
+.give-note {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
 }
 
 .to-top {

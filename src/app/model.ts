@@ -156,7 +156,20 @@ export interface SiteConfig {
   /** Shown on the help, privacy and terms pages. */
   contactName: string;
   contactEmail: string;
+  /**
+   * Ways to give toward the cost of running the site, shown on /donate: links
+   * to the operator's own payment pages, and a note for ways without a link.
+   * The site takes no payment itself. With no link and no note there is no page.
+   */
+  donate: DonateConfig;
 }
+
+export interface DonateConfig {
+  links: Array<{ label: string; url: string }>;
+  note: string;
+}
+
+export const MAX_DONATE_LINKS = 4;
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   signup: 'open',
@@ -169,6 +182,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   householdMonthlyLimit: 200,
   contactName: 'Betaharah',
   contactEmail: 'privacy@betaharah.com',
+  donate: { links: [], note: '' },
 };
 
 /** Standing mailboxes. They are live even when the operator has not typed a contact. */
@@ -210,6 +224,11 @@ export function smsReady(site: Site): boolean {
 /** RCS is used when it is switched on, texting works, and the agent and its messaging profile are saved. */
 export function rcsReady(site: Site): boolean {
   return smsReady(site) && site.config.rcsEnabled && Boolean(site.secrets.rcsAgentId && site.secrets.telnyxMessagingProfileId);
+}
+
+/** The /donate page, and every link to it, exists once the operator has saved a link or a note. */
+export function donateReady(site: Site): boolean {
+  return site.config.donate.links.length > 0 || site.config.donate.note !== '';
 }
 
 export function googleReady(site: Site): boolean {

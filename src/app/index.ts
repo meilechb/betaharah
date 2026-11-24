@@ -37,8 +37,8 @@ import { realDeps, type Deps, type Env } from './env';
 import { authorizationUrl, exchangeCode, fetchGoogleIdentity, GoogleCalendar, GoogleError, revokeToken, SIGN_IN_SCOPE } from './google';
 import { compute, confirmationText, recordEntry, rejectionText, removeEntry, whereOf, type Computed } from './household';
 import { toICalendar } from './ics';
-import { addMessage, DEFAULT_SITE_CONFIG, googleReady, lastFour, MAX_PHONES, smsReady, type Site } from './model';
-import { helpPage, privacyPage, termsPage } from './pages';
+import { addMessage, DEFAULT_SITE_CONFIG, donateReady, googleReady, lastFour, MAX_PHONES, smsReady, type Site } from './model';
+import { donatePage, helpPage, privacyPage, termsPage } from './pages';
 import { allowText, refundText } from './queue';
 import { ensureSchema } from './schema';
 import {
@@ -193,6 +193,11 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
   app.get('/help', async c => c.html(helpPage(await siteForPage(c.env))));
   app.get('/privacy', async c => c.html(privacyPage(await siteForPage(c.env))));
   app.get('/terms', async c => c.html(termsPage(await siteForPage(c.env))));
+  // Only once the operator has entered a way to give; until then the address is like any unknown one.
+  app.get('/donate', async c => {
+    const site = await siteForPage(c.env);
+    return donateReady(site) ? c.html(donatePage(site)) : c.notFound();
+  });
 
   // ----- the calendar feed (authenticated by the secret in its address) -----
 
@@ -269,6 +274,8 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       prefixes: site.config.allowedPrefixes,
       contactName: site.config.contactName,
       contactEmail: site.config.contactEmail,
+      // Whether the Donate page exists, so that the home page shows its links.
+      donate: donateReady(site),
       // How long a texted code lasts, and how long before another can be asked for.
       codeMinutes: CODE_MINUTES,
       resendSeconds: CODE_RESEND_SECONDS,

@@ -1,6 +1,7 @@
 // Drives the public pages (the home page, Help, Privacy, Terms) in a real
 // browser against a locally running app.
 //
+//   a .dev.vars with DASHBOARD_PASSWORD=local-test-password (see test/ui-check.cjs)
 //   npx wrangler dev --port 8814 --persist-to <a new empty directory>
 //   node test/ui/landing.cjs http://127.0.0.1:8814 [directory for screenshots]
 //
@@ -18,6 +19,12 @@
 // signed-in wording, the questions open and close from the keyboard, the page
 // with JavaScript turned off, the meta tags and the X-Robots-Tag headers.
 // Help, Privacy and Terms still load with their content.
+// Donations: nothing about donating shows by default. With ways to give saved
+// in the console (through its API, which needs the operator password), the
+// line under the questions and the footer link appear and lead to /donate,
+// the document pages link it too, the page itself loads at 360, 390 and
+// 1280 px in light and dark, and with JavaScript off the home page still says
+// nothing about donating. Then they are removed again and /donate is gone.
 // Needs Playwright with Chromium. Exits 0 when every check passed.
 const { chromium } = require('playwright');
 const base = (process.argv[2] || 'http://127.0.0.1:8814').replace(/\/$/, '');
@@ -79,7 +86,8 @@ function watch(page) {
 
 /** `external`: links to other sites are allowed (the document pages credit their data sources); the home page has none. */
 async function checkLinks(page, where, external = false) {
-  const hrefs = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map(a => a.getAttribute('href')));
+  // links inside a hidden element are not offered (the Donate links stay hidden until the page exists)
+  const hrefs = await page.evaluate(() => [...document.querySelectorAll('a[href]')].filter(a => !a.closest('[hidden]')).map(a => a.getAttribute('href')));
   for (const href of hrefs) {
     if (href.startsWith('#')) {
       const id = decodeURIComponent(href.slice(1));
@@ -120,6 +128,21 @@ async function checkTexting(page, pub, where) {
   }
 }
 
+/** The donation line and footer link: shown, and leading to /donate, only when `on`; otherwise nothing visible mentions donating. */
+async function checkDonate(page, on, where) {
+  for (const sel of ['#faq-donate', '#foot-donate']) {
+    const visible = await page.locator(sel).isVisible();
+    if (visible !== on) fail(where, `${sel} is ${visible ? 'shown' : 'hidden'} while the Donate page ${on ? 'exists' : 'does not exist'}`);
+  }
+  if (on) {
+    if ((await page.locator('#faq-donate a').getAttribute('href')) !== '/donate') fail(where, 'the line under the questions does not lead to /donate');
+    if ((await page.locator('#foot-donate').getAttribute('href')) !== '/donate') fail(where, 'the footer link does not lead to /donate');
+  } else {
+    const shown = await page.evaluate(() => document.body.innerText);
+    if (/donat/i.test(shown)) fail(where, 'the page mentions donating while there is no Donate page');
+  }
+}
+
 async function homeAt(browser, width, scheme, pub) {
   const where = `/ ${width}px ${scheme}`;
   const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: scheme });
@@ -147,6 +170,7 @@ async function homeAt(browser, width, scheme, pub) {
 
   await checkLinks(page, where);
   await checkTexting(page, pub, where);
+  await checkDonate(page, pub.donate === true, where);
 
   if (w.errors.length) fail(where, w.errors.join('; '));
   if (w.foreign.length) fail(where, 'requested from another origin: ' + w.foreign.join(', '));
@@ -202,8 +226,8 @@ async function keyboard(browser) {
   await context.close();
 }
 
-async function withoutScript(browser) {
-  const where = '/ without JavaScript';
+async function withoutScript(browser, label = '') {
+  const where = '/ without JavaScript' + label;
   const context = await browser.newContext({ viewport: { width: 360, height: 800 }, javaScriptEnabled: false });
   const page = await context.newPage();
   const w = watch(page);
@@ -220,8 +244,114 @@ async function withoutScript(browser) {
   if (opacity !== '1') fail(where, 'a section is left invisible');
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (sideways > 0) fail(where, `scrolls sideways by ${sideways}px`);
+  // whether or not the Donate page exists, nothing about it shows without the script
+  await checkDonate(page, false, where);
   if (w.errors.length) fail(where, w.errors.join('; '));
   await context.close();
+}
+
+const PASSWORD = process.env.DASHBOARD_PASSWORD || 'local-test-password';
+const DONATE = {
+  links: [
+    { label: 'PayPal', url: 'https://www.paypal.com/donate/?hosted_button_id=LANDINGTEST' },
+    { label: 'Card, through Stripe', url: 'https://buy.stripe.com/test_landing_0123456789abcdefghijklmnopqrstuvwxyz' },
+  ],
+  note: 'Zelle: give@example.org\nCheques payable to the operator: 1 Main Street, Lakewood, NJ 08701',
+};
+
+/** Saves the ways to give through the console's API, as the operator would. */
+async function saveDonate(donate) {
+  const headers = { 'x-betaharah': '1', 'content-type': 'application/json' };
+  const login = await fetch(base + '/api/admin/login', { method: 'POST', headers, body: JSON.stringify({ password: PASSWORD }) });
+  if (login.status !== 200) throw new Error('could not sign in to the console: ' + login.status);
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const state = await (await fetch(base + '/api/admin/state', { headers: { cookie } })).json();
+  const saved = await fetch(base + '/api/admin/config', { method: 'PUT', headers: { ...headers, cookie }, body: JSON.stringify({ ...state.config, donate }) });
+  if (saved.status !== 200) throw new Error('could not save the ways to give: ' + JSON.stringify(await saved.json()));
+  statusCache.clear();
+  htmlCache.clear();
+}
+
+async function donation(browser) {
+  await saveDonate(DONATE);
+  const pub = await (await fetch(base + '/api/public')).json();
+  if (pub.donate !== true) fail('/api/public', 'does not say donate: true once a way to give is saved');
+
+  // the home page: the line and the footer link, at a phone's width and a computer's
+  for (const width of [360, 1280]) {
+    const where = `/ with the Donate page, ${width}px`;
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    const w = watch(page);
+    await page.goto(base + '/');
+    await page.waitForLoadState('networkidle');
+    await checkDonate(page, true, where);
+    await checkLinks(page, where);
+    const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    if (sideways > 0) fail(where, `scrolls sideways by ${sideways}px`);
+    if (out) {
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: scheme });
+        await page.locator('#faq-donate').scrollIntoViewIfNeeded();
+        await page.evaluate(() => document.querySelectorAll('.reveal-pending').forEach(e => e.classList.add('revealed')));
+        await page.waitForTimeout(500);
+        await page.locator('#questions').screenshot({ path: `${out}/home-donate-line-${width}-${scheme}.png` });
+        await page.locator('footer').screenshot({ path: `${out}/home-donate-footer-${width}-${scheme}.png` });
+      }
+    }
+    // the footer link opens the page
+    await page.click('#foot-donate');
+    await page.waitForURL(base + '/donate');
+    if (!(await page.locator('h1').innerText()).includes('Donate')) fail(where, 'the footer link did not open the Donate page');
+    if (w.errors.length) fail(where, w.errors.join('; '));
+    await context.close();
+  }
+  await withoutScript(browser, ', with the Donate page');
+
+  // the document pages link it, in the header and the footer
+  for (const path of ['/help', '/privacy', '/terms']) {
+    const html = await htmlOf(path);
+    if ((html.match(/<a href="\/donate">Donate<\/a>/g) || []).length !== 2) fail(path, 'not linked to /donate in the header and the footer');
+  }
+
+  // the page itself
+  const res = await fetch(base + '/donate');
+  if (res.status !== 200) fail('/donate', 'status ' + res.status);
+  if (!/noindex/.test(res.headers.get('x-robots-tag') || '')) fail('/donate', 'not sent with X-Robots-Tag: noindex');
+  if (!/form-action 'none'/.test(res.headers.get('content-security-policy') || '')) fail('/donate', 'no Content Security Policy');
+  for (const scheme of ['light', 'dark']) {
+    for (const width of [360, 390, 1280]) {
+      const where = `/donate ${width}px ${scheme}`;
+      const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: scheme, deviceScaleFactor: 2 });
+      const page = await context.newPage();
+      const w = watch(page);
+      const r = await page.goto(base + '/donate');
+      if (!r || r.status() !== 200) fail(where, 'status ' + (r && r.status()));
+      await page.waitForLoadState('networkidle');
+      if ((await page.locator('h1').innerText()).trim() !== 'Donate') fail(where, 'heading');
+      const text = (await page.locator('main').textContent()).replace(/\s+/g, ' ');
+      for (const phrase of ['Betaharah is free.', 'What it costs to run', 'Giving is optional', 'Ways to give', 'Betaharah never sees card or bank details.', 'Cheques payable']) if (!text.includes(phrase)) fail(where, 'missing: ' + phrase);
+      const links = await page.$$eval('a.give-link', as => as.map(a => ({ href: a.getAttribute('href'), rel: a.getAttribute('rel'), text: a.textContent })));
+      if (links.length !== 2 || links.some((l, i) => l.href !== DONATE.links[i].url || l.rel !== 'noopener noreferrer' || l.text !== DONATE.links[i].label)) fail(where, 'the buttons: ' + JSON.stringify(links));
+      if ((await page.locator('form').count()) !== 0) fail(where, 'a form on the page');
+      const small = await page.$$eval('a.give-link', as => as.filter(a => a.getBoundingClientRect().height < 44).length);
+      if (small) fail(where, 'a button is lower than 44 px');
+      const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      if (sideways > 0) fail(where, `scrolls sideways by ${sideways}px`);
+      if ((await page.evaluate(() => getComputedStyle(document.querySelector('main')).maxWidth)) !== '720px') fail(where, 'main is not the document width');
+      await checkLinks(page, where, true);
+      if (w.errors.length) fail(where, w.errors.join('; '));
+      if (w.foreign.length) fail(where, 'requested from another origin: ' + w.foreign.join(', '));
+      if (out) await page.screenshot({ path: `${out}/donate-${width}-${scheme}.png`, fullPage: true });
+      await context.close();
+    }
+  }
+
+  // removed again
+  await saveDonate({ links: [], note: '' });
+  if ((await statusOf('/donate')) !== 404) fail('/donate', 'still answers after every way to give was removed');
+  if ((await (await fetch(base + '/api/public')).json()).donate !== false) fail('/api/public', 'still says donate: true');
+  if ((await htmlOf('/help')).includes('/donate')) fail('/help', 'still links to /donate');
 }
 
 async function metaAndHeaders() {
@@ -306,6 +436,7 @@ async function docs(browser) {
   await withoutScript(browser);
   await metaAndHeaders();
   await docs(browser);
+  await donation(browser);
   await browser.close();
 
   if (failures.length) {
@@ -313,7 +444,7 @@ async function docs(browser) {
     for (const f of failures) console.log('  ' + f);
     process.exit(1);
   }
-  console.log(`ok: home page at 4 widths x 2 colour schemes${pub.textingNumber ? ', with a texting number' : ', without a texting number'}; both texting states; keyboard; no JavaScript; meta and headers; Help, Privacy, Terms`);
+  console.log(`ok: home page at 4 widths x 2 colour schemes${pub.textingNumber ? ', with a texting number' : ', without a texting number'}; both texting states; keyboard; no JavaScript; meta and headers; Help, Privacy, Terms; the Donate page and its links, on and off`);
 })().catch(e => {
   console.error(e);
   process.exit(1);

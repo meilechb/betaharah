@@ -113,7 +113,7 @@ export function registerAdminRoutes(app: AdminApp, deps: Deps): void {
         await saveSiteConfig(c.env, await readBody(c), deps.now());
       } catch (e) {
         // The message names the setting ("dailyCodeLimit: ..."), so that the page can show it at the right field.
-        if (e instanceof ValidationError) throw new AdminError(400, e.message, /^(\w+):/.exec(e.message)?.[1] ?? null);
+        if (e instanceof ValidationError) throw new AdminError(400, e.message, /^([\w.]+):/.exec(e.message)?.[1] ?? null);
         throw e;
       }
       return c.json(await state(c));
