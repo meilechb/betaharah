@@ -127,15 +127,17 @@ function telnyx() {
   return h(
     'form',
     {
-      class: 'keys-form',
+      class: 'keys-form card',
       novalidate: true,
       onsubmit: e => {
         e.preventDefault();
         saveKeys(keys, e.submitter);
       },
     },
-    cardSection(
-      { title: 'Text messages (Telnyx)' },
+    h(
+      'div',
+      { class: 'card-body' },
+      h('h2', {}, 'Text messages (Telnyx)'),
       h('p', {}, S.smsReady ? 'Texting is working from this account’s number.' : 'Texting is not working yet. Cost: about $1 a month for a toll-free number and about 1 cent per text, in each direction.'),
       h(
         'ol',
@@ -169,19 +171,26 @@ function rcs() {
   return h(
     'form',
     {
-      class: 'keys-form',
+      class: 'keys-form card',
       novalidate: true,
       onsubmit: e => {
         e.preventDefault();
         saveKeys(['rcsAgentId'], e.submitter);
       },
     },
-    cardSection(
-      { title: 'RCS (optional)' },
+    h(
+      'div',
+      { class: 'card-body' },
+      h('h2', {}, 'RCS (optional)'),
       h(
         'p',
         {},
         'RCS sends the same messages through the phone’s own messaging app with the site’s name and logo, where the phone and carrier support it; other phones still get SMS. It needs an RCS agent approved by Telnyx and the carriers. To get one, you register a brand in Telnyx with a legal business name and a tax ID (EIN), an address, a website, a logo and the privacy and terms pages, then submit the agent for review. Telnyx charges a one-time fee when the agent is submitted, a launch fee, and a monthly fee for the agent, on top of the price per message. SMS alone is enough for this site.',
+      ),
+      h(
+        'p',
+        { class: 'help' },
+        'When Telnyx approves the agent: link it to the same Messaging Profile as the number, and set the RCS agent’s own inbound webhook to the same address as the number’s (shown under Telnyx above). Telnyx sends received RCS messages to the address on the agent, not the one on the profile. Every RCS text also carries an SMS copy with the same words, so phones without RCS still get it.',
       ),
       alert({ kind: S.rcsReady ? 'ok' : 'info' }, S.rcsReady ? 'RCS is in use: it is switched on, texting works, and the agent ID and Messaging Profile ID are saved.' : 'RCS is not in use. It needs texting to work, the agent ID and the Messaging Profile ID (under Telnyx) saved, and the switch below on.'),
       secretField('rcsAgentId', 'text'),
@@ -206,15 +215,17 @@ function google() {
   return h(
     'form',
     {
-      class: 'keys-form',
+      class: 'keys-form card',
       novalidate: true,
       onsubmit: e => {
         e.preventDefault();
         saveKeys(keys, e.submitter);
       },
     },
-    cardSection(
-      { title: 'Google Calendar (optional)' },
+    h(
+      'div',
+      { class: 'card-body' },
+      h('h2', {}, 'Google Calendar (optional)'),
       h('p', {}, 'Without this, people can still use the calendar subscription link, which Google refreshes on its own schedule (up to about 12 hours). With it, a connected Google calendar is updated within about a minute. Free.'),
       h(
         'ol',
@@ -235,6 +246,6 @@ function google() {
   );
 }
 
-export function keysSection() {
-  return card({ title: 'Keys and connections', icon: 'lock', intro: 'Keys are stored encrypted and are never shown again after saving. Each shows whether it is saved.' }, telnyx(), rcs(), google());
+export function keysPage() {
+  return [telnyx(), rcs(), google()];
 }

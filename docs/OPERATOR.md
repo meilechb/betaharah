@@ -14,19 +14,38 @@ For the person who operates betaharah.com.
 
 ## The operator's console
 
-Open **https://betaharah.com/admin/** and sign in with `DASHBOARD_PASSWORD`.
-It shows totals, never any account's data. There you:
+Open **https://betaharah.com/admin/** and sign in with `DASHBOARD_PASSWORD`
+(a session lasts 12 hours). It shows totals and the site's own settings,
+never any account's data, and it carries you through the setup. Each
+section is its own page (a side list on a computer, a menu at the top on a
+phone):
 
-1. **Set the contact** shown on the Help, Privacy and Terms pages (a name,
-   and an email address if you want one public).
-2. **Choose who may sign up**: anyone, by invitation, or nobody; and
-   whether people may sign up by texting JOIN to the number ("sign-up by
-   text", on by default).
-3. **Enter the keys** for Telnyx and, optionally, Google, and later the
-   RCS agent (see "RCS" below).
-4. **Make invitations.**
-5. **Delete an account** if someone asks and cannot do it themselves.
-6. **Open the test account** (see below).
+- **Overview**: the main numbers with their trend, the setup steps in
+  order, each with its status (done, needs you, waiting on someone else)
+  and the exact next step (this replaces most of this document), the status
+  of each part (whether texting works, the last failure and its kind,
+  whether the every-minute job ran, the last text received, Google, RCS),
+  and texts sent in the last 30 days. Telnyx's toll-free verification
+  cannot be seen by the site; tick it under Keys and connections as a note
+  to yourself.
+- **Usage and cost**: texts and sign-in codes today and this month against
+  the limits, received texts, new and deleted accounts, an estimate in
+  dollars at a price per text you set, and the last 30 days.
+- **Accounts**: internal ids, dates, number of phones and whether a
+  reminder is waiting; search by id; delete with DELETE typed.
+- **Site settings**: the contact for the public pages, who may sign up,
+  sign-up by text, "Send text messages", the allowed prefixes and the
+  limits, each with what it protects against.
+- **Keys and connections**: Telnyx, RCS and Google. Keys are write-only;
+  each shows whether it is saved, can be cleared, and has a Check button
+  that makes a read-only call (it sends nothing).
+- **Invitations**: a link for sign-up on the website, a word for sign-up by
+  text (JOIN and the word), or an account for one number with a password.
+- **Test account**: open, reset or delete it.
+- **Text simulator**: "Try signing up by text" (below), and what people
+  can text.
+- **Tools**: a test text to your own number, and links to the public pages
+  and the two consent screenshots.
 
 ## Test account
 
@@ -65,15 +84,14 @@ received from one is never answered.
 
 ### Trying sign-up by text before the number is approved
 
-The server has a simulator (`simulateText` in `src/app/conversation.ts`)
-that runs a text "from" a made-up number (555-0100 to 555-0199) through
-the whole real path: the sign-up rules, JOIN, setup, every word, ADD and
-JOIN with a code, WEB, DELETE ACCOUNT. Nothing is sent; the texts that
-would have gone back are shown instead; the accounts it makes are test
-accounts, which are never texted and cost nothing; and it moves none of
-the site's counters. (It is reached from the console once the console has
-a page for it.) An account made in it stays until you text DELETE ACCOUNT
-and YES from the same made-up number, or delete it from the account list.
+Console → **Text simulator**. You text "from" a made-up
+number (555-0100 to 555-0199) and see every reply, with the RCS buttons as
+buttons you can tap. The text goes through the whole real path (the
+sign-up rules, JOIN, setup, every word, ADD and JOIN with a code, WEB,
+DELETE ACCOUNT), but nothing is sent, nothing is charged, and none of the
+site's counters move. The accounts it makes are test accounts, never
+texted. One stays until you text DELETE ACCOUNT and YES from the same
+made-up number, or delete it under Accounts.
 
 ## Before text messaging works
 
@@ -116,9 +134,8 @@ site can send is 3,000 texts a month.
 Once this works, people can sign up by texting JOIN to the number (unless
 you switch "sign-up by text" off, or close sign-up). What they receive is
 in [TEXTING.md](TEXTING.md). While sign-up is by invitation, they text
-JOIN and an invitation word that you make (a word of 6 to 24 letters and
-digits, any case; `createInvitationWord` in `src/app/store.ts`, reached
-from the console once it has a field for it).
+JOIN and an invitation word that you make under Invitations (a word of 6
+to 24 letters and digits, any case).
 
 ## RCS (when the agent is approved)
 
@@ -257,7 +274,7 @@ not the addresses requested and not any account's data.
 
 ## If something goes wrong
 
-- **Nobody receives texts:** console → Status. Check the Telnyx portal for
+- **Nobody receives texts:** console → Overview, Status. Check the Telnyx portal for
   the number's verification status and the message logs.
 - **Someone is locked out:** make them a one-number invitation only if their
   account does not exist. If it exists and they have no password and texts

@@ -2,7 +2,7 @@
 import { button, card, confirmDialog, h, pretty, tag, toast } from '/app/lib.js';
 import { call, run, S, saved } from '../state.js';
 
-export function testSection() {
+export function testPage() {
   const exists = S.demo.exists;
   return card(
     { title: 'Test account', icon: 'phone', headerAction: tag(exists ? 'exists' : 'none', exists ? 'ok' : null) },

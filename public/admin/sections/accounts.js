@@ -1,5 +1,5 @@
 /* Accounts: counts and dates only, never anything inside an account. */
-import { alert, button, card, h, icon, list, listRow, promptDialog, selectField, skeleton, tag, textField, toast } from '/app/lib.js';
+import { alert, button, card, emptyState, h, promptDialog, selectField, skeleton, tag, textField, toast } from '/app/lib.js';
 import { adopt, call, date, num, plural, render, run } from '../state.js';
 
 let data = null;
@@ -13,7 +13,7 @@ const redrawMe = () => window.dispatchEvent(new CustomEvent('admin:section', { d
 
 /** Loads the list (once, or again with force, or after the search or the order changed). */
 export async function loadAccounts(force) {
-  if (loading || (data && !force)) return;
+  if (loading || ((data || error) && !force)) return;
   loading = true;
   try {
     data = await call('GET', '/api/admin/accounts?sort=' + encodeURIComponent(sort) + '&q=' + encodeURIComponent(query));
@@ -52,14 +52,16 @@ async function remove(a, btn) {
 }
 
 function row(a) {
-  const meta = ['Created ' + date(a.createdAt), 'last changed ' + date(a.updatedAt), plural(a.phones, 'phone')].join(' · ');
-  return listRow({
-    lead: icon(a.test ? 'phone' : 'user'),
-    title: h('span', { class: 'mono' }, a.id),
-    meta,
-    body: a.test || a.reminderWaiting ? h('div', { class: 'tags' }, a.test ? tag('test account', 'info') : null, a.reminderWaiting ? tag('reminder waiting') : null) : null,
-    trail: button({ label: 'Delete', variant: 'danger', size: 'sm', icon: 'trash', attrs: { 'aria-label': 'Delete account ' + a.id }, onclick: e => remove(a, e.currentTarget) }),
-  });
+  return h(
+    'tr',
+    {},
+    h('th', { scope: 'row', 'data-label': 'Account id' }, h('span', { class: 'mono' }, a.id), a.test ? tag('test account', 'info') : null),
+    h('td', { 'data-label': 'Created' }, date(a.createdAt)),
+    h('td', { 'data-label': 'Last changed' }, date(a.updatedAt)),
+    h('td', { class: 'n', 'data-label': 'Phones' }, num(a.phones)),
+    h('td', { 'data-label': 'Reminder' }, a.reminderWaiting ? tag('waiting', 'ok') : h('span', { class: 'muted' }, 'none')),
+    h('td', { class: 'actions-cell' }, button({ label: 'Delete', variant: 'danger', size: 'sm', icon: 'trash', attrs: { 'aria-label': 'Delete account ' + a.id }, onclick: e => remove(a, e.currentTarget) })),
+  );
 }
 
 function periods(c) {
@@ -76,7 +78,7 @@ function periods(c) {
   );
 }
 
-export function accountsSection() {
+export function accountsPage() {
   const controls = h(
     'div',
     { class: 'filters' },
@@ -111,24 +113,32 @@ export function accountsSection() {
     }),
   );
   let body;
-  if (error) body = h('div', {}, h('p', { class: 'muted' }, error), button({ label: 'Try again', size: 'sm', onclick: () => loadAccounts(true) }));
-  else if (!data) body = skeleton({ lines: 4, label: 'Loading the accounts' });
-  else if (data.accounts.length === 0) body = h('p', { class: 'muted' }, query ? 'No account id contains "' + query + '".' : 'There are no accounts yet.');
+  if (error) body = h('div', { class: 'empty' }, h('p', {}, error), button({ label: 'Try again', size: 'sm', onclick: () => loadAccounts(true) }));
+  else if (!data) body = skeleton({ lines: 5, label: 'Loading the accounts' });
+  else if (data.accounts.length === 0)
+    body = emptyState({ icon: 'user', title: query ? 'No account id contains "' + query + '".' : 'There are no accounts yet.', body: query ? 'Check the id, or clear the search.' : 'Accounts appear here when people sign up, or when you make an invitation for one number.' });
   else
     body = h(
       'div',
       {},
-      h('p', { class: 'small muted', 'aria-live': 'polite' }, 'Showing ' + num(data.shown) + (query ? ' matching' : '') + (data.shown >= data.limit ? ' (the first ' + num(data.limit) + '; search by id to find others)' : '') + '.'),
-      list(data.accounts.map(row), { className: 'accounts' }),
+      h(
+        'table',
+        { class: 'data-table accounts' },
+        h(
+          'thead',
+          {},
+          h('tr', {}, ['Account id', 'Created', 'Last changed', 'Phones', 'Reminder'].map(t => h('th', { scope: 'col', class: t === 'Phones' ? 'n' : null }, t)), h('th', { scope: 'col' }, h('span', { class: 'visually-hidden' }, 'Actions'))),
+        ),
+        h('tbody', {}, data.accounts.map(row)),
+      ),
+      h('p', { class: 'table-foot', 'aria-live': 'polite' }, 'Showing ' + num(data.shown) + (query ? ' matching' : '') + (data.shown >= data.limit ? ', the first ' + num(data.limit) + '. Search by id to find others.' : '.')),
     );
-  return card(
-    { title: 'Accounts', icon: 'user' },
+  return [
     alert(
       { kind: 'info', title: 'Account data is encrypted. Nobody, including you in this console, can read it here.' },
-      h('p', {}, 'Each account is shown only by an internal id, its dates, how many phones it has, and whether a reminder is waiting. Names, phone numbers, dates recorded and messages are never shown. To help someone, ask them; to remove an account they cannot delete themselves, use Delete.'),
+      h('p', {}, 'Each account is shown only by an internal id, its dates, how many phones it has, and whether a reminder is waiting. Names, phone numbers, dates recorded and messages are never shown. To help someone, ask them; to remove an account they cannot delete themselves, use Delete. Accounts made in the text simulator are test accounts too.'),
     ),
-    data ? h('div', {}, h('h3', {}, 'New accounts (not counting the test account)'), periods(data.created)) : null,
-    controls,
-    body,
-  );
+    data ? card({ title: 'New accounts', icon: 'plus', intro: 'Not counting the test account.' }, periods(data.created)) : null,
+    card({ title: 'All accounts', icon: 'user' }, controls, body),
+  ];
 }

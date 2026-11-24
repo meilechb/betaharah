@@ -1,39 +1,43 @@
 /*
- * The operator console: boot, sign-in or the console, the list of sections,
- * and redrawing with the focus kept. Every section is a module under
+ * The operator console: an application with a top bar, a side navigation
+ * on wide screens and a compact section switcher on phones. Each section is
+ * its own page (#overview, #accounts, ...), built by a module under
  * sections/. Server text is always inserted as text, never as HTML.
  */
 import { button, configureApi, h, icon, mount, pageLoading, toast } from '/app/lib.js';
 import { showSignIn } from './signin.js';
-import { adopt, call, configure, forget, run, S, SECTIONS, time } from './state.js';
-import { summarySection, setupSection } from './sections/overview.js';
-import { statusSection } from './sections/status.js';
-import { usageSection, loadHistory } from './sections/usage.js';
-import { accountsSection, loadAccounts } from './sections/accounts.js';
-import { settingsSection } from './sections/settings.js';
-import { keysSection } from './sections/keys.js';
-import { invitesSection } from './sections/invites.js';
-import { testSection } from './sections/test-account.js';
-import { toolsSection } from './sections/tools.js';
+import { adopt, call, configure, forget, PAGES, run, S, time } from './state.js';
+import { overviewPage } from './sections/overview.js';
+import { usagePage, loadHistory } from './sections/usage.js';
+import { accountsPage, loadAccounts } from './sections/accounts.js';
+import { settingsPage } from './sections/settings.js';
+import { keysPage } from './sections/keys.js';
+import { invitesPage } from './sections/invites.js';
+import { testPage } from './sections/test-account.js';
+import { simulatorCards as simulatorPage } from './sections/tools.js';
+import { toolsPage } from './sections/tools.js';
 
 const BUILDERS = {
-  summary: summarySection,
-  setup: setupSection,
-  status: statusSection,
-  usage: usageSection,
-  accounts: accountsSection,
-  settings: settingsSection,
-  keys: keysSection,
-  invites: invitesSection,
-  test: testSection,
-  tools: toolsSection,
+  overview: overviewPage,
+  usage: usagePage,
+  accounts: accountsPage,
+  settings: settingsPage,
+  keys: keysPage,
+  invites: invitesPage,
+  simulator: simulatorPage,
+  test: testPage,
+  tools: toolsPage,
 };
 
-/** Loads that wait until their section is first on screen. */
-const LAZY = { usage: loadHistory, accounts: loadAccounts };
+/** What each page loads when it is opened. */
+const LOADS = { overview: [loadHistory], usage: [loadHistory], accounts: [loadAccounts] };
 
-let observer = null;
-let current = 'summary';
+let current = 'overview';
+
+function pageFromHash() {
+  const id = location.hash.slice(1);
+  return BUILDERS[id] ? id : 'overview';
+}
 
 function signedOut(notice) {
   forget();
@@ -52,37 +56,55 @@ async function start() {
     mount([h('div', { class: 'alert bad', role: 'alert' }, e.message || 'The console could not be loaded.')]);
     return;
   }
+  current = pageFromHash();
   render();
-  const target = location.hash.slice(1);
-  if (BUILDERS[target]) {
-    const el = document.getElementById(target);
-    if (el) el.scrollIntoView();
-    setCurrent(target);
-  }
 }
 
 function signOut(btn) {
   run(() => call('POST', '/api/admin/logout'), () => signedOut('You are signed out.'), btn);
 }
 
-function nav() {
+function go(id) {
+  if (location.hash.slice(1) !== id) location.hash = id;
+  else show(id);
+}
+
+function show(id, focusHeading) {
+  current = id;
+  render();
+  window.scrollTo(0, 0);
+  if (focusHeading) {
+    const heading = document.getElementById('page-title');
+    if (heading) heading.focus({ preventScroll: true });
+  }
+}
+
+function badge(id) {
+  if (id !== 'overview') return null;
   const left = S.checklist.filter(i => !i.optional && i.status !== 'done').length;
+  return left > 0 ? h('span', { class: 'count', title: left + ' setup steps left' }, String(left), h('span', { class: 'visually-hidden' }, ' setup steps left')) : null;
+}
+
+function sideNav() {
+  const groups = [];
+  for (const p of PAGES) {
+    let g = groups.find(x => x.name === p.group);
+    if (!g) groups.push((g = { name: p.group, pages: [] }));
+    g.pages.push(p);
+  }
   return h(
     'nav',
-    { class: 'console-nav', 'aria-label': 'Sections' },
-    h(
-      'ul',
-      {},
-      SECTIONS.map(s =>
+    { class: 'side-nav', 'aria-label': 'Sections' },
+    groups.map(g =>
+      h(
+        'div',
+        { class: 'nav-group' },
+        g.name ? h('div', { class: 'nav-group-title' }, g.name) : null,
         h(
-          'li',
+          'ul',
           {},
-          h(
-            'a',
-            { href: '#' + s.id, id: 'nav-' + s.id, 'aria-current': s.id === current ? 'location' : null, onclick: () => setCurrent(s.id) },
-            icon(s.icon),
-            h('span', {}, s.label),
-            s.id === 'setup' && left > 0 ? h('span', { class: 'count', 'aria-label': left + ' left' }, String(left)) : null,
+          g.pages.map(p =>
+            h('li', {}, h('a', { href: '#' + p.id, id: 'nav-' + p.id, 'aria-current': p.id === current ? 'page' : null }, icon(p.icon), h('span', {}, p.label), badge(p.id))),
           ),
         ),
       ),
@@ -90,102 +112,81 @@ function nav() {
   );
 }
 
-function setCurrent(id) {
-  current = id;
-  document.querySelectorAll('.console-nav a').forEach(a => {
-    if (a.id === 'nav-' + id) a.setAttribute('aria-current', 'location');
-    else a.removeAttribute('aria-current');
-  });
+/** On a phone: a select that switches the page. */
+function phoneSwitcher() {
+  return h(
+    'div',
+    { class: 'phone-switcher' },
+    h('label', { for: 'section-switch', class: 'visually-hidden' }, 'Section'),
+    h(
+      'select',
+      { id: 'section-switch', onchange: e => go(e.target.value) },
+      PAGES.map(p => h('option', { value: p.id, selected: p.id === current }, p.label)),
+    ),
+  );
 }
 
-/** One section, wrapped so that it can be replaced on its own. */
-export function sectionNode(id) {
-  return h('div', { class: 'section-wrap', id: id, 'data-section': id, tabindex: '-1' }, BUILDERS[id]());
+function topBar() {
+  const until = S.session && S.session.until;
+  return h(
+    'header',
+    { class: 'app-bar' },
+    h('a', { class: 'brand', href: '#overview' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'B'), h('span', { class: 'brand-name' }, 'Betaharah'), h('span', { class: 'brand-sub' }, 'Operator console')),
+    h(
+      'div',
+      { class: 'app-bar-end' },
+      h('span', { class: 'signed-in' }, icon('lock', { size: 'sm' }), h('span', {}, until ? 'Signed in until ' + time(until) : 'Signed in')),
+      button({ label: 'Sign out', icon: 'log-out', size: 'sm', onclick: e => signOut(e.currentTarget) }),
+    ),
+  );
 }
 
-/** Redraws one section in place (after its own data arrived), keeping the focus. */
-export function redrawSection(id) {
-  const old = document.getElementById(id);
-  if (!old || !S) return;
-  keepFocus(() => old.replaceChildren(BUILDERS[id]()));
-}
-window.addEventListener('admin:section', e => redrawSection(e.detail));
-
-function keepFocus(fn) {
+function render() {
+  if (!S) return;
+  const page = PAGES.find(p => p.id === current);
   const active = document.activeElement;
   const id = active && active.id ? active.id : null;
-  const start = active && 'selectionStart' in active ? active.selectionStart : null;
+  const caret = active && 'selectionStart' in active ? active.selectionStart : null;
   const y = window.scrollY;
-  fn();
+  mount(
+    [
+      topBar(),
+      h(
+        'div',
+        { class: 'app-body' },
+        sideNav(),
+        h(
+          'main',
+          { class: 'app-main', id: 'main' },
+          phoneSwitcher(),
+          h('div', { class: 'page-head' }, h('h1', { id: 'page-title', tabindex: '-1' }, page.label), h('p', { class: 'page-desc' }, page.desc)),
+          h('div', { class: 'page', id: current }, BUILDERS[current]()),
+        ),
+      ),
+    ],
+    { wide: true },
+  );
+  document.title = page.label + ' · Betaharah operator console';
   window.scrollTo(0, y);
   if (id) {
     const el = document.getElementById(id);
     if (el) {
       el.focus({ preventScroll: true });
-      if (start !== null && 'setSelectionRange' in el) {
+      if (caret !== null && 'setSelectionRange' in el) {
         try {
-          el.setSelectionRange(start, start);
+          el.setSelectionRange(caret, caret);
         } catch (e) {
           // not a text field
         }
       }
     }
   }
+  for (const load of LOADS[current] || []) load();
 }
 
-function render() {
-  if (!S) return;
-  const until = S.session && S.session.until;
-  keepFocus(() =>
-    mount(
-      [
-        h(
-          'header',
-          { class: 'top console-top' },
-          h('div', {}, h('h1', {}, 'Operator console'), h('p', { class: 'today' }, 'Totals and the site’s own settings. No account’s data is shown here.')),
-          h(
-            'div',
-            { class: 'session' },
-            until ? h('span', { class: 'small muted' }, 'Signed in until ' + time(until)) : null,
-            button({ label: 'Sign out', icon: 'log-out', size: 'sm', onclick: e => signOut(e.currentTarget) }),
-          ),
-        ),
-        h('div', { class: 'console' }, nav(), h('div', { class: 'console-main' }, SECTIONS.map(s => sectionNode(s.id)))),
-      ],
-      { wide: true },
-    ),
-  );
-  watchLazy();
-}
-
-function watchLazy() {
-  if (observer) observer.disconnect();
-  const pending = Object.keys(LAZY);
-  if (typeof IntersectionObserver === 'undefined') {
-    pending.forEach(id => LAZY[id]());
-    return;
-  }
-  observer = new IntersectionObserver(
-    entries => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        const id = entry.target.id;
-        observer.unobserve(entry.target);
-        if (LAZY[id]) LAZY[id]();
-      }
-    },
-    { rootMargin: '200px 0px' },
-  );
-  pending.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) observer.observe(el);
-  });
-}
-
-window.addEventListener('hashchange', () => {
-  const id = location.hash.slice(1);
-  if (BUILDERS[id]) setCurrent(id);
-});
+// A page's own data arrived: redraw it (the event names the part that changed).
+window.addEventListener('admin:section', () => render());
+window.addEventListener('hashchange', () => show(pageFromHash(), true));
 window.addEventListener('unhandledrejection', () => toast('Something went wrong. Reload the page.', true));
 
 start();

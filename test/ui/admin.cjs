@@ -65,11 +65,15 @@ async function seed() {
     if (wide > 1) throw new Error('the page is ' + wide + 'px wider than the screen');
   };
   const toast = text => page.waitForSelector(`.toast:has-text("${text}")`);
-  const section = id => `#${id}`;
-  const stepStatus = async key => page.locator(`#setup li.step:has(.step-title:text-is("${key}")) .tag`).first().textContent();
+  /** Opens a page of the console by its address, as the navigation does. */
+  const open = async id => {
+    await page.evaluate(x => (location.hash = x), id);
+    await page.waitForSelector(`.page#${id}`);
+  };
+  const stepStatus = async key => page.locator(`#overview .setup-card li.step:has(.step-title:text-is("${key}")) .tag`).first().textContent();
   const waitStep = (key, word) =>
     page.waitForFunction(
-      ([k, w]) => [...document.querySelectorAll('#setup li.step')].some(li => li.querySelector('.step-title').textContent === k && li.querySelector('.tag').textContent === w),
+      ([k, w]) => [...document.querySelectorAll('#overview .setup-card li.step')].some(li => li.querySelector('.step-title').textContent === k && li.querySelector('.tag').textContent === w),
       [key, word],
     );
 
@@ -85,25 +89,28 @@ async function seed() {
     await page.fill('#pw', PASSWORD);
     await page.click('button[type=submit]');
     await page.waitForSelector('h2:has-text("Status")');
-    if (!(await page.textContent('.console-top')).includes('Signed in until')) throw new Error('no session time');
+    if (!(await page.textContent('.app-bar')).includes('Signed in until')) throw new Error('no session time');
     await noSideways();
   });
 
   // ----- summary, steps, status -----
   await step('summary, setup steps and status are shown', async () => {
-    const summary = await page.textContent(section('summary'));
-    if (!/Setup: \d+ steps? left/.test(summary)) throw new Error('summary: ' + summary.slice(0, 80));
-    if ((await page.locator('#setup li.step').count()) !== 9) throw new Error('not nine steps');
+    if ((await page.locator('#overview .stat').count()) !== 4) throw new Error('not four stat tiles');
+    if (!/\d+ setup steps? left/.test(await page.textContent('#overview p.lead'))) throw new Error('no summary line');
+    if ((await page.locator('#overview .setup-card li.step').count()) !== 9) throw new Error('not nine steps');
+    await page.waitForSelector('#overview .empty, #overview svg.chart');
     if ((await stepStatus('Contact details for the public pages')) !== 'Needs you') throw new Error('contact step');
-    if (!(await page.textContent(section('status'))).includes('Text messaging is off or not set up')) throw new Error('status');
-    await page.click('#nav-accounts');
-    if (!page.url().endsWith('#accounts')) throw new Error('nav');
-    if ((await page.getAttribute('#nav-accounts', 'aria-current')) !== 'location') throw new Error('aria-current');
+    if (!(await page.textContent('#overview')).includes('Text messaging is off or not set up')) throw new Error('status');
+    // on a phone the section switcher changes the page
+    await page.selectOption('#section-switch', 'accounts');
+    await page.waitForSelector('#page-title:text-is("Accounts")');
+    if (!page.url().endsWith('#accounts')) throw new Error('switcher');
+    if ((await page.getAttribute('#nav-accounts', 'aria-current')) !== 'page') throw new Error('aria-current');
   });
 
   // ----- usage -----
   await step('usage: counts, price, chart and table', async () => {
-    await page.locator(section('usage')).scrollIntoViewIfNeeded();
+    await open('usage');
     await page.waitForSelector('#usage svg.chart');
     await page.fill('#price', 'a lot');
     await page.click('button:has-text("Save price")');
@@ -123,21 +130,21 @@ async function seed() {
 
   // ----- accounts -----
   await step('accounts: listed by id and dates, searched, sorted, deleted with DELETE typed', async () => {
-    await page.locator(section('accounts')).scrollIntoViewIfNeeded();
-    await page.waitForSelector('#accounts ul.accounts li');
+    await open('accounts');
+    await page.waitForSelector('#accounts table.accounts tbody tr');
     if (!(await page.textContent('#accounts')).includes('Nobody, including you in this console, can read it here')) throw new Error('no privacy note');
-    const before = await page.locator('#accounts ul.accounts li').count();
+    const before = await page.locator('#accounts table.accounts tbody tr').count();
     if (before < 3) throw new Error('only ' + before + ' accounts');
-    const id = (await page.textContent('#accounts ul.accounts li >> nth=0 >> .mono')).trim();
+    const id = (await page.textContent('#accounts table.accounts tbody tr >> nth=0 >> .mono')).trim();
     await page.fill('#acc-q', id.slice(2, 9));
-    await page.waitForFunction(() => document.querySelectorAll('#accounts ul.accounts li').length === 1);
+    await page.waitForFunction(() => document.querySelectorAll('#accounts table.accounts tbody tr').length === 1);
     await page.fill('#acc-q', '');
-    await page.waitForFunction(n => document.querySelectorAll('#accounts ul.accounts li').length === n, before);
+    await page.waitForFunction(n => document.querySelectorAll('#accounts table.accounts tbody tr').length === n, before);
     await page.selectOption('#acc-sort', 'oldest');
-    await page.waitForFunction(i => document.querySelector('#accounts ul.accounts li:last-child .mono').textContent.trim() === i, id);
+    await page.waitForFunction(i => document.querySelector('#accounts table.accounts tbody tr:last-child .mono').textContent.trim() === i, id);
     await page.selectOption('#acc-sort', 'newest');
-    await page.waitForFunction(i => document.querySelector('#accounts ul.accounts li:first-child .mono').textContent.trim() === i, id);
-    await page.click('#accounts ul.accounts li >> nth=0 >> button:has-text("Delete")');
+    await page.waitForFunction(i => document.querySelector('#accounts table.accounts tbody tr:first-child .mono').textContent.trim() === i, id);
+    await page.click('#accounts table.accounts tbody tr >> nth=0 >> button:has-text("Delete")');
     await page.waitForSelector('dialog[open] h2:has-text("Delete this account")');
     await page.fill('dialog input', 'delete');
     await page.click('dialog button[type=submit]');
@@ -145,13 +152,13 @@ async function seed() {
     await page.fill('dialog input', 'DELETE');
     await page.click('dialog button[type=submit]');
     await toast('The account was deleted');
-    await page.waitForFunction(n => document.querySelectorAll('#accounts ul.accounts li').length === n - 1, before);
+    await page.waitForFunction(n => document.querySelectorAll('#accounts table.accounts tbody tr').length === n - 1, before);
     await noSideways();
   });
 
   // ----- settings -----
   await step('settings: field errors, a lock-out warning, then saved', async () => {
-    await page.locator(section('settings')).scrollIntoViewIfNeeded();
+    await open('settings');
     await page.fill('#prefixes', '1');
     await page.fill('#lim-dailyCodeLimit', '-3');
     await page.click('button:has-text("Save settings")');
@@ -169,13 +176,14 @@ async function seed() {
     await page.click('button:has-text("Save settings")');
     await toast('Settings saved');
     if ((await page.inputValue('#cname')) !== 'Local Tester') throw new Error('not kept');
+    await open('overview');
     if ((await stepStatus('Contact details for the public pages')) !== 'Done') throw new Error('contact step not done');
     if ((await stepStatus('Sign-up policy chosen')) !== 'Done') throw new Error('sign-up step not done');
   });
 
   // ----- keys -----
   await step('keys: checks without keys, a wrong number, saved, cleared, notes to self, RCS switch', async () => {
-    await page.locator(section('keys')).scrollIntoViewIfNeeded();
+    await open('keys');
     await page.click('button:has-text("Check Telnyx")');
     await toast('Save the API key and the number first');
     await page.click('button:has-text("Check Google")');
@@ -193,15 +201,24 @@ async function seed() {
     if ((await page.inputValue('#k-telnyxApiKey')) !== '') throw new Error('the key was put back in the field');
     if ((await page.locator('label[for="k-telnyxApiKey"] .tag').textContent()) !== 'saved') throw new Error('not marked saved');
     if ((await page.content()).includes('local-test-key')) throw new Error('the key is on the page');
-    if (!(await page.textContent('#status')).includes('Text messaging is on')) throw new Error('status did not change');
+    await open('overview');
+    if (!(await page.textContent('#overview')).includes('Text messaging is on')) throw new Error('status did not change');
+    await open('keys');
     await page.click('button[aria-label="Clear the saved Telnyx API key"]');
     await page.click('dialog button:has-text("Clear it")');
     await toast('Cleared');
     if ((await page.locator('label[for="k-telnyxApiKey"] .tag').textContent()) !== 'not saved') throw new Error('not cleared');
     await page.check('#note-tollFreeSubmitted');
+    await toast('Noted');
+    await open('overview');
     await waitStep('Texting number: toll-free verification', 'Waiting on someone else');
+    await open('keys');
     await page.check('#note-tollFreeVerified');
+    await page.waitForFunction(() => document.querySelector('#note-tollFreeVerified').checked && !document.querySelector('[aria-busy=true]'));
+    await page.waitForTimeout(300);
+    await open('overview');
     await waitStep('Texting number: toll-free verification', 'Done');
+    await open('keys');
     await page.check('#rcsEnabled');
     await toast('RCS is switched on');
     await page.uncheck('#rcsEnabled');
@@ -211,7 +228,7 @@ async function seed() {
 
   // ----- invitations -----
   await step('invitations: both kinds, the link shown once, cancel', async () => {
-    await page.locator(section('invites')).scrollIntoViewIfNeeded();
+    await open('invites');
     await page.fill('#inum', '(732) 555-0142');
     await page.click('button:has-text("Create invitation")');
     await page.waitForSelector('#invites .error:has-text("reserved for fiction")');
@@ -230,6 +247,15 @@ async function seed() {
       return c && c.textContent.trim() !== old;
     }, link);
     await page.waitForSelector('#invites ul.list li:has-text("Used 0 of 3")');
+    // a word for sign-up by text
+    await page.check('#r-ikind-word');
+    await page.fill('#iword', 'ab');
+    await page.click('button:has-text("Create invitation")');
+    await page.waitForSelector('#invites .error:has-text("6 to 24 letters")');
+    const word = 'Ui' + Date.now().toString(36);
+    await page.fill('#iword', word);
+    await page.click('button:has-text("Create invitation")');
+    await page.waitForSelector(`#invites .alert.ok code.copy:has-text("JOIN ${word.toUpperCase()}")`);
     const count = await page.locator('#invites ul.list li').count();
     await page.click('#invites ul.list li >> nth=0 >> button:has-text("Cancel")');
     await page.click('dialog button:has-text("Cancel the invitation")');
@@ -237,9 +263,42 @@ async function seed() {
     await page.waitForFunction(n => document.querySelectorAll('#invites ul.list li').length === n - 1, count);
   });
 
+  // ----- the text simulator -----
+  await step('simulator: a complete sign-up by text, then DELETE ACCOUNT', async () => {
+    await open('simulator');
+    const n = String(10 + (Date.now() % 80)).padStart(2, '0');
+    await page.click('button:has-text("Start over with another number")');
+    await page.fill('#sim-from', '(732) 555-01' + n);
+    const say = async (text, expect) => {
+      const before = await page.locator('#sim-log .sim-msg.site').count();
+      await page.fill('#sim-text', text);
+      await page.click('.sim-form button[type=submit]');
+      await page.waitForFunction(b => document.querySelectorAll('#sim-log .sim-msg.site').length > b, before);
+      if (expect) await page.waitForSelector(`#sim-log .sim-msg.site:has-text("${expect}")`);
+    };
+    await say('JOIN', 'Step 1 of 3');
+    await say('08701', 'Lakewood, NJ 08701');
+    // the RCS buttons send their text
+    const before = await page.locator('#sim-log .sim-msg.site').count();
+    await page.click('#sim-log .sim-msg.site:last-child .chip:has-text("A:")');
+    await page.waitForFunction(b => document.querySelectorAll('#sim-log .sim-msg.site').length > b, before);
+    await page.waitForSelector('#sim-log .sim-msg.me:has-text("A")');
+    await say('1 11/19 day', 'Recorded');
+    await say('MENU', 'Words:');
+    await noSideways();
+    await page.screenshot({ path: out + '/admin-simulator.png', fullPage: false });
+    await say('DELETE ACCOUNT');
+    await say('YES');
+    await page.fill('#sim-from', '(732) 444-0101');
+    await page.fill('#sim-text', 'JOIN');
+    await page.click('.sim-form button[type=submit]');
+    await page.waitForSelector('#simulator .error:has-text("reserved for fiction")');
+    await page.fill('#sim-from', '(732) 555-0150');
+  });
+
   // ----- tools -----
   await step('tools: the test text needs texting; the pages are linked', async () => {
-    await page.locator(section('tools')).scrollIntoViewIfNeeded();
+    await open('tools');
     if (!(await page.isDisabled('button:has-text("Send a test text")'))) throw new Error('test text enabled without texting');
     for (const href of ['/', '/help', '/privacy', '/terms', '/sms-opt-in-1.png', '/sms-opt-in-2.png', '/app/']) {
       if ((await page.locator(`#tools a[href$="${href}"]`).count()) === 0) throw new Error('no link to ' + href);
@@ -248,11 +307,11 @@ async function seed() {
 
   // ----- the test account -----
   await step('test account: open, reset, delete', async () => {
-    await page.locator(section('test')).scrollIntoViewIfNeeded();
+    await open('test');
     await page.click('button:has-text("Open the test account")');
     await page.waitForURL(/\/app\/$/);
     await page.goto(base + '/admin/#test');
-    await page.waitForSelector('#test .tag:has-text("exists")');
+    await page.waitForSelector('.page#test .tag:has-text("exists")');
     await page.click('#test button:has-text("Reset it")');
     await page.click('dialog button:has-text("Reset it")');
     await toast('The test account was reset');
@@ -268,8 +327,14 @@ async function seed() {
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.evaluate(() => window.scrollTo(0, 0));
     await noSideways();
-    const navPos = await page.evaluate(() => getComputedStyle(document.querySelector('.console-nav')).position);
-    if (navPos !== 'sticky') throw new Error('no side list on a wide screen');
+    await open('overview');
+    const navPos = await page.evaluate(() => getComputedStyle(document.querySelector('.side-nav')).position);
+    if (navPos !== 'sticky') throw new Error('no side navigation on a wide screen');
+    await page.click('#nav-usage');
+    await page.waitForSelector('#page-title:text-is("Usage and cost")');
+    await noSideways();
+    await page.click('#nav-accounts');
+    await page.waitForSelector('#accounts table.data-table thead th');
     await page.screenshot({ path: out + '/admin-wide-dark.png', fullPage: true });
     await page.setViewportSize({ width: 360, height: 800 });
     await page.emulateMedia({ colorScheme: 'light' });

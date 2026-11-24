@@ -1,6 +1,7 @@
 /* Tools: a test text, and links to the public pages and the consent screenshots. */
 import { button, card, cardSection, h, icon, setFieldError, textField, toast } from '/app/lib.js';
 import { adopt, call, draft, render, run, S } from '../state.js';
+import { simulator } from './simulator.js';
 
 let error = '';
 
@@ -57,12 +58,34 @@ function link(href, label, note) {
   return h('li', {}, h('a', { href, target: '_blank', rel: 'noopener' }, label, ' ', icon('chevron-right', { size: 'sm' })), note ? h('span', { class: 'small muted' }, ' ' + note) : null);
 }
 
-export function toolsSection() {
-  return card(
-    { title: 'Tools', icon: 'bell' },
-    cardSection({ title: 'Send a test text' }, testText()),
-    cardSection(
-      { title: 'Pages' },
+/** The words people text, in short. The full reference is docs/TEXTING.md in the repository. */
+function whatPeopleText() {
+  const rows = [
+    ['JOIN', 'Signs up while sign-up is open. While it is by invitation: JOIN and an invitation word. JOIN and a code (from ADD on an account) adds a phone to that account.'],
+    ['MENU', 'Lists the words. Each word sent alone shows its own options: STATUS, HISTORY, UNDO, LOCATION, CUSTOMS, NIGHTFALL, REMINDERS, PHONES, CALENDAR, TERMS, WEB, SETUP, DELETE ACCOUNT.'],
+    ['1 2 3 4 5', 'Record: 1 flow began, 2 hefsek done, 3 count broken, 4 immersed, 5 stain. After 1, 3 or 5 add day, night, yesterday night or a time (9pm). A date also works: 1 11/22 night.'],
+    ['9, 0, ?', '9 status, 0 undo the last entry, ? the short list of digits.'],
+    ['REMINDERS ON', 'Turns reminders on for that phone. That text is the consent; reminders are off until then.'],
+    ['WEB', 'Texts back a one-time link that signs in on the website.'],
+    ['STOP, START, HELP', 'STOP ends all texts to that phone until it texts START. HELP gets a short help text.'],
+  ];
+  return h('dl', { class: 'texting-words' }, rows.map(([word, what]) => h('div', {}, h('dt', {}, h('code', {}, word)), h('dd', {}, what))));
+}
+
+export function simulatorCards() {
+  return h(
+    'div',
+    { class: 'grid-2 sim-grid' },
+    card({ title: 'Try signing up by text', icon: 'phone' }, simulator()),
+    card({ title: 'What people can text', icon: 'list', intro: 'Capitals or not does not matter. The full list, with every reply, is docs/TEXTING.md in the repository.' }, whatPeopleText()),
+  );
+}
+
+export function toolsPage() {
+  return [
+    card({ title: 'Send a test text', icon: 'message' }, testText()),
+    card(
+      { title: 'Public pages', icon: 'link' },
       h(
         'ul',
         { class: 'links' },
@@ -75,5 +98,5 @@ export function toolsSection() {
       h('p', { class: 'help' }, 'The toll-free verification form asks for the website, privacy and terms addresses, and for the two screenshots below.'),
       h('ul', { class: 'links' }, link(S.links.optIn1, 'Consent screenshot 1: sign-in'), link(S.links.optIn2, 'Consent screenshot 2: reminders')),
     ),
-  );
+  ];
 }

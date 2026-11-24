@@ -15,7 +15,7 @@ export const draft = {
   /** True once the settings form was changed and not yet saved. */
   configDirty: false,
   secrets: {},
-  invite: { kind: 'setup', number: '', note: '', maxUses: 5, days: 14, link: '', linkKind: '' },
+  invite: { kind: 'setup', number: '', word: '', note: '', maxUses: 5, days: 14, link: '', linkKind: '' },
   testTo: '',
   price: null,
   errors: {},
@@ -126,18 +126,17 @@ export function dayLabel(day, withYear) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' });
 }
 
-/** The sections of the console, in page order. */
-export const SECTIONS = [
-  { id: 'summary', label: 'Summary', icon: 'info' },
-  { id: 'setup', label: 'Setup steps', icon: 'list' },
-  { id: 'status', label: 'Status', icon: 'refresh' },
-  { id: 'usage', label: 'Usage and cost', icon: 'message' },
-  { id: 'accounts', label: 'Accounts', icon: 'user' },
-  { id: 'settings', label: 'Site settings', icon: 'settings' },
-  { id: 'keys', label: 'Keys and connections', icon: 'lock' },
-  { id: 'invites', label: 'Invitations', icon: 'link' },
-  { id: 'test', label: 'Test account', icon: 'phone' },
-  { id: 'tools', label: 'Tools', icon: 'bell' },
+/** The pages of the console, in the order of the navigation. */
+export const PAGES = [
+  { id: 'overview', label: 'Overview', icon: 'info', group: '', desc: 'How the site is doing, and what is left to set up.' },
+  { id: 'accounts', label: 'Accounts', icon: 'user', group: 'People', desc: 'Every account, by an internal id and its dates.' },
+  { id: 'invites', label: 'Invitations', icon: 'link', group: 'People', desc: 'Links and words that let people sign up while sign-up is by invitation, and accounts for one number.' },
+  { id: 'usage', label: 'Usage and cost', icon: 'message', group: 'Texting', desc: 'Texts and sign-in codes against the limits, what they cost, and the last 30 days.' },
+  { id: 'simulator', label: 'Text simulator', icon: 'phone', group: 'Texting', desc: 'Try sign-up and every text command from a made-up number. Nothing is sent and nothing is charged.' },
+  { id: 'settings', label: 'Site settings', icon: 'settings', group: 'Setup', desc: 'Who may sign up, the switches for texting, and the limits that cap the bill.' },
+  { id: 'keys', label: 'Keys and connections', icon: 'lock', group: 'Setup', desc: 'Telnyx for texts, RCS, and Google Calendar. Keys are write-only.' },
+  { id: 'test', label: 'Test account', icon: 'calendar', group: 'Tools', desc: 'A made-up household for trying every feature. It never texts a real phone.' },
+  { id: 'tools', label: 'Tools', icon: 'bell', group: 'Tools', desc: 'A test text to your own phone, and the public pages.' },
 ];
 
-export const sectionLabel = id => (SECTIONS.find(s => s.id === id) || { label: id }).label;
+export const sectionLabel = id => (PAGES.find(p => p.id === id) || { label: id }).label;

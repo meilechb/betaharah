@@ -580,3 +580,74 @@ describe('the Check buttons', () => {
     expect((await op.post('/api/admin/check/rcs')).json.result).toMatchObject({ ok: false, agentStatus: 'REJECTED' });
   });
 });
+
+describe('invitation words and the text simulator', () => {
+  it('makes a word for JOIN, lists it with the other invitations, and cancels it the same way', async () => {
+    const op = await site({ config: { signup: 'invite' } });
+    const made = await op.post('/api/admin/invite-words', { word: 'Spring26', days: 3, maxUses: 2, note: 'shul' });
+    expect(made.status).toBe(200);
+    expect(made.json.word).toBe('SPRING26');
+    const inv = made.json.state.invites;
+    expect(inv).toHaveLength(1);
+    expect(inv[0]).toMatchObject({ kind: 'signup', note: 'shul', maxUses: 2, uses: 0, expiresAt: START + 3 * DAY });
+    // only a fingerprint is kept: the word itself is not in the state
+    expect(JSON.stringify(made.json.state)).not.toContain('SPRING26');
+    const again = await op.post('/api/admin/invite-words', { word: 'spring26' });
+    expect(again.status).toBe(400);
+    expect(again.json.error).toContain('already in use');
+    const bad = await op.post('/api/admin/invite-words', { word: 'ab' });
+    expect(bad.status).toBe(400);
+    expect(bad.json.field).toBe('word');
+    expect((await op.post('/api/admin/invite-words', { word: 'Winter27', days: 91 })).json.field).toBe('days');
+    expect((await op.del(`/api/admin/invites/${inv[0].id}`)).json.invites).toEqual([]);
+    expect((await new Client().post('/api/admin/invite-words', { word: 'Summer26' })).status).toBe(401);
+    expect((await op.post('/api/admin/invite-words', { word: 'Summer26' }, { header: false })).status).toBe(400);
+  });
+
+  it('runs a complete sign-up by text from a made-up number, and sends nothing', async () => {
+    const op = await site({ sms: false });
+    const say = async (text: string, from = '+17325550150') => {
+      const r = await op.post('/api/admin/simulate', { from, text });
+      expect(r.status, JSON.stringify(r.json)).toBe(200);
+      return r.json;
+    };
+    const hello = await say('Hi');
+    expect(hello.outcome).toBe('replied');
+    expect(hello.replies[0].suggestions).toEqual([{ label: 'Join', send: 'JOIN' }]);
+    const joined = await say('JOIN');
+    expect(joined.outcome).toBe('created');
+    expect(typeof joined.householdId).toBe('string');
+    expect((await say('08701')).replies.map((r: any) => r.text)[0]).toContain('Lakewood, NJ 08701');
+    expect((await say('A')).outcome).toBe('conversed');
+    expect((await say('1 11/19 day')).replies[0].text).toMatch(/^Recorded: flow/);
+    const menu = await say('MENU');
+    expect(menu.replies[0].text).toMatch(/^Words:/);
+    expect(world.telnyx.sent).toEqual([]);
+    // the account it made is a test account, listed among the accounts
+    const list = (await op.get('/api/admin/accounts')).json.accounts;
+    expect(list.map((a: any) => a.id)).toContain(joined.householdId);
+    // deleted by texting DELETE ACCOUNT
+    await say('DELETE ACCOUNT');
+    const gone = await say('YES');
+    expect(gone.householdId).toBeNull();
+    expect((await op.get('/api/admin/accounts')).json.accounts.map((a: any) => a.id)).not.toContain(joined.householdId);
+  });
+
+  it('refuses a real number, and needs the operator', async () => {
+    const op = await site();
+    const real = await op.post('/api/admin/simulate', { from: '+17324440101', text: 'JOIN' });
+    expect(real.status).toBe(400);
+    expect(real.json.error).toContain('reserved for fiction');
+    expect((await op.post('/api/admin/simulate', { from: 'abc', text: 'JOIN' })).json.field).toBe('from');
+    expect((await op.post('/api/admin/simulate', { from: '+17325550150', text: '' })).json.field).toBe('text');
+    expect((await op.post('/api/admin/simulate', { from: '+17325550150', text: 'x'.repeat(321) })).status).toBe(400);
+    expect((await new Client().post('/api/admin/simulate', { from: '+17325550150', text: 'JOIN' })).status).toBe(401);
+    expect(world.telnyx.sent).toEqual([]);
+  });
+
+  it('the state shows the caps for texting with numbers that have no account', async () => {
+    const op = await site();
+    const caps = (await op.get('/api/admin/state')).json.textCaps;
+    expect(caps).toEqual({ strangerRepliesPerNumber: 1, strangerRepliesPerDay: 50, textSignupsPerDay: 25, strangerRepliesToday: 0, textSignupsToday: 0 });
+  });
+});

@@ -1,5 +1,5 @@
 /* Usage and cost: counts today and this month against the limits, an estimate in dollars, and 30 days of history. */
-import { button, card, cardSection, h, selectField, setFieldError, skeleton, textField } from '/app/lib.js';
+import { button, card, h, selectField, setFieldError, skeleton, textField } from '/app/lib.js';
 import { call, dayLabel, dollars, draft, num, run, S, saved } from '../state.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -9,7 +9,7 @@ let historyError = '';
 let loading = false;
 let series = 'textsSent';
 
-const SERIES = [
+export const SERIES = [
   { value: 'textsSent', label: 'Texts sent', unit: ['text sent', 'texts sent'] },
   { value: 'codesSent', label: 'Sign-in codes', unit: ['sign-in code', 'sign-in codes'] },
   { value: 'textsReceived', label: 'Texts received', unit: ['text received', 'texts received'] },
@@ -19,9 +19,12 @@ const SERIES = [
 
 const redrawMe = () => window.dispatchEvent(new CustomEvent('admin:section', { detail: 'usage' }));
 
+/** The loaded history ({ days }), or null; and its error. */
+export const historyState = () => ({ history, error: historyError });
+
 /** Loads the 30-day history (once, or again with force). */
 export async function loadHistory(force) {
-  if (loading || (history && !force)) return;
+  if (loading || ((history || historyError) && !force)) return;
   loading = true;
   try {
     history = await call('GET', '/api/admin/history?days=30');
@@ -42,7 +45,7 @@ function svg(tag, attrs, ...children) {
 }
 
 /** A bar chart of one count per day, drawn with DOM calls. Hovering or focusing a bar shows its value above the chart. */
-function chart(days, key, unit) {
+export function chart(days, key, unit) {
   // A narrower drawing on a phone, so that its text stays readable.
   const W = window.innerWidth < 640 ? 340 : 640;
   const H = window.innerWidth < 640 ? 200 : 180;
@@ -171,39 +174,42 @@ function priceForm() {
   );
 }
 
-export function usageSection() {
+export function usagePage() {
   const t = S.counts.today;
   const m = S.counts.month;
   const price = S.notes.centsPerText;
   const cost = (m.textsSent + m.textsReceived) * price;
-  const ofCap = (n, cap) => num(n) + ' of at most ' + num(cap);
-  return card(
-    { title: 'Usage and cost', icon: 'message', intro: 'Every text costs money, sign-in codes included. The limits under Site settings cap the bill. Days and months here begin at midnight UTC, which is 7 PM in New York in winter and 8 PM in summer; the limits count the same way.' },
+  const row = (label, today, month) => h('tr', {}, h('th', { scope: 'row' }, label), h('td', { class: 'n', 'data-label': 'Today' }, today), h('td', { class: 'n', 'data-label': 'This month' }, month));
+  return [
     h(
       'div',
-      { class: 'table-scroll' },
-      h(
-        'table',
-        { class: 'usage' },
-        h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, ''), h('th', { scope: 'col', class: 'n' }, 'Today'), h('th', { scope: 'col', class: 'n' }, 'This month'))),
+      { class: 'grid-2 usage-top' },
+      card(
+        { title: 'Today and this month', icon: 'calendar' },
         h(
-          'tbody',
-          {},
-          h('tr', {}, h('th', { scope: 'row' }, 'Texts sent'), h('td', { class: 'n' }, num(t.textsSent)), h('td', { class: 'n' }, ofCap(m.textsSent, S.config.monthlyMessageLimit))),
-          h('tr', {}, h('th', { scope: 'row' }, 'Of those, sign-in codes'), h('td', { class: 'n' }, ofCap(S.usage.codesToday, S.config.dailyCodeLimit)), h('td', { class: 'n' }, num(m.codesSent))),
-          h('tr', {}, h('th', { scope: 'row' }, 'Texts received'), h('td', { class: 'n' }, num(t.textsReceived)), h('td', { class: 'n' }, num(m.textsReceived))),
-          h('tr', {}, h('th', { scope: 'row' }, 'New accounts'), h('td', { class: 'n' }, num(t.signups)), h('td', { class: 'n' }, num(m.signups))),
-          h('tr', {}, h('th', { scope: 'row' }, 'Deleted accounts'), h('td', { class: 'n' }, num(t.deletions)), h('td', { class: 'n' }, num(m.deletions))),
+          'table',
+          { class: 'data-table compact usage' },
+          h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Count'), h('th', { scope: 'col', class: 'n' }, 'Today'), h('th', { scope: 'col', class: 'n' }, 'This month'))),
+          h(
+            'tbody',
+            {},
+            row('Texts sent', num(t.textsSent), num(m.textsSent) + ' of ' + num(S.config.monthlyMessageLimit)),
+            row('Of those, sign-in codes', num(S.usage.codesToday) + ' of ' + num(S.config.dailyCodeLimit), num(m.codesSent)),
+            row('Texts received', num(t.textsReceived), num(m.textsReceived)),
+            row('New accounts', num(t.signups), num(m.signups)),
+            row('Deleted accounts', num(t.deletions), num(m.deletions)),
+          ),
         ),
+        h('p', { class: 'help' }, 'Days and months begin at midnight UTC (7 PM in New York in winter, 8 PM in summer), as the limits do.'),
+      ),
+      card(
+        { title: 'Cost', icon: 'download' },
+        h('div', { class: 'big-number' }, dollars(cost)),
+        h('p', { class: 'muted' }, 'Estimated cost of texts this month: ' + num(m.textsSent + m.textsReceived) + ' texts sent and received, at ' + price + (price === 1 ? ' cent' : ' cents') + ' each. Telnyx also charges about $1 a month for the number.'),
+        h('p', { class: 'muted' }, 'At the monthly limit of ' + num(S.config.monthlyMessageLimit) + ' texts, sending alone would cost about ' + dollars(S.config.monthlyMessageLimit * price) + '.'),
+        priceForm(),
       ),
     ),
-    h(
-      'p',
-      { class: 'cost' },
-      h('strong', {}, 'Estimated cost of texts this month: ' + dollars(cost) + '. '),
-      num(m.textsSent + m.textsReceived) + ' texts sent and received, at ' + price + (price === 1 ? ' cent' : ' cents') + ' each. Telnyx also charges about $1 a month for the number. At the monthly limit, sending alone would cost about ' + dollars(S.config.monthlyMessageLimit * price) + '.',
-    ),
-    priceForm(),
-    cardSection({ title: 'The last 30 days' }, historyPart()),
-  );
+    card({ title: 'The last 30 days', icon: 'list' }, historyPart()),
+  ];
 }

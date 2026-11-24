@@ -131,33 +131,46 @@ function save(form, btn) {
   });
 }
 
-export function settingsSection() {
+/** The fixed caps on texting with numbers that have no account, with today's counts. */
+function textCaps() {
+  const t = S.textCaps;
+  return h(
+    'div',
+    { class: 'caps' },
+    h('p', { class: 'help' }, 'Fixed limits on texts with numbers that have no account. They keep wrong numbers and strangers from costing much:'),
+    h(
+      'ul',
+      { class: 'small' },
+      h('li', {}, 'At most ' + num(t.strangerRepliesPerNumber) + ' reply in 24 hours to one number without an account.'),
+      h('li', {}, 'At most ' + num(t.strangerRepliesPerDay) + ' such replies a day for the whole site. Today: ' + num(t.strangerRepliesToday) + '.'),
+      h('li', {}, 'At most ' + num(t.textSignupsPerDay) + ' accounts created by text a day. Today: ' + num(t.textSignupsToday) + '.'),
+    ),
+    h('p', { class: 'help' }, 'While sign-up is closed, or this switch is off, a number without an account gets no reply at all.'),
+  );
+}
+
+export function settingsPage() {
   const c = draft.config;
   const e = draft.errors || {};
   const warnings = lockouts(c);
-  return card(
+  return h(
+    'form',
     {
-      title: 'Site settings',
-      icon: 'settings',
-      tag: 'form',
-      className: 'settings',
-      attrs: {
-        novalidate: true,
-        onsubmit: ev => {
-          ev.preventDefault();
-          save(ev.currentTarget, ev.submitter || ev.currentTarget.querySelector('button[type=submit]'));
-        },
+      class: 'settings-form',
+      novalidate: true,
+      onsubmit: ev => {
+        ev.preventDefault();
+        save(ev.currentTarget, ev.submitter || ev.currentTarget.querySelector('button[type=submit]'));
       },
-      intro: 'Nothing here is saved until you press Save settings at the bottom.',
     },
     e._form ? alert({ kind: 'bad', role: 'alert' }, e._form) : null,
-    cardSection(
-      { title: 'Contact on the Help, Privacy and Terms pages' },
+    card(
+      { title: 'Contact on the public pages', icon: 'user', intro: 'Shown on the Help, Privacy and Terms pages.' },
       textField({ id: 'cname', label: 'Your name, or a name for the site', maxlength: 80, value: c.contactName, error: e.contactName, help: 'Shown as the person who runs the site. The toll-free verification reviewers read these pages.', oninput: ev => ((c.contactName = ev.target.value), touch()) }),
       textField({ id: 'cemail', label: 'Contact email (public, optional)', type: 'email', maxlength: 120, value: c.contactEmail, error: e.contactEmail, help: 'Anyone can read it on those pages. Leave it empty to show none.', oninput: ev => ((c.contactEmail = ev.target.value), touch()) }),
     ),
-    cardSection(
-      { title: 'Who may create an account' },
+    card(
+      { title: 'Who may create an account', icon: 'link' },
       selectField({
         id: 'signup',
         label: 'Sign-up',
@@ -177,13 +190,14 @@ export function settingsSection() {
       checkRow({
         id: 'textSignup',
         label: 'People can create an account by texting JOIN to the number',
-        help: 'Follows the sign-up rule above: with "Nobody" it does nothing, and with invitations only it does nothing for a number without one. The number is then shown on the sign-in page.',
+        help: 'The account is made by text and set up by text (ZIP code, customs, recent dates); no website is needed. It follows the sign-up rule above: with "Nobody" it does nothing, and with invitations only the person texts JOIN and an invitation word (see Invitations). While it is on, the number is shown on the sign-in page.',
         checked: c.textSignup,
         onchange: ev => ((c.textSignup = ev.target.checked), touch()),
       }),
+      textCaps(),
     ),
-    cardSection(
-      { title: 'Text messages' },
+    card(
+      { title: 'Text messages', icon: 'message' },
       checkRow({
         id: 'smsEnabled',
         label: 'Send text messages',
@@ -208,10 +222,10 @@ export function settingsSection() {
         },
       }),
     ),
-    cardSection({ title: 'Limits that cap the bill' }, h('p', { class: 'help' }, 'Every text costs you about a cent. Past a limit, nothing is sent.'), LIMITS.map(l => limitRow(l, e[l.key]))),
+    card({ title: 'Limits that cap the bill', icon: 'alert', intro: 'Every text costs you about a cent. Past a limit, nothing is sent.' }, LIMITS.map(l => limitRow(l, e[l.key]))),
     warnings.length
       ? alert({ kind: 'warn', title: 'These changes keep people out' }, h('ul', {}, warnings.map(w => h('li', {}, w))))
       : null,
-    h('div', { class: 'actions' }, button({ label: 'Save settings', variant: 'primary', type: 'submit' }), draft.configDirty ? h('span', { class: 'small muted' }, 'You have changes that are not saved.') : null),
+    h('div', { class: 'save-bar' }, h('span', { class: 'small muted' }, draft.configDirty ? 'You have changes that are not saved.' : 'Nothing here is saved until you press Save settings.'), button({ label: 'Save settings', variant: 'primary', type: 'submit' })),
   );
 }

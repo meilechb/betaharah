@@ -68,7 +68,7 @@ function telnyxCheck() {
   return row('Telnyx keys', c.ok ? 'ok' : 'bad', c.ok ? 'Checked' : 'Problem', 'Last check, ' + ago(c.at, S.now) + ': ' + c.message);
 }
 
-export function statusSection() {
+export function statusCard() {
   return card(
     { title: 'Status', icon: 'refresh', intro: 'Whether each part of the site is working. ' + num(S.totals.households) + ' ' + (S.totals.households === 1 ? 'account' : 'accounts') + ' and ' + plural(S.totals.phones, 'phone') + ' in all.' },
     h('ul', { class: 'health' }, texting(), telnyxCheck(), job(), inbound(), google(), rcs()),
