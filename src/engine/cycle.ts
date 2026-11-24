@@ -3,7 +3,10 @@
  *
  * A niddah period begins with a flow or a stain and ends with immersion.
  * Within it: the minimum wait, the hefsek taharah, the seven clean days,
- * and the night of immersion.
+ * and the night of immersion. Once a hefsek taharah is recorded and the
+ * seven clean days are complete, she is taken to have immersed on the night
+ * of immersion: nothing has to record it. An immersion that is recorded
+ * closes the period on its own night.
  */
 import { isNoImmersionNight } from './holidays';
 import { onahIndex, type Onah } from './onah';
@@ -42,12 +45,12 @@ export type LogWarningCode =
   /** A flow or stain after the hefsek cancelled the count. */
   | 'count_cancelled_by_flow'
   /**
-   * A flow or stain came when the period before it was never closed in the
-   * record: its count was complete (or long overdue) and no immersion is
-   * recorded. It is taken as the start of a new period, with the days of
+   * A flow or stain came when the period before it has no hefsek taharah
+   * recorded, on or after the night that would have been its first night of
+   * immersion. It is taken as the start of a new period, with the days of
    * waiting, which is the stricter reading of an incomplete record.
    */
-  | 'period_began_without_immersion';
+  | 'period_began_without_hefsek';
 
 export interface LogWarning {
   entryId: string;
@@ -74,19 +77,20 @@ export interface NiddahPeriod {
   mikvahNightAbs: number | null;
   /** Nights skipped because immersion is not done on them. */
   postponedOver: number[];
-  /** Hebrew date on whose night she immersed, or null while the period is open. */
+  /** Hebrew date on whose night an immersion was recorded, or null. */
   mikvahDoneAbs: number | null;
   mikvahId: string | null;
   /**
-   * True when the next period began with no immersion recorded for this one
-   * (see 'period_began_without_immersion'). The period is then not open any
-   * more, although `mikvahDoneAbs` is null.
+   * True when the next period began with no recorded immersion for this one:
+   * after its night of immersion (she is taken to have immersed then), or,
+   * with no hefsek taharah, as 'period_began_without_hefsek' says. The
+   * period is then not open any more, although `mikvahDoneAbs` is null.
    */
-  endedWithoutImmersion: boolean;
+  closedByNextPeriod: boolean;
 }
 
 export interface ProcessedLog {
-  /** In order; only the last can be open (mikvahDoneAbs === null and not endedWithoutImmersion). */
+  /** In order; only the last can be open (mikvahDoneAbs === null and not closedByNextPeriod). */
   periods: NiddahPeriod[];
   /** Flows that count for vesatot, in order, with their entry ids. */
   flows: Array<FlowRecord & { id: string }>;
@@ -119,10 +123,11 @@ export function deriveCount(
 }
 
 /**
- * Whether a flow or stain in `onah` finds the open period `p` left unclosed
- * in the record, so that it begins a new period rather than continuing `p`:
+ * Whether a flow or stain in `onah` comes after the open period `p` is over,
+ * so that it begins a new period rather than continuing `p`:
  *   - `p` has a hefsek taharah and its seven clean days are over (the flow
- *     is on the first night she could have immersed, or later); or
+ *     is on the first night she could have immersed, or later: she is taken
+ *     to have immersed); or
  *   - `p` has no hefsek taharah at all, and the flow comes on or after the
  *     night that would have been the earliest night of immersion had the
  *     hefsek been done on the first day it could be.
@@ -131,6 +136,15 @@ export function deriveCount(
 function unclosed(p: NiddahPeriod, onah: Onah, minWaitDays: number): boolean {
   if (p.earliestMikvahAbs !== null) return onah.abs >= p.earliestMikvahAbs;
   return onah.abs >= p.start.abs + minWaitDays + 7;
+}
+
+/**
+ * Whether an onah comes after the night of immersion of `p`, which has a
+ * hefsek taharah: she is taken to have immersed on that night, so a hefsek
+ * or a broken count recorded after it has no period to belong to.
+ */
+function afterImmersionNight(p: NiddahPeriod, onah: Onah): boolean {
+  return p.mikvahNightAbs !== null && onahIndex(onah) > onahIndex({ abs: p.mikvahNightAbs, part: 'night' });
 }
 
 /** Where an entry falls in time: an onah index, then an order within the onah. */
@@ -178,11 +192,11 @@ export function processLog(entries: readonly LogEntry[], settings: HalachicSetti
       case 'flow':
       case 'stain': {
         if (open && unclosed(open, e.onah, minWait)) {
-          // The record of the period before is incomplete: no immersion although its count was over.
-          // Nothing says that she had not immersed, so this is a new period and the wait begins again.
-          open.endedWithoutImmersion = true;
+          // With a hefsek and a complete count, she is taken to have immersed: this is a new period.
+          // With no hefsek recorded, the record is incomplete: this is taken as a new period too, and said.
+          if (open.hefsekAbs === null) warnings.push({ entryId: e.id, code: 'period_began_without_hefsek' });
+          open.closedByNextPeriod = true;
           open = null;
-          warnings.push({ entryId: e.id, code: 'period_began_without_immersion' });
         }
         if (!open) {
           open = {
@@ -193,7 +207,7 @@ export function processLog(entries: readonly LogEntry[], settings: HalachicSetti
             hefsekId: null,
             mikvahDoneAbs: null,
             mikvahId: null,
-            endedWithoutImmersion: false,
+            closedByNextPeriod: false,
             ...deriveCount(e.onah.abs, null, minWait),
           };
           periods.push(open);
@@ -210,7 +224,7 @@ export function processLog(entries: readonly LogEntry[], settings: HalachicSetti
         break;
       }
       case 'hefsek': {
-        if (!open) {
+        if (!open || afterImmersionNight(open, { abs: e.abs, part: 'day' })) {
           warnings.push({ entryId: e.id, code: 'hefsek_without_niddah' });
         } else if (e.abs < open.start.abs) {
           warnings.push({ entryId: e.id, code: 'hefsek_before_start' });
@@ -221,7 +235,7 @@ export function processLog(entries: readonly LogEntry[], settings: HalachicSetti
         break;
       }
       case 'broken': {
-        if (!open || open.hefsekAbs === null) {
+        if (!open || open.hefsekAbs === null || afterImmersionNight(open, e.onah)) {
           warnings.push({ entryId: e.id, code: 'broken_without_count' });
         } else {
           setHefsek(open, null, null);

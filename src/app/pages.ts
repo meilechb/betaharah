@@ -126,7 +126,7 @@ const COMMANDS: Array<[string, string]> = [
   ['1', 'A flow began now'],
   ['2', 'Hefsek taharah done today'],
   ['3', 'The count of clean days was broken now'],
-  ['4', 'Immersed tonight'],
+  ['4', 'Immersed tonight (optional)'],
   ['5', 'A stain that makes her niddah was found now'],
   ['9', 'Where things stand'],
   ['0', 'Undo the last entry (within 48 hours)'],
@@ -152,7 +152,7 @@ export function helpPage(site: Site): string {
   ${googleReady(site) ? '<li><strong>Sign in with Google, or with your phone number.</strong> With Google, nothing else is asked. With a phone, you get a six-digit code by text and type it in. If you like, you can also set a password for a phone under Settings.</li>' : '<li><strong>Sign in with your phone number.</strong> You get a six-digit code by text message and type it in. There is nothing else to fill in. If you like, you can also set a password under Settings, and sign in with that.</li>'}
   <li><strong>Choose your location.</strong> Sunrise, sunset and nightfall are calculated for it.</li>
   <li><strong>Review your customs.</strong> Every point on which customs differ is a setting. Until you save them, the calendar uses the stricter option for each. Go over them with your rav.</li>
-  <li><strong>Record the most recent dates</strong>: when the last period began, and the hefsek taharah and immersion that followed.</li>
+  <li><strong>Record the most recent dates</strong>: when the last period began, and its hefsek taharah. Once the seven clean days are over, the calendar takes it that she immersed on the mikvah night.</li>
   <li><strong>Optional: put it in your calendar and turn on text reminders</strong>, both under Settings.</li>
 </ol>`,
       },

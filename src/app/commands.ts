@@ -2,7 +2,8 @@
  * Text-message commands.
  *
  *   1  a flow began            2  hefsek taharah done
- *   3  the count was broken    4  immersed
+ *   3  the count was broken    4  immersed (optional: the calendar takes it
+ *                                 that she immersed on the mikvah night)
  *   5  a stain (niddah without a flow)
  *   9  status                  0  undo the last entry
  *
@@ -114,7 +115,7 @@ export function parseCommand(text: string): ParsedCommand {
 }
 
 export const HELP_TEXT =
-  '1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm).';
+  '1 flow, 2 hefsek, 3 count broken, 4 mikvah (optional), 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm).';
 
 export interface ResolveContext {
   now: number;

@@ -199,6 +199,7 @@ details.more {
 details.advanced > summary,
 details.more > summary,
 details.legend-box > summary,
+details.legend-more > summary,
 .up-details > summary {
   cursor: pointer;
   color: var(--accent);
@@ -808,6 +809,10 @@ table.month .day .mk.wide {
 .legend-groups ul.legend-days {
   grid-column: 1 / -1;
   color: var(--muted);
+}
+.legend-groups details.legend-more {
+  grid-column: 1 / -1;
+  font-size: var(--text-sm);
 }
 ul.legend {
   list-style: none;

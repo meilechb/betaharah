@@ -3,7 +3,8 @@
  * what was agreed for the sign-in form (the toll-free filing describes it),
  * for Google sign-in, and for finding the way out.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (path: string): string => readFileSync(path, 'utf8');
@@ -100,5 +101,35 @@ describe('public copy and the dashboard shell', () => {
   it('document pages stay a readable measure, and buttons are large enough to tap', () => {
     expect(css).toMatch(/max-width:\s*72[08]px/);
     expect(css).toMatch(/--tap:\s*44px/);
+  });
+});
+
+/** Every file under a folder, with its path. */
+function files(dir: string): string[] {
+  return readdirSync(dir).flatMap(name => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? files(path) : [path];
+  });
+}
+
+describe('immersion is assumed, never asked about', () => {
+  it('no text, page or event asks whether she immersed or says that no immersion is recorded', () => {
+    const sources = [...files('src'), ...files('public'), 'docs/TEXTING.md', 'docs/OPERATOR.md'].filter(f => /\.(ts|js|html|md)$/.test(f));
+    const asked = [
+      /no immersion (is )?recorded/i,
+      /immersion not recorded/i,
+      /no M recorded/,
+      /Reply 4 (after|if)/,
+      /If she immersed/i,
+      /She immersed (tonight|on the evening)/,
+      /Record that \{?immersion/i,
+      /mikvah_confirm/,
+      /mikvah_not_recorded/,
+    ];
+    for (const file of sources) {
+      // settings.ts maps the old kind of reminder, as stored in accounts saved before, to the new one
+      const text = file === join('src', 'app', 'settings.ts') ? read(file).replace(/mikvah_confirm/g, '') : read(file);
+      for (const re of asked) expect(re.test(text), `${file}: ${re}`).toBe(false);
+    }
   });
 });

@@ -58,10 +58,10 @@ export const CUSTOMS_LATER = 'Customs can be reviewed on the website, under Cust
 export const RECENT_ASK =
   'Step 3 of 3: recent dates. Send the start of the most recent period: 1, the date, and day or night, e.g. 1 11/22 night (the night that begins that evening). Or reply SKIP.';
 
-export const RECENT_NEXT = 'If they followed: send 2 and the hefsek date (2 11/26), and 4 and the evening of immersion (4 12/3). Reply DONE when finished.';
+export const RECENT_NEXT = 'If the hefsek was done: send 2 and its date, e.g. 2 11/26. Reply DONE when finished.';
 
 export const SETUP_DONE =
-  'Setup is finished. From now on text 1 when a flow begins, 2 after the hefsek, 4 after immersion, 9 for status. Reminders are off until you text REMINDERS ON. MENU lists everything.';
+  'Setup is finished. From now on text 1 when a flow begins, 2 after the hefsek, 9 for status. Reminders are off until you text REMINDERS ON. MENU lists everything.';
 
 export function joinedText(others: string): string {
   return `This phone is now on the account${others}. Text 9 for status, MENU for everything. Reminders are off for this phone until you text REMINDERS ON.`;
@@ -140,7 +140,7 @@ export const REMINDERS_OFF = 'Changed: reminders are off for this phone. Replies
 export const REMINDERS_ALREADY_OFF = 'Reminders are already off for this phone. REMINDERS ON turns them on.';
 export const OPTED_OUT = 'This phone replied STOP earlier. Reply START first, then REMINDERS ON.';
 
-export const KIND_NAMES = ['hefsek', 'morning bedikah', 'afternoon bedikah', 'mikvah night', 'immersion not recorded', 'onah'] as const;
+export const KIND_NAMES = ['hefsek', 'morning bedikah', 'afternoon bedikah', 'mikvah night', 'book the mikvah', 'onah'] as const;
 
 export function wordingChanged(style: 'plain' | 'discreet'): string {
   return style === 'discreet'

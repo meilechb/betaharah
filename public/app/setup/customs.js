@@ -161,7 +161,7 @@ export function customsView() {
     intro: S.halachic.confirmedAt ? null : h('p', { class: 'muted small' }, '“Used now” marks the option the calendar uses until the customs are confirmed.'),
     body: [
       g.keys.map(k => (k === 'tzeit' ? tzeitGroup() : byKey[k] ? choiceGroup(byKey[k]) : null)),
-      last ? h('p', { class: 'muted small setup-confirm-note' }, 'Saving marks these customs as confirmed. They can still be changed at any time, in the Customs tab.') : null,
+      last ? h('p', { class: 'muted small setup-confirm-note' }, 'They can be changed later in the Customs tab.') : null,
       error ? h('p', { class: 'setup-error', role: 'alert', id: 'setup-customs-error', tabindex: '-1' }, icon('alert', { size: 'sm' }), h('span', {}, error)) : null,
     ],
     back: () => {

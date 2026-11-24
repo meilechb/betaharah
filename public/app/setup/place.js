@@ -247,7 +247,7 @@ export function placeView() {
 
   return screen({
     title: 'Where do you live?',
-    intro: t('The times of {sunset} and {nightfall} depend on the place, so the calendar needs to know where you are.'),
+    intro: t('The times of {sunset} and {nightfall} are worked out for it.'),
     body: [
       zipPart,
       h('h3', { class: 'setup-or' }, st.zipUnavailable ? 'Choose from the list' : 'Or choose from the list'),
@@ -281,7 +281,7 @@ export function placeView() {
           ontoggle: e => (st.coordsOpen = e.target.open),
         },
         h('summary', {}, icon('chevron-right', { size: 'sm' }), 'Enter coordinates instead'),
-        h('p', { class: 'help' }, 'For a place not on the list. Decimal degrees, as a map app shows them.'),
+        h('p', { class: 'help' }, 'Decimal degrees, as a map app shows them.'),
         h(
           'div',
           { class: 'coords-grid' },

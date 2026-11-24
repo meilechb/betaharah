@@ -39,27 +39,33 @@ Source: Yoatzot, "Minimum Wait", "Hefsek Taharah", "Seven Clean Days".
   only after the wait, and the entry is marked "ask a rav".
 - **Seven clean days** begin the night after the hefsek. Reminders are for a
   bedikah each morning and each afternoon before sunset; days 1 and 7 are
-  marked as required.
+  marked as required. The morning after the hefsek is recorded, a reminder
+  to book the mikvah names the mikvah night (none if that morning is already
+  the day of the mikvah night).
 - **A flow or stain after the hefsek**, while the seven clean days are still
   being counted, or a "count broken" entry, cancels the count. A new hefsek
   is needed. The minimum wait is not started again.
-- **A flow or stain when the period before it was never closed in the
-  record.** The calendar cannot know whether she immersed and it was not
-  recorded, or she did not immerse. It takes the stricter reading: the flow
-  begins a new period, and the days of waiting are counted again from it.
-  This applies when (a) the earlier period has a hefsek and its seven clean
-  days were over (the flow is on the first night she could have immersed, or
-  later) and no immersion is recorded; or (b) the earlier period has no
-  hefsek recorded at all and the flow comes on or after what would have been
-  its earliest night of immersion (the days of waiting plus seven). The
-  earlier period keeps what was recorded for it (its hefsek and clean days
-  stay on the calendar; its mikvah night is shown as "no immersion
-  recorded"). The dashboard says so and asks for the immersion to be
-  recorded if there was one, and to ask a rav if she had not immersed (a
-  woman who had not immersed may not need the days of waiting again; the
-  calendar does not decide that). Recording the immersion afterwards, with
-  its own date, closes the earlier period and removes the note. Before (a)
-  and (b), bleeding continues the same period as above.
+- **Immersion is assumed (owner's instruction).** Once a hefsek taharah is
+  recorded and the seven clean days are complete, the calendar takes it that
+  she immersed on the mikvah night. Nothing asks whether she went. On the
+  mikvah night the status is "Mikvah night"; from the next sunrise it is
+  tehorah. Recording an immersion stays possible and optional: a recorded one
+  closes the period on its own night (a later night, if she went later). A
+  hefsek or a "count broken" dated after the mikvah night has no period to
+  belong to and is refused.
+- **A flow or stain after the count was over** begins a new period, with
+  its own days of waiting: (a) the earlier period has a hefsek and its seven
+  clean days are over (the flow is on the first night she could have
+  immersed, or later): she is taken to have immersed, so this is simply the
+  next period, with no note; or (b) the earlier period has no hefsek
+  recorded at all and the flow comes on or after what would have been its
+  earliest night of immersion (the days of waiting plus seven). In (b) the
+  record is incomplete; the calendar takes the stricter reading (a new
+  period, the wait counted again) and says in one line that no hefsek
+  taharah was recorded for the period before. The earlier period keeps what
+  was recorded for it (in (a), its hefsek, clean days and mikvah night stay
+  on the calendar as they were). Before (a) and (b), bleeding continues the
+  same period as above.
 - **A second hefsek** replaces the first (this can only make immersion
   later).
 - **Immersion** is on the night after the seventh day, after nightfall

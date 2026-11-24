@@ -17,7 +17,7 @@ code; it is the only other document you need.
 | `public/app/views/today.js`, `log.js`, `customs.js`, `shared.js` | The tabs, and pieces two tabs use (`alertsBlock`, `termsToggle`, `saveApp`). | Dashboard agent |
 | `public/app/views/calendar.js` | Today's month calendar: the month, the legend (always shown, in two groups), and the chosen day with its one-click buttons and what is marked on it. | Dashboard agent |
 | `public/app/views/record.js` | Recording, in one place: `recordNow(body, button, where)` for one-click entries (the next step, a day's buttons), `notice(where)` for the server's confirmation with Undo or its refusal, `openRecord(preset, openerId)` and `recordPanel()` for the full form on Today, `recordCard()` for "Add a past entry" on the Log. | Dashboard agent |
-| `public/app/views/marks.js` | The marks of the kinds of days, used by the dashboard and the console's calculation test: `mark()` (H✓/M✓ recorded, H? the hefsek day not recorded, outlined M a mikvah night, dashed expected), `entryMark(kind)`, `legend()`, and the words beside a title: `plainTitle()` (no " (projected)"), `stateTag()` ("recorded", "not recorded", "expected"), `spoken()`, `describe()`, `assumption()`. | Dashboard agent |
+| `public/app/views/marks.js` | The marks of the kinds of days, used by the dashboard and the console's calculation test: `mark()` (H✓ a recorded hefsek, M✓ a recorded immersion, H? the hefsek day not recorded, outlined M a mikvah night whether ahead or past, dashed expected), `entryMark(kind)`, `legend()`, and the words beside a title: `plainTitle()` (no " (projected)"), `stateTag()` ("recorded", "not recorded", "expected"), `spoken()`, `describe()`, `assumption()`. | Dashboard agent |
 | `public/app/views/settings/*.js`, `public/app/settings.css` | The Settings tab: `index.js` draws the list of sections (each row with a one-line summary) and the open section; one module per section; `route.js` keeps the open section in the address (`#settings/phones`); `ui.js` has the rows and switches. | Settings |
 | `test/ui/settings.cjs` | The browser run of every Settings section, on the test account and on a new account. | Settings |
 | `public/app/dashboard.css` | Styles for the signed-in tabs. | Dashboard agent |
@@ -90,21 +90,23 @@ rest stays in this order on the right (`.today-layout` in `dashboard.css`).
    and sentence, then the one thing to record next as one primary button
    (`#next-step`), chosen from `S.status.phase`: "A period began" (tehorah);
    "The hefsek taharah was done today" (before the hefsek, by day, once the
-   grid's projected hefsek day has come); "She immersed tonight" (mikvah night);
-   "She immersed on the evening of …" (the mikvah night passed with nothing
-   recorded). The clean days and a postponed immersion have no button. Links
-   open the full form preset: "It began earlier", "On another night",
-   "Record something else". Then today's items, the next onat perishah while
-   tehorah, today's sunset, and the alerts; under the note about a period with
-   no immersion recorded before it, "Record that immersion".
+   grid's projected hefsek day has come). The clean days, a postponed
+   immersion and the mikvah night have no button: nothing asks about the
+   immersion (once the mikvah night is over she is tehorah). Links open the
+   full form preset: "It began earlier", "Record something else". Then
+   today's items, the next onat perishah while tehorah, today's sunset, and
+   the alerts.
 2. **The full form** (`recordPanel` in `record.js`), only after a link opened
    it, with Close. It keeps every choice: any kind, another date, by day, at
    night or a clock time, a note, the vesatot switch.
-3. **Calendar** (`calendar.js`): the month, the legend, and the chosen day.
-   For today or an earlier day, "What happened on this day?" records with one
-   click (`POST /api/entries` with `{ kind, date, part }`), with more under
-   "Other things to add"; then "On this day".
-4. **Coming up**: "Until the immersion" (the hefsek day, the clean days as one
+3. **Calendar** (`calendar.js`): the month, the chosen day, and the legend
+   (one short line per mark; how a day is drawn under a closed "More"). The
+   day's header is one line: date, Hebrew date, sunrise and sunset. For today
+   or an earlier day, "What happened on this day?" records with one click
+   (`POST /api/entries` with `{ kind, date, part }`): flow by day, flow at
+   night, hefsek taharah; stain, count broken and the (optional) immersion
+   are under "Other things to add"; then "On this day".
+4. **Coming up**: "Until the mikvah night" (the hefsek day, the clean days as one
    row, the mikvah night, with the server's assumption when they are
    projected), then "Onot of separation", one row each, with the reasons shown.
    The calendar button on a row shows that day on the calendar.

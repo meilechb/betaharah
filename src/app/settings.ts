@@ -63,7 +63,32 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   boundaryMarginMinutes: 20,
 };
 
-export const REMINDER_KINDS: ReminderKind[] = ['hefsek', 'bedikah_morning', 'bedikah_afternoon', 'mikvah', 'mikvah_confirm', 'onah'];
+export const REMINDER_KINDS: ReminderKind[] = ['hefsek', 'bedikah_morning', 'bedikah_afternoon', 'mikvah', 'mikvah_book', 'onah'];
+
+/**
+ * Kinds of reminder that were renamed or replaced, as stored in accounts
+ * saved before: the question the morning after the mikvah night
+ * ('mikvah_confirm') became the reminder to book the mikvah. Someone who had
+ * the old one on gets the new one.
+ */
+const FORMER_KINDS: Record<string, ReminderKind> = { mikvah_confirm: 'mikvah_book' };
+
+/** A stored list of kinds, with former names mapped to the current ones and anything unknown left out. */
+export function currentKinds(list: unknown): ReminderKind[] {
+  if (!Array.isArray(list)) return [];
+  const out = new Set<ReminderKind>();
+  for (const k of list) {
+    const kind = typeof k === 'string' ? (FORMER_KINDS[k] ?? k) : null;
+    if (kind && (REMINDER_KINDS as string[]).includes(kind)) out.add(kind as ReminderKind);
+  }
+  return [...out];
+}
+
+/** The phones of a stored household, with their kinds of reminder brought up to date. */
+export function currentPhones(list: unknown): PhoneRecord[] {
+  if (!Array.isArray(list)) return [];
+  return (list as PhoneRecord[]).map(p => ({ ...p, reminders: currentKinds(p.reminders) }));
+}
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -119,7 +144,7 @@ export function parsePhoneOptions(input: unknown): Pick<PhoneRecord, 'name' | 'c
   return {
     name: str(o.name, 'name', 40),
     canUpdate: bool(o.canUpdate, 'canUpdate'),
-    reminders: [...new Set(o.reminders.map(r => oneOf(r, 'reminders', REMINDER_KINDS)))],
+    reminders: [...new Set(o.reminders.map(r => oneOf(typeof r === 'string' ? (FORMER_KINDS[r] ?? r) : r, 'reminders', REMINDER_KINDS)))],
   };
 }
 
@@ -148,7 +173,8 @@ function parseReminders(input: unknown): ReminderOptions {
   const hefsek = obj(o.hefsek, 'reminders.hefsek');
   const bedikot = obj(o.bedikot, 'reminders.bedikot');
   const mikvah = obj(o.mikvah, 'reminders.mikvah');
-  const confirm = obj(o.mikvahConfirm, 'reminders.mikvahConfirm');
+  // Saved before the reminder to book the mikvah replaced the question about immersion: its setting, as it was.
+  const book = obj(o.mikvahBook ?? o.mikvahConfirm, 'reminders.mikvahBook');
   const onah = obj(o.onah, 'reminders.onah');
   return {
     style: oneOf(o.style, 'reminders.style', ['plain', 'discreet'] as const),
@@ -160,10 +186,10 @@ function parseReminders(input: unknown): ReminderOptions {
       minutesBeforeSunset: num(bedikot.minutesBeforeSunset, 'reminders.bedikot.minutesBeforeSunset', 20, 600, true),
     },
     mikvah: { on: bool(mikvah.on, 'reminders.mikvah.on'), minutesBeforeSunset: num(mikvah.minutesBeforeSunset, 'reminders.mikvah.minutesBeforeSunset', 20, 600, true) },
-    mikvahConfirm: {
-      on: bool(confirm.on, 'reminders.mikvahConfirm.on'),
-      hour: num(confirm.hour, 'reminders.mikvahConfirm.hour', 0, 23, true),
-      minute: num(confirm.minute, 'reminders.mikvahConfirm.minute', 0, 59, true),
+    mikvahBook: {
+      on: bool(book.on, 'reminders.mikvahBook.on'),
+      hour: num(book.hour, 'reminders.mikvahBook.hour', 0, 23, true),
+      minute: num(book.minute, 'reminders.mikvahBook.minute', 0, 59, true),
     },
     onah: { on: bool(onah.on, 'reminders.onah.on'), minutesBefore: num(onah.minutesBefore, 'reminders.onah.minutesBefore', 0, 1440, true) },
     beforeRestDays: bool(o.beforeRestDays, 'reminders.beforeRestDays'),

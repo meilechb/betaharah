@@ -5,7 +5,7 @@
  * two-step view (#settings/phones/add).
  */
 import { alert, api, button, confirmDialog, emptyState, h, icon, pretty, textField } from '../../lib.js';
-import { S, signOutLocally } from '../../store.js';
+import { S, signOutLocally, t } from '../../store.js';
 import { attempt, refresh, region } from '../shared.js';
 import { open, replace } from './route.js';
 import { andList, blockRow, group, infoRow, navRow, save, stTag, switchRow } from './ui.js';
@@ -88,7 +88,7 @@ function listView() {
     title: 'Phones',
     parent: '',
     statusKey: 'phones',
-    lead: 'Up to ' + S.maxPhones + ' phones share this account. Each one chooses what it may do and which reminders it receives.',
+    lead: 'Up to ' + S.maxPhones + ' phones share this account.',
     body: [
       group(
         { title: S.phones.length === 1 ? 'The phone on this account' : 'The ' + S.phones.length + ' phones on this account', id: 'phones-list' },
@@ -148,7 +148,7 @@ function verifyPart(p) {
   if (busy && adding.step === 'code') return codeForm();
   return blockRow(
     h('p', { class: 'st-block-title' }, 'This number is not verified'),
-    h('p', { class: 'help' }, 'A 6-digit code is texted to it. Entering the code here shows the phone belongs to someone on this account; then reminders can be sent to it.'),
+    h('p', { class: 'help' }, 'A 6-digit code is texted to it.'),
     busy && adding.error ? alert({ kind: 'bad', role: 'alert' }, h('span', { id: 'phone-add-error', tabindex: '-1' }, adding.error)) : null,
     h('div', { class: 'actions' }, button({ label: 'Text a code to verify', variant: 'primary', icon: 'message', attrs: { id: 'verify-' + keyOf(p.number) }, onclick: e => requestCode(p.number, e.currentTarget, true) })),
   );
@@ -201,7 +201,7 @@ function detailView(key) {
           switchRow({
             id: 'texts-' + key,
             label: 'Receive text reminders',
-            help: off || (p.texts ? 'The kinds chosen below are texted to this phone.' : 'Nothing is texted to this phone. Turning this on shows the terms first.'),
+            help: off || (p.texts ? null : 'The terms are shown first.'),
             checked: p.texts || showConsent,
             disabled: Boolean(off) && !p.texts,
             onchange: e => {
@@ -222,12 +222,13 @@ function detailView(key) {
               {
                 title: 'Reminders it receives',
                 id: 'phone-kinds',
-                footer: 'When each one is sent is set under Reminders, for every phone.',
+                footer: 'Their times are set under Reminders.',
               },
               kinds.map(k =>
                 switchRow({
                   id: 'rem-' + key + '-' + k,
                   label: S.labels.reminders[k] || k,
+                  help: k === 'mikvah_book' ? t('The morning after the {hefsek} is recorded.') : null,
                   checked: p.reminders.includes(k),
                   onchange: e => {
                     const on = e.target.checked;

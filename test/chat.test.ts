@@ -352,7 +352,7 @@ describe('the menu and the words', () => {
   });
 
   it('? is the digit help, with the dated forms and MENU', () => {
-    expect(new Phone(household()).say('?')).toMatch(/^1 flow began, .* A date also works: 1 11\/22 night, 2 11\/26, 4 12\/3\. MENU lists the words\.$/);
+    expect(new Phone(household()).say('?')).toMatch(/^1 flow, 2 hefsek, .* A date also works: 1 11\/22 night, 2 11\/26, 4 12\/3\. MENU lists the words\.$/);
   });
 
   it('the existing digit commands give exactly their existing replies', () => {

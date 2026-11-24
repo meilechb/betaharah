@@ -662,28 +662,28 @@ function legend() {
     h(
       'div',
       { class: 'calc-legend-group' },
-      h('h4', {}, 'What you entered'),
+      h('h4', {}, 'Entered'),
       h(
         'ul',
         { class: 'legend' },
-        item(mark({ kind: 'flow' }), cap(fill('{flow} or {stain}: a period began'))),
-        item(mark({ kind: 'hefsek', title: '✓' }), cap(fill('{hefsek}, done'))),
-        item(mark({ kind: 'mikvah', title: '✓' }), cap(fill('{immersion}, done'))),
+        item(mark({ kind: 'flow' }), cap(fill('{flow} or {stain}'))),
+        item(mark({ kind: 'hefsek', title: '✓' }), cap(fill('{hefsek}'))),
+        item(mark({ kind: 'mikvah', title: '✓' }), cap(fill('{immersion} (optional)'))),
       ),
     ),
     h(
       'div',
       { class: 'calc-legend-group' },
-      h('h4', {}, 'What the calendar works out'),
+      h('h4', {}, 'Worked out'),
       h(
         'ul',
         { class: 'legend' },
-        item(mark({ kind: 'hefsek', projected: true }), cap(fill('the day the {hefsek} can be done. It was not entered.'))),
-        item(mark({ kind: 'clean_day' }, { number: 1 }), fill('Day 1 to 7 of the {clean_days}')),
+        item(mark({ kind: 'hefsek', projected: true }), cap(fill('{hefsek} day, not entered'))),
+        item(mark({ kind: 'clean_day' }, { number: 1 }), cap(fill('{clean_days}, day 1 to 7'))),
         item(mark({ kind: 'mikvah' }), cap(fill('{mikvah_night}'))),
-        item(h('span', { class: 'calc-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap(fill('{veset_onah}: separation, by day or at night'))),
+        item(h('span', { class: 'calc-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap(fill('{veset_onah}, day or night'))),
         item(mark({ kind: 'onah', light: true }, { night: true }), cap(fill('{or_zarua} only'))),
-        item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), fill('Dashed: expected, if the {hefsek} is done on the first day it can be')),
+        item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), 'Dashed: expected'),
       ),
     ),
   );
@@ -746,7 +746,7 @@ function eventRow(e, opts) {
       { class: 'ev-main' },
       h('div', { class: 'ev-title' }, plainTitle(e), state ? ' ' : null, state),
       h('div', { class: 'ev-when' }, o.continuing ? 'From the evening before, until ' + e.end : (o.date ? shortDate(e.startDate) + ' · ' : '') + eventTime(e)),
-      e.description && !o.continuing ? h('div', { class: 'ev-desc' }, o.date ? reasonsOf(e) : e.description) : null,
+      e.description && !o.continuing ? h('div', { class: 'ev-desc' }, e.description) : null,
     ),
   );
 }
@@ -808,8 +808,13 @@ function dayPanel() {
       'div',
       { class: 'calc-day-head' },
       h('h2', { id: 'calc-day-title' }, longDate(date) + ', ' + date.slice(0, 4)),
-      h('p', { class: 'calc-day-sub', lang: scenario.terms === 'he' ? 'he' : null }, day.hebrewDay + ' ' + day.hebrewMonth, day.rest ? h('span', { class: 'tag' }, fill('{shabbat} or {yom_tov}')) : null),
-      h('p', { class: 'sun-times small muted' }, 'Sunrise ' + (day.sunrise || '—') + ' · ' + fill('{sunset} ') + (day.sunset || '—')),
+      h(
+        'p',
+        { class: 'calc-day-sub' },
+        h('span', { lang: scenario.terms === 'he' ? 'he' : null }, day.hebrewDay + ' ' + day.hebrewMonth),
+        ' · Sunrise ' + (day.sunrise || '—') + ' · ' + cap(fill('{sunset} ')) + (day.sunset || '—'),
+        day.rest ? h('span', { class: 'tag' }, fill('{shabbat} or {yom_tov}')) : null,
+      ),
     ),
     h('h3', { class: 'calc-q', id: 'calc-add-title' }, 'What happened on this day?'),
     h(
@@ -818,9 +823,8 @@ function dayPanel() {
       addButton('calc-add-flow-day', 'flow', 'day', flow + ', by day', date),
       addButton('calc-add-flow-night', 'flow', 'night', flow + ', at night', date),
       addButton('calc-add-hefsek', 'hefsek', null, labelOf('hefsek'), date),
-      addButton('calc-add-mikvah', 'mikvah', null, labelOf('mikvah') + ', that evening', date),
     ),
-    h('p', { class: 'small muted calc-night-note' }, fill('"At night" is the night that begins on the evening of this date, after {sunset}.')),
+    h('p', { class: 'small muted calc-night-note' }, fill('At night: after {sunset} on this date.')),
     h(
       'div',
       { id: 'calc-add-result', tabindex: '-1', class: 'calc-add-result' },
@@ -838,8 +842,9 @@ function dayPanel() {
         addButton('calc-add-stain-night', 'stain', 'night', labelOf('stain') + ', at night', date),
         addButton('calc-add-broken-day', 'broken', 'day', labelOf('broken') + ', by day', date),
         addButton('calc-add-broken-night', 'broken', 'night', labelOf('broken') + ', at night', date),
+        addButton('calc-add-mikvah', 'mikvah', null, labelOf('mikvah') + ', that evening', date),
       ),
-      h('p', { class: 'small muted' }, fill('A {stain} is added only when a {rav} has said that it makes her {niddah}. "' + labelOf('broken') + '" is for when the {clean_days} must start again.')),
+      h('p', { class: 'small muted' }, fill('A {stain} only when a {rav} said it makes her {niddah}.')),
       h(
         'form',
         {
@@ -893,14 +898,6 @@ function assumption(e) {
   return line ? cap(line.slice('Projected: '.length)) : '';
 }
 
-/** An onah's description without its first lines (its date and hours), which the row already shows. */
-function reasonsOf(e) {
-  const d = e.description || '';
-  if (e.kind !== 'onah') return d;
-  const cut = d.indexOf('\n\n');
-  return cut >= 0 ? d.slice(cut + 2) : d;
-}
-
 function worksOutCard() {
   const r = ui.result;
   if (!r || !r.state.grid) return null;
@@ -947,7 +944,7 @@ function worksOutCard() {
       ? h(
           'div',
           { class: 'calc-group', id: 'calc-steps' },
-          h('h3', {}, cap(fill('until the {immersion}'))),
+          h('h3', {}, cap(fill('until the {mikvah_night}'))),
           note ? h('p', { class: 'calc-assume small', id: 'calc-assume' }, note) : null,
           h('ul', { class: 'events' }, hefsek.map(e => eventRow(e, { date: true })), cleanRow, mikvah.map(e => eventRow(e, { date: true }))),
         )

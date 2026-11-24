@@ -2,7 +2,8 @@
  * Wording for the dashboard. Sentences are English; halachic terms are
  * shown in English letters or in Hebrew script, as the household chooses.
  */
-import { civilDate, eveningLabel, fullDate, onahLabel, weekday } from '../engine/calendar';
+import { eveningLabel, fullDate, onahLabel } from '../engine/calendar';
+import { absToCivil, dayOfWeek } from '../engine/civil';
 import type { LogEntry, LogWarningCode } from '../engine/cycle';
 import type { PatternAlert } from '../engine/patterns';
 import { clock12 } from '../engine/present';
@@ -31,38 +32,40 @@ export function entryText(e: LogEntry, lang: TermLanguage): string {
   }
 }
 
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+/** A date in running text: "Wed, Nov 25". */
+export function shortDate(abs: number): string {
+  const c = absToCivil(abs);
+  return `${DAYS[dayOfWeek(abs)]}, ${MONTHS[c.m - 1]} ${c.d}`;
+}
+
+/** Where things stand: a headline, and one short line with the next date and its time. */
 export function statusLines(t: Timeline, timeZone: string, lang: TermLanguage): { headline: string; detail: string } {
   if (t.status.state === 'tehorah') return { headline: capital(term('tehorah', lang)), detail: '' };
   const p = t.status.period;
   const phase = t.status.phase;
   const m = p.planMikvah;
-  const mikvah = fill(`{mikvah_night}: ${weekday(m.eveningAbs)}, ${civilDate(m.eveningAbs)}, after ${clock12(m.tzeit, timeZone, 'ceil')}`, lang);
+  const mikvah = capital(fill(`{mikvah_night}: ${shortDate(m.eveningAbs)}, after ${clock12(m.tzeit, timeZone, 'ceil')}.`, lang));
   const niddah = capital(term('niddah', lang));
   switch (phase.kind) {
     case 'before_hefsek':
       return {
         headline: fill(`${niddah}, before the {hefsek}`, lang),
-        detail: fill(
-          `Began: ${onahText(p.start, lang)}. The {hefsek} can be done from ${fullDate(p.earliestHefsekAbs, lang)}. Next possible day: ${weekday(p.planHefsekAbs)}, ${civilDate(p.planHefsekAbs)}, before ${clock12(p.hefsekSunset, timeZone, 'floor')}.`,
-          lang,
-        ),
+        detail: capital(fill(`{hefsek} from ${shortDate(p.planHefsekAbs)}, before ${clock12(p.hefsekSunset, timeZone, 'floor')}.`, lang)),
       };
     case 'before_first_day':
       return {
         headline: fill(`${niddah}, after the {hefsek}`, lang),
-        detail: capital(fill(`The first of the {clean_days} is ${weekday(p.planCleanDays[0]!.abs)}, ${civilDate(p.planCleanDays[0]!.abs)}. ${capital(mikvah)}.`, lang)),
+        detail: capital(fill(`The {clean_days} begin ${shortDate(p.planCleanDays[0]!.abs)}. `, lang)) + mikvah,
       };
     case 'counting':
-      return { headline: `${capital(term('clean_days', lang))}: day ${phase.day}`, detail: `${capital(mikvah)}.` };
+      return { headline: `${capital(term('clean_days', lang))}: day ${phase.day}`, detail: mikvah };
     case 'postponed':
-      return { headline: fill('The count is complete; no {immersion} tonight', lang), detail: `${capital(mikvah)}.` };
+      return { headline: fill('The count is complete; no {immersion} tonight', lang), detail: mikvah };
     case 'mikvah_tonight':
-      return { headline: capital(term('mikvah_night', lang)), detail: capital(fill(`{immersion} after {nightfall}: ${clock12(m.tzeit, timeZone, 'ceil')}.`, lang)) };
-    case 'mikvah_not_recorded':
-      return {
-        headline: fill('The count is complete; no {immersion} is recorded', lang),
-        detail: fill(`The {mikvah_night} was ${weekday(m.eveningAbs)}, ${civilDate(m.eveningAbs)}.`, lang),
-      };
+      return { headline: capital(term('mikvah_night', lang)), detail: capital(fill(`{immersion} after ${clock12(m.tzeit, timeZone, 'ceil')}.`, lang)) };
   }
 }
 
@@ -87,8 +90,8 @@ export function warningText(code: LogWarningCode, lang: TermLanguage): string {
       return f('An {immersion} is recorded on the night of {yom_kippur} or {tisha_bav}.');
     case 'count_cancelled_by_flow':
       return f('A {flow} after the {hefsek}: the count is void and a new {hefsek} is needed.');
-    case 'period_began_without_immersion':
-      return f('No {immersion} is recorded for the period before the latest one, so the calendar counts the latest {flow} as a new period, with the days of waiting. If she immersed, record the {immersion}. If she had not immersed, ask a {rav}.');
+    case 'period_began_without_hefsek':
+      return f('No {hefsek} was recorded for the period before, so this is counted as a new period.');
   }
 }
 

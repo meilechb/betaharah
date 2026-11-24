@@ -6,10 +6,12 @@
  * or the label of the day, says what they mean.
  *
  * What she recorded and what the calendar works out are kept apart: a tick
- * (H✓, M✓) for a hefsek taharah or immersion that was recorded; "H?" for the
- * day a hefsek taharah can be done, which was not; an outlined M for a mikvah
- * night; dashed for what is only expected. In words, the same with a label
- * (stateTag) instead of the server's " (projected)".
+ * (H✓) for a hefsek taharah that was recorded, and M✓ for an immersion that
+ * was (recording one is optional); "H?" for the day a hefsek taharah can be
+ * done, which was not; an outlined M for a mikvah night, whether it is ahead
+ * or past (once it is over she is taken to have immersed); dashed for what is
+ * only expected. In words, the same with a label (stateTag) instead of the
+ * server's " (projected)".
  */
 import { h, icon, tag } from '../lib.js';
 import { t } from '../store.js';
@@ -38,11 +40,9 @@ export const wasRecorded = e => e.kind === 'flow' || isDone(e);
 export const plainTitle = e => (e.title || '').replace(' (projected)', '');
 
 /** A short label beside a title: what she recorded, the day a hefsek taharah can be done (not recorded), or what is expected. */
-export function stateTag(e, today) {
+export function stateTag(e) {
   if (wasRecorded(e)) return tag('recorded', 'ok');
   if (e.kind === 'hefsek') return tag('not recorded', 'warn');
-  // a mikvah night that has passed with no immersion recorded (today: the civil date, when known)
-  if (e.kind === 'mikvah' && today && e.startDate < today) return tag('not recorded', 'warn');
   if (e.projected) return tag('expected', 'info');
   return null;
 }
@@ -65,21 +65,13 @@ export function assumption(e) {
 }
 
 /**
- * The lines of an event's description, as a page shows them. opts.dated: the
- * row already shows the date (and an onah's hours), so the first lines are left
- * out; opts.noAssumption: the assumption is said once above the rows.
+ * The lines of an event's description, as a page shows them (the server's
+ * descriptions do not repeat the event's date or hours). opts.noAssumption:
+ * the assumption is said once above the rows.
  */
 export function describe(e, opts) {
   const o = opts || {};
-  let d = e.description || '';
-  if (o.dated) {
-    if (e.kind === 'onah') {
-      const cut = d.indexOf('\n\n');
-      d = cut >= 0 ? d.slice(cut + 2) : '';
-    } else {
-      d = d.split('\n').slice(1).join('\n');
-    }
-  }
+  const d = e.description || '';
   return d
     .split('\n')
     .filter(l => !(o.noAssumption && l.startsWith(PROJECTED)))
@@ -156,7 +148,8 @@ const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
  * The legend, always shown under the month, in two groups: what she
- * recorded, and what the calendar works out from it. Then how a day is drawn.
+ * recorded, and what the calendar works out from it; one short line per
+ * mark. How a day is drawn is under "More", closed.
  */
 export function legend() {
   const item = (m, text) => h('li', {}, m, h('span', {}, text));
@@ -166,36 +159,41 @@ export function legend() {
     h(
       'div',
       { class: 'legend-group', id: 'legend-recorded' },
-      h('h4', {}, 'What you recorded'),
+      h('h4', {}, 'Recorded'),
       h(
         'ul',
         { class: 'legend' },
-        item(mark({ kind: 'flow' }), cap1(t('{flow} or {stain}: a period began'))),
-        item(mark({ kind: 'hefsek', title: '✓' }), cap1(t('{hefsek}, recorded'))),
-        item(mark({ kind: 'mikvah', title: '✓' }), cap1(t('{immersion}, recorded'))),
+        item(mark({ kind: 'flow' }), cap1(t('{flow} or {stain}'))),
+        item(mark({ kind: 'hefsek', title: '✓' }), cap1(t('{hefsek}'))),
+        item(mark({ kind: 'mikvah', title: '✓' }), cap1(t('{immersion} (optional)'))),
       ),
     ),
     h(
       'div',
       { class: 'legend-group', id: 'legend-worked-out' },
-      h('h4', {}, 'What the calendar works out'),
+      h('h4', {}, 'Worked out'),
       h(
         'ul',
         { class: 'legend' },
-        item(mark({ kind: 'hefsek', projected: true }), cap1(t('the day the {hefsek} can be done. Not recorded.'))),
-        item(mark({ kind: 'clean_day' }, { number: 1 }), t('Day 1 to 7 of the {clean_days}')),
-        item(mark({ kind: 'mikvah' }), term('mikvah_night')),
-        item(h('span', { class: 'mk-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap1(t('{veset_onah}, by day or at night'))),
+        item(mark({ kind: 'hefsek', projected: true }), cap1(t('{hefsek} day, not recorded'))),
+        item(mark({ kind: 'clean_day' }, { number: 1 }), cap1(t('{clean_days}, day 1 to 7'))),
+        item(mark({ kind: 'mikvah' }), cap1(term('mikvah_night'))),
+        item(h('span', { class: 'mk-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap1(t('{veset_onah}, day or night'))),
         item(mark({ kind: 'onah', light: true }, { night: true }), cap1(t('{or_zarua} only'))),
-        item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), t('Dashed: expected, if the {hefsek} is done on the first day it can be')),
+        item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), 'Dashed: expected'),
       ),
     ),
     h(
-      'ul',
-      { class: 'legend legend-days' },
-      h('li', {}, h('span', { class: 'legend-day rest', 'aria-hidden': 'true' }, '7'), h('span', {}, t('Shaded, with a bar on top: {shabbat} or {yom_tov}'))),
-      h('li', {}, h('span', { class: 'legend-day today', 'aria-hidden': 'true' }, '7'), h('span', {}, 'Outlined: today')),
-      h('li', { class: 'legend-note' }, h('span', {}, t('Each day shows the Hebrew date of its daytime. A Hebrew date begins at {sunset} the evening before, so a night belongs to the next day’s Hebrew date. A mark for a night is on the day whose evening it begins.'))),
+      'details',
+      { class: 'legend-more', id: 'legend-more' },
+      h('summary', {}, 'More'),
+      h(
+        'ul',
+        { class: 'legend legend-days' },
+        h('li', {}, h('span', { class: 'legend-day rest', 'aria-hidden': 'true' }, '7'), h('span', {}, t('Shaded: {shabbat} or {yom_tov}'))),
+        h('li', {}, h('span', { class: 'legend-day today', 'aria-hidden': 'true' }, '7'), h('span', {}, 'Outlined: today')),
+        h('li', { class: 'legend-note' }, h('span', {}, t('A night is marked on the day whose evening it begins.'))),
+      ),
     ),
   );
 }

@@ -227,20 +227,20 @@ describe('processing the log', () => {
     // hefsek Thursday; the clean days are Friday to the next Thursday (THU + 7)
     const r = processLog([flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU }, flow('f2', THU + 7)], BASIC);
     expect(r.periods).toHaveLength(1);
-    expect(r.periods[0]).toMatchObject({ hefsekAbs: null, earliestHefsekAbs: THU, endedWithoutImmersion: false });
+    expect(r.periods[0]).toMatchObject({ hefsekAbs: null, earliestHefsekAbs: THU, closedByNextPeriod: false });
     expect(r.warnings).toEqual([{ entryId: 'f2', code: 'count_cancelled_by_flow' }]);
   });
 
-  it('a flow after the count was over, with no immersion recorded, begins a new period with the days of waiting', () => {
-    // The owner's case: a period, its hefsek, no immersion recorded, and the next period a month later.
+  it('a flow after the count was over begins a new period with the days of waiting, and nothing is said', () => {
+    // The owner's case: a period, its hefsek, no immersion recorded (she is taken to have immersed), and the next period a month later.
     const next = SUN + 32;
     const r = processLog([flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU }, flow('f2', next)], BASIC);
     expect(r.periods).toHaveLength(2);
     // the first period keeps its hefsek and its count, and is closed
-    expect(r.periods[0]).toMatchObject({ startId: 'f', hefsekAbs: THU, mikvahNightAbs: THU + 8, mikvahDoneAbs: null, endedWithoutImmersion: true });
+    expect(r.periods[0]).toMatchObject({ startId: 'f', hefsekAbs: THU, mikvahNightAbs: THU + 8, mikvahDoneAbs: null, closedByNextPeriod: true });
     // the second waits its own five days
-    expect(r.periods[1]).toMatchObject({ startId: 'f2', hefsekAbs: null, earliestHefsekAbs: next + 4, endedWithoutImmersion: false });
-    expect(r.warnings).toEqual([{ entryId: 'f2', code: 'period_began_without_immersion' }]);
+    expect(r.periods[1]).toMatchObject({ startId: 'f2', hefsekAbs: null, earliestHefsekAbs: next + 4, closedByNextPeriod: false });
+    expect(r.warnings).toEqual([]);
     expect(r.flows.map(x => x.id)).toEqual(['f', 'f2']);
     // from the first night she could have immersed on, and not a day earlier
     const onTheNight = processLog([flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU }, { id: 'f2', kind: 'flow', onah: { abs: THU + 8, part: 'night' }, veset: true }], BASIC);
@@ -252,7 +252,7 @@ describe('processing the log', () => {
     const next = SUN + 32;
     const r = processLog([flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU }, flow('f2', next), { id: 'm', kind: 'mikvah', abs: THU + 8 }], BASIC);
     expect(r.periods).toHaveLength(2);
-    expect(r.periods[0]).toMatchObject({ mikvahDoneAbs: THU + 8, endedWithoutImmersion: false });
+    expect(r.periods[0]).toMatchObject({ mikvahDoneAbs: THU + 8, closedByNextPeriod: false });
     expect(r.periods[1]).toMatchObject({ startId: 'f2', earliestHefsekAbs: next + 4 });
     expect(r.warnings).toEqual([]);
   });
@@ -265,12 +265,28 @@ describe('processing the log', () => {
     expect(during.warnings).toEqual([]);
     const after = processLog([flow('f', SUN), flow('f2', SUN + 12)], BASIC);
     expect(after.periods).toHaveLength(2);
-    expect(after.periods[0]).toMatchObject({ hefsekAbs: null, endedWithoutImmersion: true });
+    expect(after.periods[0]).toMatchObject({ hefsekAbs: null, closedByNextPeriod: true });
     expect(after.periods[1]).toMatchObject({ startId: 'f2', earliestHefsekAbs: SUN + 16 });
-    expect(after.warnings).toEqual([{ entryId: 'f2', code: 'period_began_without_immersion' }]);
+    expect(after.warnings).toEqual([{ entryId: 'f2', code: 'period_began_without_hefsek' }]);
     // a hefsek and an immersion recorded after the second flow belong to the second period
     const closed = processLog([flow('f', SUN), flow('f2', SUN + 12), { id: 'h', kind: 'hefsek', abs: SUN + 16 }, { id: 'm', kind: 'mikvah', abs: SUN + 24 }], BASIC);
     expect(closed.periods[1]).toMatchObject({ hefsekAbs: SUN + 16, mikvahDoneAbs: SUN + 24 });
+  });
+
+  it('after the night of immersion she is taken to have immersed: a hefsek or a broken count after it has no period', () => {
+    // hefsek Thursday: the night of immersion is THU + 8
+    const log = [flow('f', SUN), { id: 'h', kind: 'hefsek', abs: THU } as const];
+    const hefsek = processLog([...log, { id: 'h2', kind: 'hefsek', abs: THU + 8 }], BASIC);
+    expect(hefsek.periods[0]).toMatchObject({ hefsekAbs: THU, mikvahNightAbs: THU + 8 });
+    expect(hefsek.warnings).toEqual([{ entryId: 'h2', code: 'hefsek_without_niddah' }]);
+    const broken = processLog([...log, { id: 'b', kind: 'broken', onah: { abs: THU + 8, part: 'day' } }], BASIC);
+    expect(broken.periods[0]).toMatchObject({ hefsekAbs: THU });
+    expect(broken.warnings).toEqual([{ entryId: 'b', code: 'broken_without_count' }]);
+    // on the night itself, before immersing, the count can still be broken; on the day before, a second hefsek still replaces the first
+    expect(processLog([...log, { id: 'b', kind: 'broken', onah: { abs: THU + 8, part: 'night' } }], BASIC).periods[0]!.hefsekAbs).toBeNull();
+    expect(processLog([...log, { id: 'h2', kind: 'hefsek', abs: THU + 7 }], BASIC).periods[0]!.hefsekAbs).toBe(THU + 7);
+    // an immersion recorded on a later night is still taken as recorded
+    expect(processLog([...log, { id: 'm', kind: 'mikvah', abs: THU + 12 }], BASIC).periods[0]!.mikvahDoneAbs).toBe(THU + 12);
   });
 
   it('a second hefsek replaces the first, which can only make immersion later', () => {

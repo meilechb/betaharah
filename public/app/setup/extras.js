@@ -27,7 +27,6 @@ function commandsTable(sms) {
       ),
     ),
     sms.commandNote ? h('p', { class: 'help' }, sms.commandNote) : null,
-    h('p', { class: 'help' }, 'Text messages always write halachic terms in English letters, so this table does too.'),
   ];
 }
 
@@ -41,14 +40,14 @@ export function calendarView() {
   const done = cal.google.connected || Boolean(cal.link);
   return screen({
     title: 'See the dates in your calendar app',
-    intro: 'Optional. The dates can also appear in the calendar app you already use. This can be set up later in Settings too.',
+    intro: 'Optional. Show the dates in your own calendar app.',
     body: [
       cal.google.available
         ? h(
             'div',
             { class: 'setup-option' },
             h('h3', {}, icon('calendar'), 'Google Calendar'),
-            h('p', { class: 'muted' }, 'The site makes one calendar in your Google account and keeps it up to date; it cannot see anything else there.'),
+            h('p', { class: 'muted' }, 'One new calendar in your Google account; nothing else there is seen.'),
             cal.google.connected
               ? alert({ kind: 'ok' }, 'Connected. The calendar is named “' + S.app.calendar.name + '” in your Google Calendar.')
               : h('div', { class: 'actions' }, linkButton({ href: '/api/google/start', label: 'Connect Google Calendar', attrs: { id: 'sc-google' } })),
@@ -63,13 +62,13 @@ export function calendarView() {
               'div',
               {},
               copyField({ value: cal.link }),
-              h('p', { class: 'help' }, 'Add this address in your calendar app as a subscribed calendar. Anyone who has it can read the calendar, so share it only with your spouse.'),
+              h('p', { class: 'help' }, 'Add it in your calendar app as a subscribed calendar. Keep it private.'),
               h('div', { class: 'actions' }, linkButton({ href: cal.link.replace(/^https?:/, 'webcal:'), label: 'Open in my calendar app', icon: 'calendar' })),
             )
           : h(
               'div',
               {},
-              h('p', { class: 'muted' }, 'A private address that Apple Calendar, Outlook or Google Calendar can follow. No account needs to be connected.'),
+              h('p', { class: 'muted' }, 'For Apple Calendar, Outlook or Google Calendar.'),
               h(
                 'div',
                 { class: 'actions' },
@@ -236,7 +235,7 @@ function addOwnPhoneView(toSpouse) {
   return screen({
     count: 'Phones, part 1 of 2',
     title: 'Your phone',
-    intro: 'Optional. Add your mobile number to get reminders by text and to record by text. A code is texted to it to confirm that it is yours.',
+    intro: 'Optional. For reminders and recording by text.',
     body: [
       own.step === 'code'
         ? codeForm(own, 'sp-own', () => {
@@ -306,7 +305,7 @@ function remindersView() {
     return screen({
       count: 'Phones, part 1 of 2',
       title: 'Text reminders to this phone',
-      intro: 'Before reminders can be sent to ' + pretty(p.number) + ', confirm that it is yours with a code texted to it.',
+      intro: 'Confirm ' + pretty(p.number) + ' with a code texted to it.',
       body: [
         mine.step === 'code'
           ? codeForm(mine, 'sp-mine', () => {
@@ -333,7 +332,7 @@ function remindersView() {
   return screen({
     count: 'Phones, part 1 of 2',
     title: p.me ? 'Text reminders to this phone' : 'Text reminders to your phone',
-    intro: t('Reminders before the {hefsek}, for the {bedikot}, on the {mikvah_night} and before each {onat_perishah}, sent to ') + pretty(p.number) + '.',
+    intro: 'Sent to ' + pretty(p.number) + '.',
     body: [
       h('p', { class: 'help consent' }, 'By saving, the owner of this phone agrees to receive the reminders chosen below by text message from Betaharah. Message frequency varies. Message and data rates may apply. Reply STOP to stop, HELP for help.'),
       h(
@@ -400,7 +399,7 @@ function spouseView() {
     ...head,
     intro: others.length
       ? null
-      : 'For husband and wife to share this account. A code is texted to the phone; once it is entered here, that phone can sign in, record by text, and receive its own reminders. Add only a phone whose owner has agreed.',
+      : 'For husband and wife to share this account. Add only a phone whose owner has agreed.',
     body: [list, others.length ? h('h3', {}, 'Add another phone') : null, body],
     back: backToReminders,
     skip: others.length ? null : { label: 'Skip this step', onclick: next },
@@ -446,14 +445,13 @@ export function doneView() {
             ),
           )
         : null,
-      h('p', {}, 'What the dashboard shows:'),
       h(
         'ul',
         { class: 'setup-tour' },
-        h('li', {}, h('strong', {}, 'Today: '), 'where things stand, what comes next, and buttons to record.'),
-        h('li', {}, h('strong', {}, 'Log: '), 'everything recorded, newest first. Earlier dates can be added there.'),
-        h('li', {}, h('strong', {}, 'Customs: '), S.halachic.confirmedAt ? 'the customs chosen here.' : 'still the stricter defaults, until they are confirmed there.'),
-        h('li', {}, h('strong', {}, 'Settings: '), 'location, calendar, phones and reminders. This setup can be opened again from there.'),
+        h('li', {}, h('strong', {}, 'Today: '), 'where things stand, and buttons to record.'),
+        h('li', {}, h('strong', {}, 'Log: '), 'everything recorded.'),
+        h('li', {}, h('strong', {}, 'Customs: '), S.halachic.confirmedAt ? 'the customs chosen here.' : 'the stricter defaults, until confirmed.'),
+        h('li', {}, h('strong', {}, 'Settings: '), 'location, calendar, phones and reminders.'),
       ),
       texting,
     ],

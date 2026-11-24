@@ -38,7 +38,7 @@ export interface UpcomingItem {
 }
 
 /** Where the household stands, as a key for the page (the timeline's phase); `day` only while counting. */
-export type StatusPhase = 'tehorah' | 'before_hefsek' | 'before_first_day' | 'counting' | 'postponed' | 'mikvah_tonight' | 'mikvah_not_recorded';
+export type StatusPhase = 'tehorah' | 'before_hefsek' | 'before_first_day' | 'counting' | 'postponed' | 'mikvah_tonight';
 
 /**
  * The text commands, for the page's tables. They are what is typed and
@@ -49,7 +49,7 @@ export const TEXT_COMMANDS: ReadonlyArray<{ text: string; meaning: string }> = [
   { text: '1', meaning: 'a flow began' },
   { text: '2', meaning: 'the hefsek is done' },
   { text: '3', meaning: 'the count is broken' },
-  { text: '4', meaning: 'she immersed (mikvah)' },
+  { text: '4', meaning: 'immersed (optional)' },
   { text: '5', meaning: 'a stain' },
   { text: '9', meaning: 'the status' },
   { text: '0', meaning: 'undo the last entry' },
@@ -97,11 +97,11 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
     const t = computed.timeline;
     const phase = t.status.state === 'tehorah' ? null : t.status.phase;
     status = { ...statusLines(t, tz, lang), phase: phase ? phase.kind : 'tehorah', day: phase && phase.kind === 'counting' ? phase.day : null };
-    // The note about a period that began with no immersion recorded before it is shown for the latest period only:
-    // it asks for something to be recorded, and an older one is history.
+    // The note about a period that began with no hefsek recorded before it is shown for the latest period only:
+    // an older one is history.
     const latestStart = t.periods.length > 0 ? t.periods[t.periods.length - 1]!.startId : null;
     for (const w of t.warnings) {
-      if (w.code === 'period_began_without_immersion' && w.entryId !== latestStart) continue;
+      if (w.code === 'period_began_without_hefsek' && w.entryId !== latestStart) continue;
       alerts.push({ level: 'warn', text: warningText(w.code, lang) });
     }
     for (const p of t.patterns) alerts.push({ level: 'warn', text: patternText(p, lang) });
@@ -207,7 +207,7 @@ export function dashboardState(args: StateArgs) {
   const setup = [
     { key: 'place', done: data.app.place !== null, text: 'Choose your location', tab: 'settings' },
     { key: 'customs', done: data.halachicConfirmedAt !== null, text: f('Review your customs, ideally with your {rav}, and save them'), tab: 'customs' },
-    { key: 'entry', done: data.entries.length > 0, text: f('Record the start of the most recent {flow}, and the {hefsek} and {immersion} that followed'), tab: 'today' },
+    { key: 'entry', done: data.entries.length > 0, text: f('Record when the last period began, and its {hefsek}'), tab: 'today' },
     { key: 'calendar', done: data.google !== null || data.calendarLinkToken !== null, text: 'Optional: show it in your calendar app', tab: 'settings' },
     { key: 'texts', done: texting, text: 'Optional: turn on text reminders', tab: 'settings' },
   ];
@@ -245,7 +245,7 @@ export function dashboardState(args: StateArgs) {
         bedikah_morning: capital(f('{bedikah}, morning')),
         bedikah_afternoon: capital(f('{bedikah}, afternoon')),
         mikvah: capital(f('{mikvah_night}')),
-        mikvah_confirm: capital(f('{immersion} not recorded')),
+        mikvah_book: 'Book the mikvah',
         onah: capital(f('{onat_perishah}')),
       },
     },

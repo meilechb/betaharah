@@ -1,6 +1,6 @@
 /*
  * Settings: Reminders. Each kind is a row with a switch and its timing in
- * plain words; "Change" opens the row to edit the timing. Shabbat and Yom
+ * a few words; "Change" opens the row to edit the timing. Shabbat and Yom
  * Tov, the wording (with an example of each), the rare options under
  * "Advanced", and the coming reminders as their own view
  * (#settings/reminders/scheduled).
@@ -90,7 +90,7 @@ function kinds() {
       id: 'hefsek',
       on: r.hefsek.on,
       title: '{hefsek}',
-      when: duration(r.hefsek.minutesBeforeSunset) + ' before {sunset}, on each day it can be done',
+      when: duration(r.hefsek.minutesBeforeSunset) + ' before {sunset}, each day it can be done',
       set: (a, on) => (a.reminders.hefsek.on = on),
       edit: () => [numberField('rem-hefsek-min', t('Minutes before {sunset}'), r.hefsek.minutesBeforeSunset, 20, 600, 'minutes', (a, v) => (a.reminders.hefsek.minutesBeforeSunset = v))],
     },
@@ -98,7 +98,7 @@ function kinds() {
       id: 'bedikot',
       on: r.bedikot.on,
       title: '{bedikot}',
-      when: 'On each of the {clean_days}: ' + clock(r.bedikot.morningHour, r.bedikot.morningMinute) + ', and ' + duration(r.bedikot.minutesBeforeSunset) + ' before {sunset}',
+      when: clock(r.bedikot.morningHour, r.bedikot.morningMinute) + ' and ' + duration(r.bedikot.minutesBeforeSunset) + ' before {sunset}',
       set: (a, on) => (a.reminders.bedikot.on = on),
       edit: () => [
         timeField('rem-bedikot-morning', 'Morning reminder at', r.bedikot.morningHour, r.bedikot.morningMinute, (a, x, y) => Object.assign(a.reminders.bedikot, { morningHour: x, morningMinute: y })),
@@ -109,23 +109,23 @@ function kinds() {
       id: 'mikvah',
       on: r.mikvah.on,
       title: '{mikvah_night}',
-      when: duration(r.mikvah.minutesBeforeSunset) + ' before {sunset} on the day',
+      when: duration(r.mikvah.minutesBeforeSunset) + ' before {sunset}',
       set: (a, on) => (a.reminders.mikvah.on = on),
       edit: () => [numberField('rem-mikvah-min', t('Minutes before {sunset}'), r.mikvah.minutesBeforeSunset, 20, 600, 'minutes', (a, v) => (a.reminders.mikvah.minutesBeforeSunset = v))],
     },
     {
-      id: 'confirm',
-      on: r.mikvahConfirm.on,
-      title: '{immersion} not recorded',
-      when: 'If no {immersion} was recorded, a question the next morning at ' + clock(r.mikvahConfirm.hour, r.mikvahConfirm.minute),
-      set: (a, on) => (a.reminders.mikvahConfirm.on = on),
-      edit: () => [timeField('rem-confirm-at', 'Ask the next morning at', r.mikvahConfirm.hour, r.mikvahConfirm.minute, (a, x, y) => Object.assign(a.reminders.mikvahConfirm, { hour: x, minute: y }))],
+      id: 'book',
+      on: r.mikvahBook.on,
+      title: 'Book the mikvah',
+      when: clock(r.mikvahBook.hour, r.mikvahBook.minute) + ', the morning after the {hefsek} is recorded',
+      set: (a, on) => (a.reminders.mikvahBook.on = on),
+      edit: () => [timeField('rem-book-at', 'Send at', r.mikvahBook.hour, r.mikvahBook.minute, (a, x, y) => Object.assign(a.reminders.mikvahBook, { hour: x, minute: y }))],
     },
     {
       id: 'onah',
       on: r.onah.on,
       title: '{onat_perishah}',
-      when: duration(r.onah.minutesBefore) + ' before each one begins',
+      when: duration(r.onah.minutesBefore) + ' before it begins',
       set: (a, on) => (a.reminders.onah.on = on),
       edit: () => [numberField('rem-onah-min', 'Minutes before it begins', r.onah.minutesBefore, 0, 1440, 'minutes', (a, v) => (a.reminders.onah.minutesBefore = v))],
     },
@@ -180,8 +180,8 @@ function kindRow(k) {
 }
 
 const EXAMPLES = {
-  plain: 'Mikvah night: Thu Nov 26, after 5:18 PM. Reply 4 after immersing.',
-  discreet: 'M night: Thu Nov 26 after 5:18 PM. Reply 4 after.',
+  plain: 'Mikvah night: Thu Nov 26, after 5:18 PM.',
+  discreet: 'M night: Thu Nov 26 after 5:18 PM.',
 };
 
 function mainView() {
@@ -192,24 +192,22 @@ function mainView() {
     title: 'Reminders',
     parent: '',
     statusKey: 'reminders',
-    lead: 'Which reminders exist, and when they are sent. Each phone chooses which of them it receives, under Phones.',
+    lead: 'Each phone chooses which it gets, under Phones.',
     body: [
       !S.sms.ready
-        ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'Text messaging is not available on this site yet, so no reminder is sent. What you set here applies once it is.'))
+        ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'Texting is not available on this site yet.'))
         : S.phones.length === 0
-          ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'No phone is on this account yet, so no reminder is sent. ', h('a', { href: '#settings/phones/add' }, 'Add a phone under Phones'), '.'))
+          ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'No phone yet. ', h('a', { href: '#settings/phones/add' }, 'Add a phone'), '.'))
           : !anyPhone
-            ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'No phone receives text reminders yet. ', h('a', { href: '#settings/phones' }, 'Turn them on for a phone under Phones'), '.'))
+            ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'No phone gets reminders yet. ', h('a', { href: '#settings/phones' }, 'Turn them on under Phones'), '.'))
             : null,
-      group({ title: 'Kinds of reminder', id: 'rem-kinds-group', footer: 'Times are for the place under Location.' }, region('rem-kinds', () => h('div', { class: 'st-rows-inner' }, kinds().map(kindRow)))),
+      group({ title: 'Kinds of reminder', id: 'rem-kinds-group' }, region('rem-kinds', () => h('div', { class: 'st-rows-inner' }, kinds().map(kindRow)))),
       group(
         { title: tn('{shabbat} and {yom_tov}'), id: 'rem-rest-group' },
         switchRow({
           id: 'rem-rest',
           label: tn('Send nothing on {shabbat} or {yom_tov}'),
-          help: r.beforeRestDays
-            ? tn('On. A reminder that falls on {shabbat} or {yom_tov} is sent before it begins, or after it ends when that is when it is useful.')
-            : tn('Off. Reminders are sent at their time, also on {shabbat} and {yom_tov}.'),
+          help: r.beforeRestDays ? 'Sent before or after it instead.' : tn('Sent at their time, also on {shabbat} and {yom_tov}.'),
           checked: r.beforeRestDays,
           onchange: e => {
             const on = e.target.checked;
@@ -218,15 +216,15 @@ function mainView() {
         }),
       ),
       group(
-        { title: 'Wording of the texts', id: 'rem-style-group', footer: 'One setting for every phone. Texts are always in English letters, so that every phone can show them.' },
+        { title: 'Wording of the texts', id: 'rem-style-group', footer: 'For every phone, in English letters.' },
         blockRow(
           choiceCards({
             name: 'sms-style',
             legend: 'Wording of the texts',
             value: r.style,
             options: [
-              { value: 'plain', label: 'Plain words', help: 'Says what each reminder is about.', example: h('span', { class: 'st-example' }, h('span', { class: 'visually-hidden' }, 'Example: '), EXAMPLES.plain) },
-              { value: 'discreet', label: 'Discreet', help: 'Letters and times only, for a phone others may see.', example: h('span', { class: 'st-example' }, h('span', { class: 'visually-hidden' }, 'Example: '), EXAMPLES.discreet) },
+              { value: 'plain', label: 'Plain words', help: 'The full words.', example: h('span', { class: 'st-example' }, h('span', { class: 'visually-hidden' }, 'Example: '), EXAMPLES.plain) },
+              { value: 'discreet', label: 'Discreet', help: 'Letters and times only.', example: h('span', { class: 'st-example' }, h('span', { class: 'visually-hidden' }, 'Example: '), EXAMPLES.discreet) },
             ],
             onchange: v => saveApp('reminders', a => (a.reminders.style = v)),
           }),
@@ -239,11 +237,11 @@ function mainView() {
       more(
         { id: 'rem-adv', summary: 'Advanced' },
         group(
-          { title: tn('{hefsek} reminders', true), intro: tn('When the {hefsek} keeps being put off, its reminders stop after this many days.') },
+          { title: tn('{hefsek} reminders', true), intro: 'They stop after this many days.' },
           region('rem-adv-days', () => blockRow(numberField('rem-hefsek-days', 'Stop after', r.hefsekMaxDays, 1, 30, 'days', (a, v) => (a.reminders.hefsekMaxDays = v), 'rem-adv-days'))),
         ),
         group(
-          { title: tn('Texts close to sunrise or {sunset}'), intro: tn('When a text arrives within this many minutes after sunrise or {sunset}, the reply asks which side of it was meant.') },
+          { title: tn('Texts close to sunrise or {sunset}'), intro: 'The reply asks whether day or night was meant.' },
           region('rem-adv-margin', () => blockRow(numberField('boundary', 'Ask within', S.app.boundaryMarginMinutes, 0, 120, 'minutes', (a, v) => (a.boundaryMarginMinutes = v), 'rem-adv-margin'))),
         ),
       ),
@@ -262,7 +260,7 @@ function scheduledView() {
       return emptyState({
         icon: 'bell',
         title: 'No reminders are scheduled.',
-        body: S.app.place ? 'They appear here once there is something to remind about, for example after a new start is recorded.' : 'Choose a location first. Nothing can be scheduled without it.',
+        body: S.app.place ? 'They appear once a date is recorded.' : 'Choose a location first.',
       });
     }
     const days = [];
@@ -304,7 +302,7 @@ function scheduledView() {
           ),
         ),
       ),
-      h('p', { class: 'help' }, S.reminders.length >= 30 ? 'The first 30 are shown. ' : '', 'This list changes when a date is recorded or a setting is changed.'),
+      S.reminders.length >= 30 ? h('p', { class: 'help' }, 'The first 30 are shown.') : null,
     );
   };
   return { title: 'Scheduled reminders', parent: 'reminders', backLabel: 'Reminders', body: body() };

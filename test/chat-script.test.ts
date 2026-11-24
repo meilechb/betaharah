@@ -52,9 +52,9 @@ describe('from the first text to a finished setup', () => {
     p.wait(2);
     expect(lines(p.send('1 11/1 night'))).toEqual([`Recorded: flow Sun Nov 1 night, 2026. Hefsek from Fri Nov 6. 0 to undo. ${T.RECENT_NEXT}`]);
     p.wait(1);
-    expect(lines(p.send('2 11/6'))[0]).toMatch(/^Recorded: hefsek Fri Nov 6, 2026\. Clean days Sat Nov 7 - Fri Nov 13\. Mikvah Fri Nov 13 after \d:\d\d PM\. 0 to undo\. The question before is still open: send 2 or 4 with a date, or DONE\.$/);
+    expect(lines(p.send('2 11/6'))[0]).toMatch(/^Recorded: hefsek Fri Nov 6, 2026\. Clean days Sat Nov 7 - Fri Nov 13\. Mikvah Fri Nov 13 after \d:\d\d PM\. 0 to undo\. The question before is still open: send 2 with a date, or DONE\.$/);
     p.wait(1);
-    expect(lines(p.send('4 11/13'))).toEqual(['Recorded: mikvah Fri Nov 13 night, 2026. 0 to undo. The question before is still open: send 2 or 4 with a date, or DONE.']);
+    expect(lines(p.send('4 11/13'))).toEqual(['Recorded: mikvah Fri Nov 13 night, 2026. 0 to undo. The question before is still open: send 2 with a date, or DONE.']);
     p.wait(1);
     expect(lines(p.send('DONE'))).toEqual([T.SETUP_DONE]);
     expect(p.chat).toBeNull();

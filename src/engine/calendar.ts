@@ -106,25 +106,20 @@ export interface CalendarOptions {
 }
 
 const PROJECTED = ' (projected)';
-const PROJECTED_NOTE = 'Projected: this assumes the {hefsek} is done on the first day it can be.';
+/** The line a projected event ends with; the pages find it by its first word. */
+const PROJECTED_NOTE = 'Projected: if the {hefsek} is done on the first day it can be.';
 
 function onahEvent(o: OnahView, opts: CalendarOptions): CalendarEvent {
-  const { lang, timeZone: tz } = opts;
+  const { lang } = opts;
   const part = o.onah.part;
   const timed = { start: roundToMinute(o.start, 'floor'), end: roundToMinute(o.end, 'ceil') };
   const key = `onah:${onahIndex(o.onah)}`;
   if (opts.style === 'discreet') {
     return { key, kind: 'onah', title: o.veset ? '◆' : '◇', description: '', timed, projected: false, light: !o.veset };
   }
-  const lines = [
-    onahLabel(o.onah, lang),
-    `From ${clock12(o.start, tz, 'floor')} until ${clock12(o.end, tz, 'ceil')}`,
-    '',
-    ...o.reasons.map(r => reasonText(r, lang)),
-    '',
-    o.veset ? fill('Separation, and a {bedikah}.', lang) : 'Separation.',
-  ];
-  if (o.onMikvahNight) lines.push('', fill('This {onah} falls on the {mikvah_night}. Ask a {rav}.', lang));
+  // The event's own date and hours are not repeated: the reasons, then what is done.
+  const lines = [...o.reasons.map(r => reasonText(r, lang)), o.veset ? fill('Separation, and a {bedikah}.', lang) : 'Separation.'];
+  if (o.onMikvahNight) lines.push(fill('It falls on the {mikvah_night}. Ask a {rav}.', lang));
   return {
     key,
     kind: 'onah',
@@ -151,7 +146,7 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
       : p.cause === 'flow'
         ? `${capital(term('flow', lang))} (${p.start.part})`
         : `${capital(term('stain', lang))}: ${term('niddah', lang)} began (${p.start.part})`,
-    description: discreet ? '' : onahLabel(p.start, lang),
+    description: '',
     timed: { start: roundToMinute(p.startWindow.start, 'floor'), end: roundToMinute(p.startWindow.end, 'ceil') },
     projected: false,
   });
@@ -160,10 +155,8 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
   const hefsekTimed = { start: roundToMinute(p.hefsekMinchaKetana, 'ceil'), end: roundToMinute(p.hefsekSunset, 'floor') };
   const hefsek = capital(term('hefsek', lang));
   if (p.hefsekAbs !== null) {
-    const lines = [fullDate(p.hefsekAbs, lang)];
-    if (p.hefsekEarly) {
-      lines.push('', fill('The {hefsek} was done before the days of waiting were over; the {clean_days} begin only after them. Ask a {rav}.', lang));
-    }
+    const lines: string[] = [];
+    if (p.hefsekEarly) lines.push(fill('Done before the days of waiting were over; the {clean_days} begin after them. Ask a {rav}.', lang));
     out.push({
       key: `hefsek:${p.startId}`,
       kind: 'hefsek',
@@ -172,19 +165,13 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
       timed: hefsekTimed,
       projected: false,
     });
-  } else if (p.endedWithoutImmersion) {
+  } else if (p.closedByNextPeriod) {
     // The next period began with no hefsek taharah recorded for this one: nothing more is known of it.
     return out;
   } else if (p.mikvahDoneAbs === null) {
     const deadline = clock12(p.hefsekSunset, tz, 'floor');
-    const lines = [
-      fullDate(p.planHefsekAbs, lang),
-      fill(`Before {sunset}: ${deadline}`, lang),
-      fill(`Preferably after {minchah_ketanah}: ${clock12(p.hefsekMinchaKetana, tz, 'ceil')}`, lang),
-    ];
-    if (p.planHefsekAbs > p.earliestHefsekAbs) {
-      lines.push('', fill(`The {hefsek} could have been done from ${weekday(p.earliestHefsekAbs)}, ${hebrewDate(p.earliestHefsekAbs, lang, false)}.`, lang));
-    }
+    // The event runs from minchah ketanah to sunset; its hours are not repeated here.
+    const lines = [fill('Before {sunset}; preferably after {minchah_ketanah}.', lang)];
     out.push({
       key: `hefsek:${p.startId}`,
       kind: 'hefsek',
@@ -197,12 +184,9 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
 
   // The seven clean days.
   for (const day of p.planCleanDays) {
-    const lines = [
-      fullDate(day.abs, lang),
-      fill(`A {bedikah} in the morning, and a {bedikah} before {sunset} (${clock12(day.sunset, tz, 'floor')}).`, lang),
-    ];
+    const lines = [capital(fill(`{bedikah} in the morning and before {sunset} (${clock12(day.sunset, tz, 'floor')}).`, lang))];
     if (day.n === 1 || day.n === 7) lines.push(fill('A {bedikah} on this day is required.', lang));
-    if (p.projected) lines.push('', fill(PROJECTED_NOTE, lang));
+    if (p.projected) lines.push(fill(PROJECTED_NOTE, lang));
     out.push({
       key: `clean:${p.startId}:${day.n}`,
       kind: 'clean_day',
@@ -220,34 +204,21 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
       key: `mikvah:${p.startId}`,
       kind: 'mikvah',
       title: discreet ? 'M ✓' : `${capital(term('immersion', lang))} ✓`,
-      description: discreet ? '' : capital(eveningLabel(m.nightAbs, lang)),
+      description: '',
       timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 60 * MINUTE },
       projected: false,
     });
-  } else if (p.endedWithoutImmersion) {
-    // The count was over and the next period began with no immersion recorded.
-    const m = p.planMikvah;
-    out.push({
-      key: `mikvah:${p.startId}`,
-      kind: 'mikvah',
-      title: discreet ? 'M ?' : `${capital(term('mikvah_night', lang))}: no ${term('immersion', lang)} recorded`,
-      description: discreet ? '' : [capital(eveningLabel(m.nightAbs, lang)), fill('No {immersion} is recorded for this period. If she immersed, record it.', lang)].join('\n'),
-      timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 90 * MINUTE },
-      projected: false,
-    });
   } else {
+    // The night worked out. Once it has passed she is taken to have immersed on it; nothing asks to record it.
     const m = p.planMikvah;
     const after = clock12(m.tzeit, tz, 'ceil');
-    const lines = [
-      eveningLabel(m.nightAbs, lang),
-      fill(`{immersion} after {nightfall}: ${after}`, lang),
-    ].map(capital);
-    if (m.postponedOver.length > 0) lines.push(fill('Moved: there is no {immersion} on the night of {yom_kippur} or of {tisha_bav}.', lang));
-    if (m.restNight) lines.push(fill('The night of {shabbat} or {yom_tov}: preparation is done beforehand.', lang));
+    const lines: string[] = [];
+    if (m.postponedOver.length > 0) lines.push(fill('Moved: no {immersion} on the night of {yom_kippur} or {tisha_bav}.', lang));
+    if (m.restNight) lines.push(fill('The night of {shabbat} or {yom_tov}: prepare beforehand.', lang));
     if (m.afterRestDay && !m.restNight) lines.push(fill('The night after {shabbat} or {yom_tov}.', lang));
-    if (m.afterRestDay && m.restNight) lines.push(fill('The day before is {shabbat} or {yom_tov}: preparation is done before that.', lang));
-    if (clash) lines.push('', fill('The {mikvah_night} falls on an {onat_perishah}. Ask a {rav}.', lang));
-    if (p.projected) lines.push('', fill(PROJECTED_NOTE, lang));
+    if (m.afterRestDay && m.restNight) lines.push(fill('The day before is {shabbat} or {yom_tov}: prepare before that.', lang));
+    if (clash) lines.push(fill('It falls on an {onat_perishah}. Ask a {rav}.', lang));
+    if (p.projected) lines.push(fill(PROJECTED_NOTE, lang));
     out.push({
       key: `mikvah:${p.startId}`,
       kind: 'mikvah',
@@ -265,7 +236,7 @@ export function buildCalendar(t: Timeline, opts: CalendarOptions): CalendarEvent
   const events: CalendarEvent[] = [];
   const clashNights = new Set(t.onot.filter(o => o.onMikvahNight).map(o => o.onah.abs));
   for (const p of t.periods) {
-    events.push(...periodEvents(p, p.mikvahDoneAbs === null && !p.endedWithoutImmersion && clashNights.has(p.planMikvah.nightAbs), opts));
+    events.push(...periodEvents(p, p.mikvahDoneAbs === null && clashNights.has(p.planMikvah.nightAbs), opts));
   }
   for (const o of t.onot) events.push(onahEvent(o, opts));
   const seen = new Set<string>();
