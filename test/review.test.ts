@@ -98,6 +98,22 @@ describe('public copy and the dashboard shell', () => {
     expect(banner.length).toBeLessThan(200 * 1024);
   });
 
+  it('headings use self-hosted Bellefair and the rest of the text uses Heebo', () => {
+    expect(css).toContain("font-family: Bellefair");
+    expect(css).toContain("font-family: Heebo");
+    expect(css).toContain('font-display: swap');
+    expect(css).toContain('U+0590-05FF');
+    expect(css).toContain('--font-display: Bellefair, Heebo, system-ui');
+    expect(css).toContain('--weight-bold: 600');
+    for (const file of ['public/fonts/bellefair-latin.woff2', 'public/fonts/bellefair-hebrew.woff2', 'public/fonts/heebo-latin.woff2', 'public/fonts/heebo-hebrew.woff2']) {
+      expect(readFileSync(file).subarray(0, 4).toString('ascii')).toBe('wOF2');
+    }
+    expect(read('public/index.html')).toContain('rel="preload" href="/fonts/heebo-latin.woff2"');
+    expect(read('public/index.html')).not.toContain('fonts.googleapis.com');
+    expect(read('public/_headers')).toContain("font-src 'self'");
+    expect(read('src/app/index.ts')).toContain("font-src 'self'");
+  });
+
   it('document pages stay a readable measure, and buttons are large enough to tap', () => {
     expect(css).toMatch(/max-width:\s*72[08]px/);
     expect(css).toMatch(/--tap:\s*44px/);
