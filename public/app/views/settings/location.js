@@ -1,7 +1,8 @@
-/* Settings: the Location card (ZIP code, a list, this device, or coordinates). */
-import { api, button, card, checkRow, h, icon, selectField, setBusy, textField } from '../../lib.js';
-import { S, t } from '../../store.js';
-import { attempt, refresh, region, saveAppChange, saveStatus } from '../shared.js';
+/* Settings: Location (the current place with today's times; change it by ZIP code, from the list, by this device, or by coordinates). */
+import { api, button, h, icon, selectField, setBusy, textField } from '../../lib.js';
+import { S } from '../../store.js';
+import { attempt, refresh, region } from '../shared.js';
+import { blockRow, errorText, group, more, save, saveApp, sunToday, switchRow, tn } from './ui.js';
 
 /** What is typed in the ZIP box and the coordinates form, and their errors. */
 let zip = '';
@@ -9,8 +10,25 @@ let zipError = '';
 let coords = null;
 let coordErrors = {};
 let geoError = '';
+/** The last place that could not be saved, and why (the server's explanation). */
+let refused = null;
 
-const savePlace = place => saveAppChange('location', a => (a.place = place), { message: 'Saved: ' + place.name });
+/** "Lakewood, NJ 08701" when the place came from a postal code. */
+export function placeName(p) {
+  if (!p) return '';
+  return p.postal && !p.name.includes(p.postal) ? p.name + ' ' + p.postal : p.name;
+}
+
+function savePlace(place) {
+  refused = null;
+  const next = JSON.parse(JSON.stringify(S.app));
+  next.place = place;
+  // A refusal (for example a place where the times cannot be computed) is shown under the place, which stays as it was.
+  return save('location', () => api('PUT', '/api/app', next).catch(e => {
+    refused = { name: placeName(place), message: (e && e.message) || 'Could not save.' };
+    throw e;
+  }), { message: 'Saved: ' + placeName(place) });
+}
 
 function findZip(btn) {
   const code = zip.replace(/\s+/g, '').toUpperCase();
@@ -25,7 +43,7 @@ function findZip(btn) {
     button: btn,
     done: r => {
       if (!r || !r.place) {
-        zipError = 'No place was found for this ZIP code. Choose the nearest place from the list below, or use this device’s location.';
+        zipError = 'No place was found for this ZIP code. Choose the nearest place from the list, or use this device’s location.';
         refresh('loc-zip');
         return;
       }
@@ -33,10 +51,7 @@ function findZip(btn) {
       savePlace(r.place);
     },
     fail: (message, e) => {
-      zipError =
-        e && e.status === 404
-          ? 'No place was found for this ZIP code. Choose the nearest place from the list below, or use this device’s location.'
-          : message;
+      zipError = e && e.status === 404 ? message + ' Or choose the nearest place from the list.' : message;
       refresh('loc-zip');
       document.getElementById('zip')?.focus();
     },
@@ -53,17 +68,18 @@ function useDevice(btn) {
   setBusy(btn, true);
   navigator.geolocation.getCurrentPosition(
     pos => {
-      const place = {
+      setBusy(btn, false);
+      savePlace({
         name: 'This device’s location',
         latitude: Math.round(pos.coords.latitude * 10000) / 10000,
         longitude: Math.round(pos.coords.longitude * 10000) / 10000,
         elevation: typeof pos.coords.altitude === 'number' ? Math.max(0, Math.round(pos.coords.altitude)) : 0,
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      };
-      savePlace(place);
+      });
     },
     () => {
       geoError = 'The location could not be read. Allow this site to use your location, or choose from the list.';
+      if (btn.isConnected) setBusy(btn, false);
       refresh('loc-device');
     },
     { timeout: 15000 },
@@ -74,12 +90,11 @@ function coordinatesForm() {
   return region('loc-coords', () => {
     const p = S.app.place;
     if (!coords) coords = { name: p ? p.name : '', latitude: p ? String(p.latitude) : '', longitude: p ? String(p.longitude) : '', elevation: p ? String(p.elevation) : '0', timeZone: p ? p.timeZone : Intl.DateTimeFormat().resolvedOptions().timeZone };
-    const field = (key, label, attrs) =>
-      textField({ id: 'place-' + key, label, value: coords[key], error: coordErrors[key] || '', oninput: e => (coords[key] = e.target.value), ...(attrs || {}) });
+    const field = (key, label, attrs) => textField({ id: 'place-' + key, label, value: coords[key], error: coordErrors[key] || '', oninput: e => (coords[key] = e.target.value), ...(attrs || {}) });
     return h(
       'form',
       {
-        class: 'coords',
+        class: 'st-form st-coords',
         novalidate: true,
         onsubmit: e => {
           e.preventDefault();
@@ -104,89 +119,160 @@ function coordinatesForm() {
         },
       },
       field('name', 'Name of the place', { maxlength: 80 }),
-      h('div', { class: 'two' }, field('latitude', 'Latitude', { inputmode: 'decimal', wide: true }), field('longitude', 'Longitude', { inputmode: 'decimal', wide: true })),
-      h('div', { class: 'two' }, field('elevation', 'Elevation (metres)', { inputmode: 'numeric', wide: true }), field('timeZone', 'Time zone', { placeholder: 'America/New_York', autocomplete: 'off', spellcheck: 'false' })),
-      button({ label: 'Use these coordinates', type: 'submit', attrs: { id: 'place-save' } }),
+      h('div', { class: 'st-two' }, field('latitude', 'Latitude', { inputmode: 'decimal', wide: true }), field('longitude', 'Longitude', { inputmode: 'decimal', wide: true })),
+      h('div', { class: 'st-two' }, field('elevation', 'Elevation (metres)', { inputmode: 'numeric', wide: true }), field('timeZone', 'Time zone', { placeholder: 'America/New_York', autocomplete: 'off', spellcheck: 'false' })),
+      h('div', { class: 'actions' }, button({ label: 'Use these coordinates', type: 'submit', attrs: { id: 'place-save' } })),
     );
   });
 }
 
-export function locationCard() {
-  const place = S.app.place;
-  const listed = place ? S.places.findIndex(p => p.name === place.name && p.latitude === place.latitude && p.longitude === place.longitude) : -1;
-  return card(
-    { title: 'Location', icon: 'map', headerAction: saveStatus('location'), className: 'location-card' },
-    h('p', { class: 'card-intro' }, t('Sunrise, {sunset} and {nightfall} are calculated for this place. Change it when you travel.')),
-    place
-      ? h('div', { class: 'current-place' }, icon('map'), h('div', {}, h('strong', {}, place.name), h('span', { class: 'small muted' }, place.latitude + ', ' + place.longitude + ' · ' + place.timeZone)))
-      : h('div', { class: 'current-place none' }, icon('alert'), h('div', {}, h('strong', {}, 'No location chosen yet.'), h('span', { class: 'small muted' }, 'Nothing can be calculated until one is chosen.'))),
-    region('loc-zip', () =>
-      h(
-        'form',
-        {
-          class: 'zip-form',
-          novalidate: true,
-          onsubmit: e => {
-            e.preventDefault();
-            findZip(e.submitter || document.getElementById('zip-find'));
-          },
-        },
-        h(
-          'div',
-          { class: 'field' },
-          h('label', { for: 'zip' }, 'ZIP code'),
-          h(
-            'div',
-            { class: 'zip-row' },
-            h('input', {
-              id: 'zip',
-              type: 'text',
-              autocomplete: 'postal-code',
-              maxlength: 10,
-              value: zip,
-              'aria-invalid': zipError ? 'true' : null,
-              'aria-describedby': zipError ? 'zip-error' : null,
-              oninput: e => (zip = e.target.value),
-            }),
-            button({ label: 'Find', type: 'submit', attrs: { id: 'zip-find' } }),
-          ),
-          zipError ? h('div', { class: 'error', id: 'zip-error' }, icon('alert', { size: 'sm' }), h('span', {}, zipError)) : null,
-        ),
-      ),
-    ),
-    selectField({
-      id: 'place',
-      label: 'Or choose from the list',
-      wide: true,
-      options: [{ value: '', label: listed < 0 ? (place ? 'Another place (' + place.name + ')' : 'Choose…') : 'Choose…', selected: listed < 0 }, ...S.places.map((p, i) => ({ value: String(i), label: p.name, selected: listed === i }))],
-      onchange: e => {
-        const v = e.target.value;
-        if (v !== '') savePlace(S.places[Number(v)]);
-      },
-    }),
-    region('loc-device', () =>
-      h(
-        'div',
-        { class: 'device' },
-        button({ label: 'Use this device’s location', icon: 'map', attrs: { id: 'place-device' }, onclick: e => useDevice(e.currentTarget) }),
-        geoError ? h('div', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, geoError)) : null,
-      ),
-    ),
+const round4 = n => String(Math.round(n * 10000) / 10000);
+
+function currentPlace() {
+  const p = S.app.place;
+  if (!p) {
+    return h(
+      'div',
+      { class: 'st-hero none' },
+      h('span', { class: 'st-hero-icon' }, icon('alert')),
+      h('div', {}, h('p', { class: 'st-hero-title' }, 'No location is chosen yet.'), h('p', { class: 'st-hero-meta' }, tn('Nothing can be calculated until one is chosen: not {sunset}, not the dates, not the reminders.'))),
+    );
+  }
+  const sun = sunToday();
+  return h(
+    'div',
+    { class: 'st-hero' },
+    h('span', { class: 'st-hero-icon' }, icon('map')),
     h(
-      'details',
-      { class: 'advanced', id: 'loc-adv' },
-      h('summary', {}, 'Advanced: coordinates and elevation'),
-      coordinatesForm(),
-      checkRow({
-        id: 'use-elevation',
-        label: t('Adjust sunrise and {sunset} for elevation'),
-        help: 'Off: the times at sea level, as most calendars print them.',
-        checked: S.app.useElevation,
-        onchange: e => {
-          const on = e.target.checked;
-          saveAppChange('location', a => (a.useElevation = on));
-        },
-      }),
+      'div',
+      { class: 'st-hero-main' },
+      h('p', { class: 'st-hero-title', id: 'loc-current' }, placeName(p)),
+      h('p', { class: 'st-hero-meta' }, p.timeZone.replace(/_/g, ' ') + ' · ' + round4(p.latitude) + ', ' + round4(p.longitude)),
+      sun
+        ? h(
+            'dl',
+            { class: 'st-times', 'aria-label': 'Today in this place' },
+            h('div', {}, h('dt', {}, icon('sun', { size: 'sm' }), 'Sunrise'), h('dd', {}, sun.sunrise || '—')),
+            h('div', {}, h('dt', {}, icon('moon', { size: 'sm' }), tn('{sunset}', true)), h('dd', {}, sun.sunset || '—')),
+          )
+        : null,
+      sun ? h('p', { class: 'st-hero-note' }, 'Today’s times, as the calendar and the reminders use them.') : null,
     ),
   );
 }
+
+function zipForm() {
+  return region('loc-zip', () =>
+    h(
+      'form',
+      {
+        class: 'st-form st-zip',
+        novalidate: true,
+        onsubmit: e => {
+          e.preventDefault();
+          findZip(e.submitter || document.getElementById('zip-find'));
+        },
+      },
+      h('label', { for: 'zip', class: 'st-label' }, 'ZIP code'),
+      h(
+        'div',
+        { class: 'st-inline' },
+        h('input', {
+          id: 'zip',
+          type: 'text',
+          autocomplete: 'postal-code',
+          inputmode: 'text',
+          maxlength: 10,
+          value: zip,
+          placeholder: '08701',
+          'aria-invalid': zipError ? 'true' : null,
+          'aria-describedby': 'zip-help' + (zipError ? ' zip-error' : ''),
+          oninput: e => (zip = e.target.value),
+        }),
+        button({ label: 'Find', type: 'submit', variant: 'primary', attrs: { id: 'zip-find' } }),
+      ),
+      h('p', { class: 'help', id: 'zip-help' }, 'A 5-digit US ZIP code or a Canadian postal code.'),
+      errorText('zip-error', zipError),
+    ),
+  );
+}
+
+function view() {
+  const place = S.app.place;
+  const listed = place ? S.places.findIndex(p => p.name === place.name && p.latitude === place.latitude && p.longitude === place.longitude) : -1;
+  return {
+    title: 'Location',
+    parent: '',
+    statusKey: 'location',
+    lead: tn('Sunrise, {sunset} and {nightfall} are calculated for this place. Change it when you travel.'),
+    body: [
+      currentPlace(),
+      refused
+        ? h(
+            'div',
+            { class: 'st-refused', role: 'alert' },
+            icon('alert'),
+            h('div', {}, h('strong', {}, refused.name + ' was not saved.'), h('p', {}, refused.message), h('p', { class: 'small' }, place ? 'The location is still ' + placeName(place) + '.' : 'No location is set.')),
+          )
+        : null,
+      group(
+        { title: 'Change the place', id: 'loc-change' },
+        blockRow(zipForm()),
+        blockRow(
+          selectField({
+            id: 'place',
+            label: 'Or choose from the list',
+            wide: true,
+            options: [{ value: '', label: listed < 0 ? (place ? 'Another place (' + place.name + ')' : 'Choose…') : 'Choose…', selected: listed < 0 }, ...S.places.map((p, i) => ({ value: String(i), label: p.name, selected: listed === i }))],
+            onchange: e => {
+              const v = e.target.value;
+              if (v !== '') savePlace(S.places[Number(v)]);
+            },
+          }),
+        ),
+        blockRow(
+          region('loc-device', () =>
+            h(
+              'div',
+              { class: 'st-device' },
+              button({ label: 'Use this device’s location', icon: 'map', attrs: { id: 'place-device' }, onclick: e => useDevice(e.currentTarget) }),
+              h('p', { class: 'help' }, 'Your browser asks first. The place is saved with its coordinates only.'),
+              geoError ? h('div', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, geoError)) : null,
+            ),
+          ),
+        ),
+      ),
+      more(
+        { id: 'loc-adv', summary: 'Advanced: coordinates and elevation' },
+        group({ title: 'Coordinates', intro: 'For a place that is not in the list and has no ZIP code.' }, blockRow(coordinatesForm())),
+        group(
+          {},
+          switchRow({
+            id: 'use-elevation',
+            label: tn('Adjust sunrise and {sunset} for elevation'),
+            help: S.app.useElevation ? 'On: the times are for ' + (place ? place.elevation : 0) + ' metres above sea level.' : 'Off: the times at sea level, as most calendars print them.',
+            checked: S.app.useElevation,
+            onchange: e => {
+              const on = e.target.checked;
+              saveApp('location', a => (a.useElevation = on));
+            },
+          }),
+        ),
+      ),
+    ],
+  };
+}
+
+export const locationSection = {
+  id: 'location',
+  title: 'Location',
+  icon: 'map',
+  summary: () => {
+    const p = S.app.place;
+    if (!p) return 'Not chosen yet';
+    const sun = sunToday();
+    return [placeName(p), sun && sun.sunset ? [tn(' · {sunset} today '), sun.sunset] : ''];
+  },
+  flag: () => (S.app.place ? null : { kind: 'warn', text: 'Needed to calculate anything' }),
+  view,
+};
