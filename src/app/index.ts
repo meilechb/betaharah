@@ -183,7 +183,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     h.set('Strict-Transport-Security', 'max-age=31536000');
     if (!h.has('Cache-Control')) h.set('Cache-Control', 'no-store');
     if ((h.get('Content-Type') ?? '').startsWith('text/html')) {
-      h.set('Content-Security-Policy', "default-src 'none'; style-src 'self'; img-src 'self' data:; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+      h.set('Content-Security-Policy', "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' data:; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
     }
   });
 

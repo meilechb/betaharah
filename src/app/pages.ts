@@ -66,6 +66,8 @@ function layout(doc: Doc): string {
 <meta name="twitter:title" content="${escapeHtml(full)}">
 <meta name="twitter:description" content="${escapeHtml(SHARE)}">
 <meta name="twitter:image" content="${SHARE_IMAGE}">
+<link rel="preload" href="/fonts/heebo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/bellefair-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/site.css">
 <link rel="stylesheet" href="/pages.css">
 </head>

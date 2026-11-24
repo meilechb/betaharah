@@ -37,10 +37,22 @@ so in your report; do not edit the frozen files.
 
 ## Hard rules
 
-- **Privacy.** No third-party scripts, fonts, images, analytics or CDNs.
-  Everything is served from the site itself. System fonts only.
+- **Privacy.** No third-party scripts, images, analytics or CDNs.
+  Everything is served from the site itself, including the fonts.
+- **Fonts.** Headings about 20px and up use Bellefair (one weight, 400),
+  for Hebrew and Latin. Body text, buttons, labels, inputs, small text and
+  calendar cards use Heebo, a variable font, at weights 400, 500 and 600
+  (`--weight-normal`, `--weight-medium`, `--weight-bold`). Both are
+  self-hosted as woff2 under `public/fonts/`, split into Hebrew and Latin
+  files with `unicode-range`, and loaded with `font-display: swap`. The
+  Latin files are preloaded. The system font stack stays after them, so a
+  missing file still draws. Bellefair has the Hebrew letters and vowel
+  points, and not gershayim (U+05F4); Heebo is the next family in
+  `--font-display`, so that character is drawn by Heebo. The page stays
+  left-to-right.
 - **Content Security Policy** (`public/_headers`):
-  `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'`.
+  `default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'`.
+  `font-src 'self'` allows the files in `/fonts/` and still blocks a font CDN.
   So: no inline `<script>`, no `style=""` attributes, no `<style>` elements
   created at run time. Setting `el.style.x` from script works, but use classes.
   Do not loosen the policy.
@@ -130,7 +142,7 @@ borders (`--line-strong`) meet 3:1.
 | Status | `--info-bg`/`--info-line`, `--warn-bg`/`--warn-line`, `--ok`/`--ok-bg`, `--bad`/`--bad-bg`/`--bad-hover`/`--bad-ink` |
 | Kinds of days | `--flow`, `--onah`, `--light` (a lighter onah), `--hefsek`, `--clean`, `--mikvah` |
 | Spacing (4 px scale) | `--space-1` 4, `-2` 8, `-3` 12, `-4` 16, `-5` 20, `-6` 24, `-8` 32, `-10` 40, `-12` 48 |
-| Type | `--font`, `--font-mono`; `--text-xs` 13 px, `-sm` 14, `-base` 16, `-lg` 18, `-xl` 22, `-2xl` 28, `-3xl` landing headline; `--leading` 1.55, `--leading-tight` 1.25; `--weight-normal` 400, `-medium` 500, `-bold` 650 |
+| Type | `--font` Heebo, then the system stack; `--font-display` Bellefair for headings about 20px and up, then Heebo; `--font-mono`; `--text-xs` 13 px, `-sm` 14, `-base` 16, `-lg` 18, `-xl` 22, `-2xl` 28, `-3xl` landing headline; `--leading` 1.55, `--leading-tight` 1.25; `--weight-normal` 400, `-medium` 500, `-bold` 600 |
 | Shape | `--radius-sm` 6, `-md` 10 (controls), `-lg` 14 (cards), `-pill`; `--shadow-sm` (cards), `-md`, `-lg` (toasts, dialogs) |
 | Sizes | `--tap` 44 px, `--control-h` 44 px, `--page-max` 760, `--page-wide` 1120, `--doc-max` 720, `--gutter` 16 |
 | Motion | `--ease`, `--dur-fast` 120 ms, `--dur` 200 ms; both become 0 under `prefers-reduced-motion` |
