@@ -77,10 +77,10 @@ proprietor"). Choose the closest option where the form has a list.
 | Privacy policy | `https://betaharah.com/privacy` |
 | Terms | `https://betaharah.com/terms` |
 | Sample message 1 | `Betaharah code: 123456. It expires in 10 minutes. Do not share it.` |
-| Sample message 2 | `Betaharah: reminders are on for this number. Text ? for the list of commands. Msg&data rates may apply. Reply STOP to stop, HELP for help.` |
+| Sample message 2 | `Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.` |
 | Sample message 3 | `Mikvah night: Thu Dec 3, after 5:16 PM. Reply 4 after immersing.` |
 | Opt-in confirmation message | Sample message 2 |
-| HELP reply | `Betaharah: calendar reminders and replies. Commands and help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.` |
+| HELP reply | `Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.` |
 | STOP | Handled by the carrier on toll-free numbers; the site also records it and sends nothing further to that phone until it texts START. |
 
 If the reviewer asks for changes, the wording that users see is in

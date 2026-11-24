@@ -388,7 +388,7 @@ describe('received texts', () => {
   it('follows what Telnyx reports, whatever the words were', () => {
     expect(kind('please stop texting me', 'STOP')).toBe('stop');
     expect(kind('ok', 'START')).toBe('start');
-    // a help keyword Telnyx has already answered is not answered twice
+    // Telnyx may mark HELP as already answered; the site still classifies it as help
     expect(kind('HELP', 'HELP')).toBe('help_answered');
   });
 
@@ -399,7 +399,7 @@ describe('received texts', () => {
 
 describe('the texts the site sends', () => {
   it('each fits one text message in the basic character set', () => {
-    const basic = /^[A-Za-z0-9 .,:;()\-\/?!'&]+$/;
+    const basic = /^[A-Za-z0-9 .,:;()\-\/?!'&@]+$/;
     for (const text of [codeText('123456'), REMINDERS_ON_TEXT, HELP_REPLY, TEST_TEXT, HELP_TEXT]) {
       expect(text, text).toMatch(basic);
       expect(text.length, text).toBeLessThanOrEqual(160);
@@ -408,12 +408,9 @@ describe('the texts the site sends', () => {
 
   it('say who they are from and how to stop, where the carriers require it', () => {
     expect(codeText('123456')).toBe('Betaharah code: 123456. It expires in 10 minutes. Do not share it.');
-    for (const text of [REMINDERS_ON_TEXT, HELP_REPLY]) {
-      expect(text).toMatch(/^Betaharah: /);
-      expect(text).toContain('Msg&data rates may apply');
-      expect(text).toContain('STOP');
-    }
-    expect(REMINDERS_ON_TEXT).toContain('HELP');
-    expect(HELP_REPLY).toContain('betaharah.com/help');
+    expect(HELP_REPLY).toBe('Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.');
+    expect(REMINDERS_ON_TEXT).toBe("Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.");
+    expect(HELP_REPLY).toContain('STOP');
+    expect(REMINDERS_ON_TEXT).toContain('STOP');
   });
 });

@@ -594,7 +594,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const to = tidyNumber(body.to, site.config);
     const outcome = await sendSms(c.env, deps, site, { to, text: TEST_TEXT, now: deps.now() });
     if (!outcome.ok) throw new HttpError(502, outcome.detail);
-    return c.json({ ok: true });
+    return c.json({ ok: true, state: await adminState(c) });
   });
 
   app.all('/api/admin/*', c => c.json({ error: 'Not found.' }, 404));

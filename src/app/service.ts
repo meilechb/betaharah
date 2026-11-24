@@ -45,9 +45,14 @@ export function codeText(code: string): string {
   return `Betaharah code: ${code}. It expires in ${CODE_MINUTES} minutes. Do not share it.`;
 }
 
-/** Sent once when reminders are turned on for a phone. */
-export const REMINDERS_ON_TEXT = 'Betaharah: reminders are on for this number. Text ? for the list of commands. Msg&data rates may apply. Reply STOP to stop, HELP for help.';
-export const HELP_REPLY = 'Betaharah: calendar reminders and replies. Commands and help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.';
+/**
+ * Sent when reminders are turned on, and when a phone texts START.
+ * Wording filed for the toll-free verification.
+ */
+export const START_REPLY = "Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.";
+export const REMINDERS_ON_TEXT = START_REPLY;
+/** Reply to HELP. Wording filed for the toll-free verification. */
+export const HELP_REPLY = 'Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.';
 export const TEST_TEXT = 'Betaharah: test message. Text 9 for status, ? for the list of commands.';
 
 // ---------- sending a text ----------
@@ -287,22 +292,74 @@ export function inboundKind(message: Pick<InboundMessage, 'text' | 'autoresponse
 }
 
 /**
- * Handles one received text. When the household's reminders and calendar
- * should now be refreshed, returns the household as saved and its picture;
- * otherwise null.
- *
- * Strangers get no reply and leave no trace. STOP and START are confirmed
- * by the carrier, not by this app. Commands are accepted only from a phone
- * that proved its number, may record by text, and has not opted out.
+ * HELP and START are answered even from a number with no account, so a
+ * carrier check of the toll-free number gets the filed wording. The number
+ * itself is not stored. STOP is only recorded for a phone on an account;
+ * the carrier sends the STOP confirmation.
  */
+async function answerKeyword(
+  env: Env,
+  deps: Deps,
+  site: Site,
+  message: InboundMessage,
+  row: { household_id: string } | null,
+  kind: 'help' | 'help_answered' | 'start',
+  now: number,
+): Promise<{ household: Household; computed: Computed | null } | null> {
+  const replyText = kind === 'start' ? START_REPLY : HELP_REPLY;
+  let send = true;
+  let refresh = false;
+  if (row) {
+    const changed = await changeHousehold(env, row.household_id, now, data => {
+      const phone = data.phones.find(p => p.number === message.from);
+      if (!phone) return { send: false, refresh: false };
+      if (data.seenTexts.includes(message.eventId)) return { send: false, refresh: false };
+      data.seenTexts.push(message.eventId);
+      if (data.seenTexts.length > MAX_SEEN_TEXTS) data.seenTexts.splice(0, data.seenTexts.length - MAX_SEEN_TEXTS);
+      addMessage(data, { direction: 'in', phone: lastFour(message.from), body: message.text, at: now, status: 'received' });
+      const turnedBackOn = kind === 'start' && phone.optedOut;
+      if (kind === 'start') phone.optedOut = false;
+      const allowed = allowText(data, site.config.householdMonthlyLimit, now);
+      addMessage(data, { direction: 'out', phone: lastFour(message.from), body: replyText, at: now, status: allowed ? 'sent' : 'not sent' });
+      return { send: allowed, refresh: turnedBackOn };
+    });
+    if (!changed) return null;
+    send = changed.result.send;
+    refresh = changed.result.refresh;
+  } else {
+    const claimed = await env.DB.prepare('INSERT OR IGNORE INTO counters (key, value, expires_at) VALUES (?, 1, ?)').bind(`kw:${message.eventId.slice(0, 120)}`, now + DAY).run();
+    if (claimed.meta.changes === 0) return null;
+  }
+  if (send) {
+    const sent = await sendSms(env, deps, site, { to: message.from, text: replyText, now });
+    if (!sent.ok && row) {
+      await changeHousehold(env, row.household_id, now, data => {
+        refundText(data, now);
+        const m = data.messages.find(x => x.direction === 'out' && x.at === now && x.body === replyText.slice(0, 320));
+        if (m) m.status = 'not sent';
+        if (sent.reason === 'blocked') {
+          const phone = data.phones.find(p => p.number === message.from);
+          if (phone) phone.optedOut = true;
+        }
+      });
+      refresh = false;
+    }
+  }
+  if (!refresh || !row) return null;
+  const household = await loadHousehold(env, row.household_id);
+  if (!household) return null;
+  return { household, computed: compute(household.data, now) };
+}
+
 export async function handleInbound(env: Env, deps: Deps, site: Site, message: InboundMessage): Promise<{ household: Household; computed: Computed | null } | null> {
   const now = deps.now();
-  const hash = await phoneHash(env, message.from);
-  const row = await getPhone(env.DB, hash);
-  if (!row) return null;
-  if ((await bump(env.DB, `in:${hash.slice(0, 24)}`, HOUR, now)) > MAX_INBOUND_PER_HOUR) return null;
-
   const kind = inboundKind(message);
+  const hash = await phoneHash(env, message.from);
+  if ((await bump(env.DB, `in:${hash.slice(0, 24)}`, HOUR, now)) > MAX_INBOUND_PER_HOUR) return null;
+  const row = await getPhone(env.DB, hash);
+  if (kind === 'help' || kind === 'help_answered' || kind === 'start') return answerKeyword(env, deps, site, message, row, kind, now);
+  if (!row) return null;
+
   const changed = await changeHousehold(env, row.household_id, now, data => {
     const none = { reply: null as string | null, refresh: false, computed: undefined as Computed | null | undefined };
     const phone = data.phones.find(p => p.number === message.from);
@@ -318,11 +375,6 @@ export async function handleInbound(env: Env, deps: Deps, site: Site, message: I
     if (kind === 'stop') {
       refresh = !phone.optedOut;
       phone.optedOut = true;
-    } else if (kind === 'start') {
-      refresh = phone.optedOut;
-      phone.optedOut = false;
-    } else if (kind === 'help') {
-      text = HELP_REPLY;
     } else if (kind === 'command' && phone.verifiedAt !== null && phone.canUpdate && !phone.optedOut) {
       const result = runCommand(data, message.text, now);
       text = result.text;

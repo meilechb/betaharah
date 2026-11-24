@@ -139,7 +139,7 @@ function statusCard() {
       {},
       h('tr', {}, h('td', {}, 'Accounts'), h('td', {}, String(t.households))),
       h('tr', {}, h('td', {}, 'Phones'), h('td', {}, String(t.phones))),
-      h('tr', {}, h('td', {}, 'Reminders waiting to be sent'), h('td', {}, String(t.pendingReminders))),
+      h('tr', {}, h('td', {}, 'Reminders waiting to be sent'), h('td', {}, String(t.waiting ?? 0))),
       h('tr', {}, h('td', {}, 'Texts sent this month'), h('td', {}, S.usage.textsThisMonth + ' of at most ' + S.config.monthlyMessageLimit)),
       h('tr', {}, h('td', {}, 'Sign-in codes requested today'), h('td', {}, S.usage.codesToday + ' of at most ' + S.config.dailyCodeLimit)),
     ),
@@ -249,7 +249,14 @@ function keysCard() {
         class: 'row',
         onsubmit: e => {
           e.preventDefault();
-          run(() => api('POST', '/api/admin/test-text', { to: testTo }), () => toast('A test text was sent.'));
+          run(
+            () => api('POST', '/api/admin/test-text', { to: testTo }),
+            r => {
+              if (r.state) adopt(r.state);
+              render();
+              toast('A test text was sent.');
+            },
+          );
         },
       },
       h('input', { type: 'tel', 'aria-label': 'Number for a test text', placeholder: 'Your own mobile number', required: true, value: testTo, oninput: e => (testTo = e.target.value) }),

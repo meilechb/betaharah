@@ -241,13 +241,17 @@ function renderAuth() {
       notes,
       h('p', { class: 'muted' }, 'Enter your mobile number. We text you a 6-digit code. That is all it takes, the first time and every time.'),
       field('Your mobile number', numberInput),
-      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'submit', disabled: a.busy }, 'Text me a code'), googleButton(a)),
-      h('p', {}, h('button', { class: 'link', type: 'button', onclick: () => set({ mode: 'password', message: '' }) }, 'Sign in with a password instead')),
       h(
         'p',
-        { class: 'muted small' },
-        'By asking for a code you agree to receive it by text message at this number. Message and data rates may apply. Reminders are sent only if you turn them on later.',
+        { class: 'help sms-consent' },
+        'Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. ',
+        h('a', { href: '/privacy' }, 'Privacy'),
+        ' and ',
+        h('a', { href: '/terms' }, 'Terms'),
+        '.',
       ),
+      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'submit', disabled: a.busy }, 'Text me a code'), googleButton(a)),
+      h('p', {}, h('button', { class: 'link', type: 'button', onclick: () => set({ mode: 'password', message: '' }) }, 'Sign in with a password instead')),
       legal(),
     );
   } else {

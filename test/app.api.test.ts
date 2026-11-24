@@ -9,7 +9,7 @@ import { createApp } from '../src/app/index';
 import { DEFAULT_SITE_CONFIG, type SiteConfig } from '../src/app/model';
 import type { QueuedReminder } from '../src/app/model';
 import { TABLES } from '../src/app/schema';
-import { HELP_REPLY, REMINDERS_ON_TEXT, TEST_TEXT, tick } from '../src/app/service';
+import { HELP_REPLY, REMINDERS_ON_TEXT, START_REPLY, TEST_TEXT, tick } from '../src/app/service';
 import { DEFAULT_APP_SETTINGS, PLACES } from '../src/app/settings';
 import { loadHousehold } from '../src/app/store';
 import { localToInstant } from '../src/engine/civil';
@@ -1152,12 +1152,12 @@ describe('text messages', () => {
 
     world.telnyx.blocked.delete(HUSBAND);
     await text(HUSBAND, 'START', 'ev-start', { autoresponseType: 'START' });
-    expect(world.telnyx.sent).toHaveLength(before); // the carrier confirms this too
+    expect(textsTo(HUSBAND).at(-1)).toBe(START_REPLY);
     s = await c.state();
     expect(s.phones[0]).toMatchObject({ optedOut: false, texts: true });
     expect(await waiting()).toBeGreaterThan(0);
     await text(HUSBAND, '9', 'ev-status-2');
-    expect(world.telnyx.sent).toHaveLength(before + 1);
+    expect(world.telnyx.sent).toHaveLength(before + 2);
   });
 
   it('the opt-out words work without Telnyx saying so, and for a phone that has not proved its number', async () => {
@@ -1165,17 +1165,34 @@ describe('text messages', () => {
     expect((await c.state()).phones[0].optedOut).toBe(true);
     await text(HUSBAND, 'unstop', 'ev2');
     expect((await c.state()).phones[0].optedOut).toBe(false);
-    expect(replies()).toEqual([]);
+    expect(replies()).toEqual([START_REPLY]);
   });
 
   it('HELP gets the program\'s description, once', async () => {
     await text(HUSBAND, 'HELP', 'ev1');
     expect(replies()).toEqual([HELP_REPLY]);
-    // when Telnyx has already answered, the site does not answer again
+    // the filed wording is sent even when Telnyx marks the keyword as already answered
     await text(HUSBAND, 'HELP', 'ev2', { autoresponseType: 'HELP' });
-    expect(replies()).toEqual([HELP_REPLY]);
+    expect(replies()).toEqual([HELP_REPLY, HELP_REPLY]);
     await text(HUSBAND, '?', 'ev3');
     expect(replies().at(-1)).toMatch(/^1 flow began, 2 hefsek done/);
+  });
+
+  it('HELP and START from a number with no account get the filed replies, and the number is not stored', async () => {
+    const stranger = '+17325550177';
+    expect(await text(stranger, 'HELP', 'kw-help')).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY]);
+    expect(await text(stranger, 'START', 'kw-start')).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
+    expect(await text(stranger, 'STOP', 'kw-stop')).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
+    expect(await text(stranger, '1', 'kw-command')).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
+    expect(await count('phones')).toBe(1);
+    expect(await count('households')).toBe(1);
+    const again = await text(stranger, 'HELP', 'kw-help');
+    expect(again).toBe(200);
+    expect(textsTo(stranger)).toEqual([HELP_REPLY, START_REPLY]);
   });
 
   it('when the carrier says a number has opted out, the site notes it', async () => {
@@ -1705,10 +1722,14 @@ describe('the operator\'s console', () => {
 
   it('sends a test text, and deletes an account when asked', async () => {
     const op = await site({ google: true });
-    expect((await op.post('/api/admin/test-text', { to: '(732) 555-0101' })).status).toBe(200);
+    const sent = await op.post('/api/admin/test-text', { to: '(732) 555-0101' });
+    expect(sent.status).toBe(200);
+    expect(sent.json.state.usage.textsThisMonth).toBe(1);
+    expect(sent.json.state.totals.waiting).toBe(0);
     expect(textsTo(HUSBAND)).toEqual([TEST_TEXT]);
     world.telnyx.failNext = 1;
     expect((await op.post('/api/admin/test-text', { to: HUSBAND })).status).toBe(502);
+    expect((await op.get('/api/admin/state')).json.usage.textsThisMonth).toBe(1);
 
     const member = await account(HUSBAND);
     world.clock.now += HOUR;

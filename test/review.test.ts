@@ -22,6 +22,18 @@ describe('public copy and the dashboard shell', () => {
     expect(app).toContain('Back to the home page');
   });
 
+  it('the sign-up form shows the SMS consent next to the phone field, and the console reads the waiting count', () => {
+    const admin = readFileSync('public/admin/admin.js', 'utf8');
+    expect(app).toContain('Message frequency varies');
+    expect(app).toContain('Msg & data rates may apply');
+    expect(app).toContain('STOP');
+    expect(app).toContain('HELP');
+    expect(app).toContain("href: '/privacy'");
+    expect(app).toContain("href: '/terms'");
+    expect(admin).toContain('t.waiting');
+    expect(admin).not.toContain('pendingReminders');
+  });
+
   it('document pages stay a readable measure, and buttons are large enough to tap', () => {
     expect(css).toMatch(/main\.doc\s*\{[^}]*max-width:\s*720px/);
     expect(css).toContain('min-height: 44px');
