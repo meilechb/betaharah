@@ -97,7 +97,7 @@
           <p class="hero-sms" id="hero-sms" hidden></p>
           <p class="signup-note" id="signup-note" role="status" hidden></p>
           <ul class="hero-facts">
-            <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>A phone number is all it takes</li>
+            <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Signing in with Google, or with your phone</li>
             <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Private to your account</li>
             <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Nothing sent on Shabbat or Yom Tov</li>
           </ul>
@@ -249,7 +249,7 @@
             <li class="fs fs-flow">
               <span class="fs-mark" aria-hidden="true"><span class="mk flow lg"><svg><use href="#i-drop" /></svg></span></span>
               <h3>Flow</h3>
-              <p>One tap, or text <code>1</code>.</p>
+              <p>One tap, or text <code>PERIOD</code>.</p>
             </li>
             <li class="fs fs-hefsek">
               <span class="fs-mark" aria-hidden="true"><span class="mk hefsek lg">H</span></span>
@@ -294,17 +294,15 @@
         <div class="wrap split">
           <div class="fcopy">
             <p class="eyebrow">Recording</p>
-            <h2 id="text-title">Text one digit to record.</h2>
-            <p>Each reply says what was recorded.</p>
-            <ul class="digits" aria-label="The digits">
-              <li><kbd>1</kbd>Flow began</li>
-              <li><kbd>2</kbd>Hefsek done</li>
-              <li><kbd>3</kbd>Count broken</li>
-              <li><kbd>4</kbd>Immersed</li>
-              <li><kbd>5</kbd>Stain</li>
-              <li><kbd>9</kbd>Status</li>
-              <li><kbd>0</kbd>Undo</li>
+            <h2 id="text-title">Text a word to record.</h2>
+            <p>Each reply says what was recorded, then the words you can send back. A digit by itself changes nothing.</p>
+            <ul class="digits" aria-label="The words">
+              <li><kbd>PERIOD</kbd>Flow began</li>
+              <li><kbd>HEFSEK</kbd>Hefsek done</li>
+              <li><kbd>STATUS</kbd>Where things stand</li>
+              <li><kbd>MORE</kbd>The other words</li>
             </ul>
+            <p class="fine">A time can follow the word: <code>period last night</code>, <code>hefsek yesterday</code>. Stain, a broken count, and immersion are under MORE.</p>
             
           </div>
           <figure class="visual" aria-labelledby="text-cap">
@@ -313,14 +311,13 @@
               <div class="phone-head" aria-hidden="true"><span class="avatar">B</span><b>Betaharah</b><small>Text message</small></div>
               <ol class="thread">
                 <li class="stamp">Tue, Dec 1 · 10:12 AM</li>
-                <li class="b out"><span class="visually-hidden">She sends: </span>1</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Recorded: flow Tue Dec 1 by day. Hefsek from Sat Dec 5. 0 to undo.</li>
-                <li class="stamp">Thu, Dec 3 · 1:00 PM</li>
-                <li class="b out"><span class="visually-hidden">She sends: </span>9</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Niddah since Tue Dec 1. Hefsek from Sat Dec 5; next possible Sat Dec 5 before 4:31 PM.</li>
-                <li class="stamp">Sun, Dec 6 · 8:05 AM</li>
-                <li class="b out"><span class="visually-hidden">She sends: </span>2 yesterday</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Recorded: hefsek Sat Dec 5. Clean days Sun Dec 6 - Sat Dec 12. Mikvah Sat Dec 12 after 5:17 PM. 0 to undo.</li>
+                <li class="b out"><span class="visually-hidden">She sends: </span>PERIOD</li>
+                <li class="b in"><span class="visually-hidden">Reply: </span>When did it begin? Reply: NOW, LAST NIGHT, TODAY BY DAY, ANOTHER DAY</li>
+                <li class="b out"><span class="visually-hidden">She sends: </span>NOW</li>
+                <li class="b in"><span class="visually-hidden">Reply: </span>Recorded: flow Tue Dec 1 by day. Hefsek from Sat Dec 5. Reply: UNDO, STATUS</li>
+                <li class="stamp">Sat, Dec 5 · 2:10 PM</li>
+                <li class="b out"><span class="visually-hidden">She sends: </span>HEFSEK</li>
+                <li class="b in"><span class="visually-hidden">Reply: </span>Recorded: hefsek Sat Dec 5. Clean days Sun Dec 6 - Sat Dec 12. Mikvah Sat Dec 12 after 5:17 PM.</li>
               </ol>
             </div>
             <figcaption id="text-cap">Three texts and their replies.</figcaption>
@@ -371,7 +368,7 @@
           <div class="section-head center">
             <p class="eyebrow">Your calendar</p>
             <h2 id="calendar-title">In the calendar you already use.</h2>
-            <p class="section-lead">Google, Apple, Outlook or any calendar app.</p>
+            <p class="section-lead">Optional. Google, Apple, Outlook, or any calendar app. Signing in with Google does not connect a calendar. If you connect one later, the site makes one new calendar and cannot see the rest.</p>
           </div>
           <div class="cal-compare">
             <figure class="agenda" aria-labelledby="agenda-words">
@@ -414,7 +411,7 @@
           <div class="fcopy">
             <p class="eyebrow">Reminders</p>
             <h2 id="reminders-title">A text before each time.</h2>
-            <p>Off until you turn them on. Nothing is sent on Shabbat or Yom Tov.</p>
+            <p>Off until you turn them on. Before the hefsek, the bedikot, a text to book the mikvah, mikvah night, and each onah. Nothing is sent on Shabbat or Yom Tov. You do not have to text that you immersed.</p>
           </div>
           <figure class="visual" aria-labelledby="lock-cap"><figure class="visual" aria-labelledby="lock-cap">
             <div class="lock">
@@ -455,7 +452,7 @@
                 <p class="phone-label">Her phone, ending 0101</p>
                 <ol class="thread">
                   <li class="b out"><span class="visually-hidden">She sends: </span>ADD</li>
-                  <li class="b in"><span class="visually-hidden">Reply: </span>Have that phone text JOIN NRMAAABZ to this number within 7 days. The code works once, for one phone. Its reminders stay off until it texts REMINDERS ON.</li>
+                  <li class="b in"><span class="visually-hidden">Reply: </span>Have that phone text JOIN NRMAAABZ to this number within 7 days. The code works once.</li>
                 </ol>
               </div>
               <div class="handset small offset">
@@ -464,8 +461,8 @@
                 <p class="phone-label">His phone</p>
                 <ol class="thread">
                   <li class="b out"><span class="visually-hidden">He sends: </span>JOIN NRMAAABZ</li>
-                  <li class="b in"><span class="visually-hidden">Reply: </span>This phone is now on the account with the phone ending 0101. Text 9 for status, MENU for everything. Reminders are off for this phone until you text REMINDERS ON.</li>
-                  <li class="b out"><span class="visually-hidden">He sends: </span>9</li>
+                  <li class="b in"><span class="visually-hidden">Reply: </span>This phone is now on the account with the phone ending 0101. Its reminders are off.</li>
+                  <li class="b out"><span class="visually-hidden">He sends: </span>STATUS</li>
                   <li class="b in"><span class="visually-hidden">Reply: </span>Clean day 3 of 7. Mikvah Sat Dec 12 after 5:17 PM.</li>
                 </ol>
               </div>
@@ -508,15 +505,15 @@
             <li class="ss">
               <p class="ss-n"><span>3</span>The last period</p>
               <ol class="thread on-dark">
-                <li class="b out"><span class="visually-hidden">You send: </span>1 11/1 night</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Recorded: flow Sun Nov 1 night, 2026. Hefsek from Fri Nov 6. 0 to undo. …</li>
+                <li class="b out"><span class="visually-hidden">You send: </span>period Nov 1 night</li>
+                <li class="b in"><span class="visually-hidden">Reply: </span>Recorded: flow Sun Nov 1 night, 2026. Hefsek from Fri Nov 6.</li>
                 <li class="b out"><span class="visually-hidden">You send: </span>DONE</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Setup is finished. From now on text 1 when a flow begins, 2 after the hefsek, 4 after immersion, 9 for status. …</li>
+                <li class="b in"><span class="visually-hidden">Reply: </span>Setup is done. Reminders are off for now. Reply: PERIOD, HEFSEK, REMINDERS, MORE</li>
               </ol>
             </li>
           </ol>
           <div class="words">
-            <p>Text <code>MENU</code> for every command.</p>
+            <p>Text <code>MENU</code> any time for the words: period, hefsek, status, and more.</p>
           </div>
         </div>
       </section>
@@ -532,7 +529,7 @@
             <li>
               <span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-phone" /></svg></span>
               <h3>A phone number is enough</h3>
-              <p>Signing in with Google keeps only the name and email.</p>
+              <p>Signing in with Google keeps only the name and email, to recognize you. It does not connect a calendar.</p>
             </li>
             <li>
               <span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-lock" /></svg></span>
@@ -569,7 +566,7 @@
           <ol class="start-steps">
             <li>
               <span class="n" aria-hidden="true">1</span>
-              <h3>Sign up with your phone</h3>
+              <h3>Sign in with Google, or with your phone</h3>
             </li>
             <li>
               <span class="n" aria-hidden="true">2</span>
@@ -631,7 +628,7 @@
       <section class="closing" aria-labelledby="closing-title">
         <div class="wrap closing-in">
           <h2 id="closing-title">Set up your calendar.</h2>
-          <p>Free. Only a phone number.</p>
+          <p>Free. Sign in with Google, or with your phone.</p>
           <div class="hero-actions center">
             <a class="btn btn-light btn-lg" href="/app/" id="closing-start">Get started free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
           </div>
