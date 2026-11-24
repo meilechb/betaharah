@@ -1695,7 +1695,7 @@ describe('the calendar subscription link', () => {
     expect(feed.res.headers.get('x-robots-tag')).toBe('noindex');
     expect(feed.text).toContain('BEGIN:VCALENDAR');
     expect(feed.text).toContain('X-WR-CALNAME:Betaharah');
-    expect(feed.text).toContain('COLOR:#6E3D45');
+    expect(feed.text).toContain('COLOR:#2A3C6E');
     expect(feed.text.replace(/\r\n /g, '')).toContain('https://betaharah.com/brand/logo-224.png');
     expect(feed.text).toContain('SUMMARY:Hefsek taharah (by 4:33 PM)');
     expect(feed.text.match(/BEGIN:VEVENT/g)!.length).toBe((await c.state()).upcoming.length + 1); // and the flow, which is past

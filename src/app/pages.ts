@@ -49,7 +49,7 @@ function layout(doc: Doc): string {
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<meta name="theme-color" content="#6e3d45">
+<meta name="theme-color" content="#2a3c6e">
 <meta property="og:site_name" content="Betaharah">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${escapeHtml(full)}">

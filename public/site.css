@@ -19,40 +19,44 @@
 :root {
   color-scheme: light dark;
 
-  /* colour: surfaces and text. Text pairs meet WCAG AA (4.5:1) on --bg and --surface. */
-  --bg: #f6f4ef;
-  --surface: #ffffff;
-  --surface-2: #faf8f4; /* sunken areas inside a card: code, copy fields */
-  --ink: #1f2430;
-  --muted: #555c6b;
-  --line: #e2ded5; /* dividers between things */
-  --line-strong: #858a95; /* borders of controls: 3:1 against --surface */
-  --accent: #2b5784;
-  --accent-hover: #234a71;
-  --accent-ink: #ffffff;
-  --accent-soft: #e8f0f8;
-  --focus: #2b5784;
-  --overlay: rgba(20, 22, 28, 0.45);
+  /* colour: Tekhelet Waters. Text and buttons meet WCAG AA.
+     --accent is the deep blue (primary): links, buttons, focus.
+     --gold is the secondary accent. It is not used for text or button fills,
+     because #a8843a is under 4.5:1 on the paper background. */
+  --bg: #f1ebe0;
+  --surface: #fffcf8;
+  --surface-2: #f6f1e8; /* sunken areas inside a card: code, copy fields */
+  --ink: #1c2230;
+  --muted: #3e465c;
+  --line: #ddd4c4; /* dividers between things */
+  --line-strong: #5c6578; /* borders of controls: 3:1 against --surface */
+  --accent: #2a3c6e;
+  --accent-hover: #1c2e58;
+  --accent-ink: #fffcf8;
+  --accent-soft: #e6eaf4;
+  --gold: #a8843a;
+  --focus: #2a3c6e;
+  --overlay: rgba(28, 34, 48, 0.45);
 
   /* colour: status. Text in an alert is --ink on the -bg colour; the -line colour is the left bar and the icon. */
-  --info-bg: #e9f1f8;
-  --info-line: #3b6d9c;
-  --warn-bg: #fff4d6;
-  --warn-line: #a87a00;
-  --ok: #2a7148;
-  --ok-bg: #e7f4ec;
+  --info-bg: #e7ebf6;
+  --info-line: #2a3c6e;
+  --warn-bg: #f8f1e2;
+  --warn-line: #7a5e28;
+  --ok: #1f5c40;
+  --ok-bg: #e5f2eb;
   --bad: #b3261e;
   --bad-bg: #fbeceb;
   --bad-hover: #8f1e18;
   --bad-ink: #ffffff;
 
   /* colour: kinds of days (dots in lists, calendar later) */
-  --flow: #c2185b;
-  --onah: #c62828;
-  --light: #c76f12;
-  --hefsek: #9a7700;
+  --flow: #9a3d62;
+  --onah: #2a3c6e;
+  --light: #a8843a;
+  --hefsek: #7a5e28;
   --clean: #1f7a8c;
-  --mikvah: #2e7d4f;
+  --mikvah: #1f5c40;
 
   /* old names, kept for pages not yet converted */
   --card: var(--surface);
@@ -109,22 +113,23 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14161b;
-    --surface: #1e2229;
-    --surface-2: #181b21;
-    --ink: #eceef2;
-    --muted: #a8afbc;
-    --line: #323843;
-    --line-strong: #6f7889;
-    --accent: #8cb8e3;
-    --accent-hover: #a9cbec;
-    --accent-ink: #0e141b;
-    --accent-soft: #1d2b3a;
-    --focus: #a9cbec;
+    --bg: #12151e;
+    --surface: #1c2230;
+    --surface-2: #161a26;
+    --ink: #f1ebe0;
+    --muted: #c9d0e4;
+    --line: #2e3548;
+    --line-strong: #8b95ad;
+    --accent: #c5d2f0;
+    --accent-hover: #d7e1f7;
+    --accent-ink: #12151e;
+    --accent-soft: #243049;
+    --gold: #e2c48a;
+    --focus: #d7e1f7;
     --overlay: rgba(0, 0, 0, 0.6);
 
-    --info-bg: #1b2836;
-    --info-line: #6c9bc8;
+    --info-bg: #1c2436;
+    --info-line: #c5d2f0;
     --warn-bg: #33290f;
     --warn-line: #d4ad3a;
     --ok: #74cb98;
@@ -135,8 +140,8 @@
     --bad-ink: #1a0d0c;
 
     --flow: #f06292;
-    --onah: #ef6c6c;
-    --light: #f0a85a;
+    --onah: #c5d2f0;
+    --light: #e2c48a;
     --hefsek: #e3c04a;
     --clean: #5cc0d3;
     --mikvah: #74cb98;
