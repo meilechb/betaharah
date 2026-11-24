@@ -19,6 +19,9 @@ code; it is the only other document you need.
 | `test/ui/settings.cjs` | The browser run of every Settings section, on the test account and on a new account. | Settings |
 | `public/app/dashboard.css` | Styles for the signed-in tabs. | Dashboard agent |
 | `public/index.html`, `public/landing.css` | The public landing page. | Console and landing agent |
+| `public/landing-try.js` | "Try it" on the home page (`#try`): a visitor's dates worked out by `POST /api/try`, with the same marks as the dashboard; without JavaScript the section is a sentence and a link. | Console and landing agent |
+| `public/admin/sections/calc.js` | The console's "Calculation test" (`#calc`), from `POST /api/admin/sandbox`. It imports `mark()` from `public/app/views/marks.js`; its calendar styles repeat the dashboard's under `.calc` in `admin.css`. | Console and landing agent |
+| `test/ui/sandbox.cjs` | The browser run of the calculation test and of "Try it". | Console and landing agent |
 | `public/admin/*` (`admin.js`, `admin.css`) | The operator console. `admin.js` is still a classic script; it may become a module that imports `/app/lib.js`. | Console and landing agent |
 | `test/ui-check.cjs` | The browser run of every page. Whoever changes markup it relies on updates it. | Shared |
 

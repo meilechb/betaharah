@@ -51,6 +51,8 @@ on a computer, a menu at the top on a phone):
 - **Invitations**: a link for sign-up on the website, a word for sign-up by
   text (JOIN and the word), or an account for one number with a password.
 - **Test account**: open, reset or delete it.
+- **Calculation test**: a blank calendar on which you add dates and see
+  what an account would show, as of any day you choose (below).
 - **Text simulator**: "Try signing up by text" (below), and what people
   can text.
 - **Tools**: a test text to your own number, and links to the public pages
@@ -90,6 +92,53 @@ text.
 The site never texts a number from 555-0100 to 555-0199: sign-in codes,
 one-number invitations and the console's test text refuse them, and a text
 received from one is never answered.
+
+## Calculation test
+
+Console → **Calculation test**. It is for checking the calculation: you
+start from a blank calendar, add dates, and see the following months worked
+out exactly as a person's account would show them. Each change is sent to
+`POST /api/admin/sandbox`, which builds a made-up household in memory, puts
+the place and customs on it as the Settings and Customs tabs save them,
+records each date in the order you added it with the same checks as the
+Record form (the same refusals, in the same words), works the picture out
+with the same code as the dashboard, and forgets it. Nothing is saved on
+the server and no account is touched.
+
+- **Place**: one of the app's list, or any US ZIP or Canadian postal code.
+- **Pretend today is**: a date, by day or at night (the night that begins
+  that evening). By day, "now" is halfway between sunrise and sunset; at
+  night, half an hour after nightfall. The line under it says which moment
+  was used. **Previous onah**, **Next onah** and **Next day** step it, to
+  watch a count go on. A date after today is refused, as it is for a person.
+- **Calendar**: the month with the same marks people see; the arrows move
+  between months (two before today to four after). Choose a day to see what
+  falls on it, with the reason for each mark, and to add a date on it: flow,
+  stain, hefsek taharah, count broken or immersion, by day, at night or at
+  a time, as on the Record form. A refused date is not kept; the reason is
+  shown under the form, word for word what a person is told.
+- **Where things stand**, **Coming up**, the warnings, the pattern alerts
+  (a possible veset kavua) and the notes are the dashboard's own. The reminder
+  texts that would be sent are under Coming up.
+- **Log**: the dates as the Log shows them. Removing one works everything
+  out again from the remaining dates in the order they were added; a date
+  that would now be refused is listed under "Not recorded now" with the
+  reason.
+- **Customs**: the twelve settings, starting as a new account's. Each
+  change is worked out at once.
+- **Copy the scenario** puts the place, customs, today and dates on the
+  clipboard as text; **Load a scenario** runs such a text again, so a case
+  can be kept and checked later. The scenario also stays in this browser
+  tab (sessionStorage) across a reload. **Remove every date** and **Start
+  over** clear it.
+
+The home page has a smaller version for visitors ("Try it",
+`POST /api/try`): a place from the list or a ZIP code, three customs
+(days before the hefsek, which day of onah beinonit, Or Zarua), up to 12
+dates of three kinds (flow, hefsek taharah, immersion), and a chosen
+"today". It saves nothing about the dates; the only thing stored is a
+counter per network address (a keyed fingerprint, as for sign-in), which
+allows 60 tries in 10 minutes.
 
 ### Trying sign-up by text before the number is approved
 

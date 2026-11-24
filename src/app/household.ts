@@ -5,7 +5,7 @@
  */
 import { buildCalendar, type CalendarEvent } from '../engine/calendar';
 import { localAbs } from '../engine/civil';
-import { processLog, type LogEntry, type LogWarningCode } from '../engine/cycle';
+import { processLog, sortLog, type LogEntry, type LogWarningCode } from '../engine/cycle';
 import { buildReminders, clock12, englishDate, statusText, type Reminder, type ReminderContext } from '../engine/present';
 import type { GeoPoint } from '../engine/sun';
 import { buildTimeline, type Timeline } from '../engine/timeline';
@@ -129,31 +129,135 @@ function inFuture(draft: DraftEntry, where: Where, now: number): boolean {
   return dayTimes(draft.abs - 1, where.place, where.zopts).sunset > now + FUTURE_TOLERANCE_MS;
 }
 
+export type AddResult = { ok: true; entry: LogEntry; notes: LogWarningCode[] } | { ok: false; reason: RejectReason };
+
+/**
+ * The checks and the change of recordEntry, without working out the
+ * picture afterwards: adds the entry after checking that it is not a
+ * repeat, not in the future, and makes sense where it falls. The data is
+ * left untouched otherwise. Used by recordEntry, and by the calculation
+ * test (sandbox.ts), which adds many entries and works the picture out once.
+ */
+export function addEntry(data: HouseholdData, draft: DraftEntry, source: string, note: string | null, now: number): AddResult {
+  const where = whereOf(data);
+  if (!where) return { ok: false, reason: 'no_place' };
+  if (data.entries.some(e => sameMoment(draft, e.entry))) return { ok: false, reason: 'duplicate' };
+  if (inFuture(draft, where, now)) return { ok: false, reason: 'future' };
+
+  const entry = { ...draft, id: randomId() } as LogEntry;
+  const trial = processLog([...data.entries.map(e => e.entry), entry], data.halachic);
+  const mine = trial.warnings.filter(w => w.entryId === entry.id).map(w => w.code);
+  const rejected = mine.find(code => REJECTED.includes(code));
+  if (rejected) return { ok: false, reason: rejected };
+
+  data.entries.push({ entry, source, note, createdAt: now });
+  data.sync.dirty = true;
+  return { ok: true, entry, notes: mine };
+}
+
+/**
+ * Adds several entries in the order given, with the same outcome for each
+ * as calling addEntry for each in turn (test/sandbox.test.ts compares the
+ * two), but checking a run of entries with one processLog instead of one
+ * for each entry.
+ *
+ * Why it is the same: processLog applies the entries one at a time in the
+ * order of sortLog, and an entry's warnings come only from the entries
+ * applied before it. So while each new entry is applied after every entry
+ * already in the log and after the new ones before it, is not a repeat and
+ * is not in the future, the warnings that one processLog gives it are those
+ * addEntry would have found. An entry those warnings refuse ends the run
+ * (the entries after it were checked with it in the log); the first entry
+ * that is applied out of order goes through addEntry itself. Then a new run
+ * begins after it.
+ */
+export function addEntries(data: HouseholdData, drafts: readonly DraftEntry[], source: string, now: number): Array<Extract<AddResult, { ok: true }> | Extract<RecordResult, { ok: false }>> {
+  const where = whereOf(data);
+  const results: Array<Extract<AddResult, { ok: true }> | Extract<RecordResult, { ok: false }>> = [];
+  let i = 0;
+  while (i < drafts.length) {
+    if (where) {
+      const taken = takeRun(data, drafts, i, where, source, now);
+      results.push(...taken);
+      i += taken.length;
+    }
+    if (i < drafts.length) {
+      const added = addEntry(data, drafts[i] as DraftEntry, source, null, now);
+      // A refusal carries the picture its wording needs, as recordEntry's does.
+      results.push(added.ok ? added : { ok: false, reason: added.reason, computed: refusalPicture(data, added.reason, now) });
+      i++;
+    }
+  }
+  return results;
+}
+
+/**
+ * The longest run of drafts from `from` that addEntries may settle with one
+ * processLog: adds them, and returns the outcome of each. A repeat or a
+ * date in the future is refused before processLog is asked and changes
+ * nothing, as in addEntry, so it does not end the run.
+ */
+function takeRun(data: HouseholdData, drafts: readonly DraftEntry[], from: number, where: Where, source: string, now: number): Array<Extract<AddResult, { ok: true }> | Extract<RecordResult, { ok: false }>> {
+  const items: Array<{ entry: LogEntry } | { reason: 'duplicate' | 'future' }> = [];
+  const run: LogEntry[] = [];
+  for (let j = from; j < drafts.length; j++) {
+    const draft = drafts[j] as DraftEntry;
+    if (data.entries.some(e => sameMoment(draft, e.entry)) || run.some(e => sameMoment(draft, e))) items.push({ reason: 'duplicate' });
+    else if (inFuture(draft, where, now)) items.push({ reason: 'future' });
+    else {
+      const entry = { ...draft, id: randomId() } as LogEntry;
+      run.push(entry);
+      items.push({ entry });
+    }
+  }
+  const existing = data.entries.map(e => e.entry);
+  // Where each entry is applied; the order of any part of the log is the same as in the whole.
+  const rank = new Map(sortLog([...existing, ...run]).map((e, k) => [e, k]));
+  let last = -1;
+  for (const e of existing) last = Math.max(last, rank.get(e) as number);
+  let n = 0;
+  while (n < run.length && (rank.get(run[n] as LogEntry) as number) > last) last = rank.get(run[n++] as LogEntry) as number;
+  const trial = n > 0 ? processLog([...existing, ...run.slice(0, n)], data.halachic) : { warnings: [] };
+  const notes = new Map<string, LogWarningCode[]>();
+  for (const w of trial.warnings) notes.set(w.entryId, [...(notes.get(w.entryId) ?? []), w.code]);
+  const inRun = new Set(run.slice(0, n));
+  const taken: Array<Extract<AddResult, { ok: true }> | Extract<RecordResult, { ok: false }>> = [];
+  for (const item of items) {
+    if ('reason' in item) {
+      taken.push({ ok: false, reason: item.reason, computed: null });
+      continue;
+    }
+    if (!inRun.has(item.entry)) break;
+    const mine = notes.get(item.entry.id) ?? [];
+    const rejected = mine.find(code => REJECTED.includes(code));
+    if (rejected) {
+      // addEntry would refuse it for this reason, and change nothing; the entries after it need a new run without it.
+      taken.push({ ok: false, reason: rejected, computed: refusalPicture(data, rejected, now) });
+      break;
+    }
+    data.entries.push({ entry: item.entry, source, note: null, createdAt: now });
+    data.sync.dirty = true;
+    taken.push({ ok: true, entry: item.entry, notes: mine });
+  }
+  return taken;
+}
+
+/** The picture a refusal's wording needs: the reply to an immersion recorded too early names the right night. */
+export function refusalPicture(data: HouseholdData, reason: RejectReason, now: number): Computed | null {
+  return reason === 'mikvah_too_early' ? compute(data, now) : null;
+}
+
 /**
  * Adds an entry to the household's data, after checking that it is not a
  * repeat, not in the future, and makes sense where it falls. The data is
  * left untouched otherwise.
  */
 export function recordEntry(data: HouseholdData, draft: DraftEntry, source: string, note: string | null, now: number): RecordResult {
-  const where = whereOf(data);
-  if (!where) return { ok: false, reason: 'no_place', computed: null };
-  if (data.entries.some(e => sameMoment(draft, e.entry))) return { ok: false, reason: 'duplicate', computed: null };
-  if (inFuture(draft, where, now)) return { ok: false, reason: 'future', computed: null };
-
-  const entry = { ...draft, id: randomId() } as LogEntry;
-  const trial = processLog([...data.entries.map(e => e.entry), entry], data.halachic);
-  const mine = trial.warnings.filter(w => w.entryId === entry.id).map(w => w.code);
-  const rejected = mine.find(code => REJECTED.includes(code));
-  if (rejected) {
-    // The reply to an immersion recorded too early names the right night, which needs the current picture.
-    return { ok: false, reason: rejected, computed: rejected === 'mikvah_too_early' ? compute(data, now) : null };
-  }
-
-  data.entries.push({ entry, source, note, createdAt: now });
-  data.sync.dirty = true;
+  const added = addEntry(data, draft, source, note, now);
+  if (!added.ok) return { ok: false, reason: added.reason, computed: refusalPicture(data, added.reason, now) };
   const computed = compute(data, now);
   if (!computed) throw new Error('location disappeared while recording');
-  return { ok: true, entry, computed, notes: mine };
+  return { ok: true, entry: added.entry, computed, notes: added.notes };
 }
 
 /** Removes an entry. Returns it, or null if there was none with that id. */

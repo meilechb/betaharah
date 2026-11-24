@@ -74,8 +74,13 @@ export interface StateArgs {
   origin: string;
 }
 
-export function dashboardState(args: StateArgs) {
-  const { data, computed, site, session, now, origin } = args;
+/**
+ * The parts of the dashboard's data that come from the calculation: where
+ * things stand, today, the alerts, what is coming up, the reminders, the
+ * month calendar and the list of entries. The dashboard (dashboardState)
+ * and the calculation test (sandbox.ts) both build them here.
+ */
+export function calculationState(data: HouseholdData, computed: Computed | null, now: number) {
   const lang = data.app.terms;
   const tz = computed?.place.timeZone ?? 'UTC';
   const f = (template: string): string => fill(template, lang);
@@ -149,15 +154,6 @@ export function dashboardState(args: StateArgs) {
     grid = buildGrid(computed, { lang, style: data.app.calendar.style, yomTov: data.halachic.yomTov, now });
   }
 
-  const texting = data.phones.some(canText);
-  const setup = [
-    { key: 'place', done: data.app.place !== null, text: 'Choose your location', tab: 'settings' },
-    { key: 'customs', done: data.halachicConfirmedAt !== null, text: f('Review your customs, ideally with your {rav}, and save them'), tab: 'customs' },
-    { key: 'entry', done: data.entries.length > 0, text: f('Record the start of the most recent {flow}, and the {hefsek} and {immersion} that followed'), tab: 'today' },
-    { key: 'calendar', done: data.google !== null || data.calendarLinkToken !== null, text: 'Optional: show it in your calendar app', tab: 'settings' },
-    { key: 'texts', done: texting, text: 'Optional: turn on text reminders', tab: 'settings' },
-  ];
-
   return {
     now,
     timeZone: tz,
@@ -166,7 +162,6 @@ export function dashboardState(args: StateArgs) {
     today,
     status,
     alerts,
-    setup,
     upcoming,
     reminders,
     /** The month calendar's days and events; null while no location is set. */
@@ -181,6 +176,52 @@ export function dashboardState(args: StateArgs) {
       })
       .slice(0, MAX_LISTED_ENTRIES)
       .map(e => ({ id: e.entry.id, kind: e.entry.kind, text: entryText(e.entry, lang), source: e.source, note: e.note, createdAt: e.createdAt })),
+  };
+}
+
+/** The names of the kinds of entries, as the Record form and the Log show them. */
+export function kindLabels(lang: HouseholdData['app']['terms']) {
+  const f = (template: string): string => fill(template, lang);
+  return {
+    flow: capital(f('{flow}')),
+    stain: capital(f('{stain}')),
+    hefsek: capital(f('{hefsek}')),
+    broken: 'Count broken',
+    mikvah: capital(f('{immersion}')),
+  };
+}
+
+export function dashboardState(args: StateArgs) {
+  const { data, computed, site, session, now, origin } = args;
+  const lang = data.app.terms;
+  const f = (template: string): string => fill(template, lang);
+  const calc = calculationState(data, computed, now);
+
+  const texting = data.phones.some(canText);
+  const setup = [
+    { key: 'place', done: data.app.place !== null, text: 'Choose your location', tab: 'settings' },
+    { key: 'customs', done: data.halachicConfirmedAt !== null, text: f('Review your customs, ideally with your {rav}, and save them'), tab: 'customs' },
+    { key: 'entry', done: data.entries.length > 0, text: f('Record the start of the most recent {flow}, and the {hefsek} and {immersion} that followed'), tab: 'today' },
+    { key: 'calendar', done: data.google !== null || data.calendarLinkToken !== null, text: 'Optional: show it in your calendar app', tab: 'settings' },
+    { key: 'texts', done: texting, text: 'Optional: turn on text reminders', tab: 'settings' },
+  ];
+
+  return {
+    now: calc.now,
+    timeZone: calc.timeZone,
+    terms: calc.terms,
+    words: calc.words,
+    today: calc.today,
+    status: calc.status,
+    alerts: calc.alerts,
+    setup,
+    upcoming: calc.upcoming,
+    reminders: calc.reminders,
+    /** The month calendar's days and events; null while no location is set. */
+    grid: calc.grid,
+    entryCount: calc.entryCount,
+    // newest first; the page lists the most recent ones
+    entries: calc.entries,
     halachic: {
       settings: data.halachic,
       confirmedAt: data.halachicConfirmedAt,
@@ -192,13 +233,7 @@ export function dashboardState(args: StateArgs) {
     places: PLACES,
     reminderKinds: REMINDER_KINDS,
     labels: {
-      kinds: {
-        flow: capital(f('{flow}')),
-        stain: capital(f('{stain}')),
-        hefsek: capital(f('{hefsek}')),
-        broken: 'Count broken',
-        mikvah: capital(f('{immersion}')),
-      },
+      kinds: kindLabels(lang),
       reminders: {
         hefsek: capital(f('{hefsek}')),
         bedikah_morning: capital(f('{bedikah}, morning')),

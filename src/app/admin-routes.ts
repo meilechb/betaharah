@@ -19,6 +19,7 @@ import { buildDemoData, DEMO_NUMBER, DEMO_SPOUSE, isFictionalNumber } from './de
 import type { Deps, Env } from './env';
 import { compute } from './household';
 import { SITE_SECRET_KEYS } from './model';
+import { ALL_KINDS, runSandbox, sandboxChoices, type SandboxLimits } from './sandbox';
 import { refreshHousehold, sendSms, TEST_TEXT } from './service';
 import { ValidationError } from './settings';
 import { createHousehold, createInvitationWord, createInvite, deleteHousehold, deleteInvite, getPhone, insertPhone, inviteHash, loadHousehold, loadSite, phoneHash, saveSiteConfig, saveSiteSecrets } from './store';
@@ -395,5 +396,17 @@ export function registerAdminRoutes(app: AdminApp, deps: Deps): void {
     }),
   );
 
+  /**
+   * The calculation test (sandbox.ts): a made-up household worked out in
+   * memory as a real account is, and forgotten. GET gives the places and
+   * the customs with a new account's defaults (?terms=he for Hebrew script);
+   * POST works out one scenario. Nothing is stored.
+   */
+  app.get('/api/admin/sandbox', c => c.json(sandboxChoices(c.req.query('terms') === 'he' ? 'he' : 'en')));
+  app.post('/api/admin/sandbox', async c => c.json(runSandbox(await readBody(c), ADMIN_SANDBOX_LIMITS)));
+
   app.all('/api/admin/*', c => c.json({ error: 'Not found.' }, 404));
 }
+
+/** The operator's calculation test: every kind of entry, up to 200 of them. */
+export const ADMIN_SANDBOX_LIMITS: SandboxLimits = { maxEntries: 200, kinds: ALL_KINDS };
