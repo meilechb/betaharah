@@ -3,8 +3,8 @@
 Everything in Betaharah can be done by text message alone: signing up,
 setting up, recording, and managing the account. This page lists every
 text a person can send and exactly what comes back. It is also the
-reference for the carrier review and for whoever connects the engine
-(`src/app/chat/`) to the server.
+reference for the carrier review, and it describes how the server
+(`src/app/conversation.ts`) runs the engine (`src/app/chat/`).
 
 The examples were produced by the engine itself (the tests check the same
 texts). They assume Lakewood, NJ, on Tuesday 24 November 2026. In the
@@ -41,17 +41,37 @@ text always says in words what to send.
    and which word asks it again.
 7. **STOP, START, HELP** and the other carrier words (STOPALL, UNSUBSCRIBE,
    CANCEL, END, QUIT, REVOKE, OPT OUT, UNSTOP, INFO) are handled by the
-   carrier and the existing code before the conversation engine, and none
-   of them is used as a command word here. YES is used only to confirm an
-   action that was just described, never as an opt-in.
+   carrier and the server before the conversation engine, exactly as they
+   always were, also in the middle of a conversation (an open question
+   stays open). None of them is used as a command word here. YES is used
+   only to confirm an action that was just described, never as an opt-in.
+   STOP: the carrier confirms it, and the site sends nothing more to that
+   phone (not even replies) until it texts START. HELP gets:
+   `Betaharah: mikvah calendar reminders and replies. Text MENU for the commands. Help: betaharah.com/help. Msg&data rates may apply. Reply STOP to stop.`
+   (nothing, when Telnyx has already answered the HELP itself).
 8. **Anything that cannot be undone asks first.** Erasing an entry,
    removing a phone, leaving the account, deleting the account, replacing
-   or removing the calendar link, pausing vesatot, and texting an
-   invitation to another number each need YES.
+   or removing the calendar link, and pausing vesatot each need YES.
+9. **Nothing is ever sent to a number that has not texted in.** Every
+   text goes back to the phone whose text it answers; reminders go only
+   to phones on an account that turned them on. To add a phone, the
+   account gets a code and the other phone texts it in itself (see
+   PHONES).
 
 ## Signing up
 
-A text from a number that has no account.
+A text from a number that has no account. The server answers it only if
+all of these hold (otherwise nothing at all is sent):
+
+- the operator allows sign-up by text (`textSignup`, on by default) and
+  sign-up is not closed;
+- the number begins with an allowed prefix (normally +1);
+- the number is not one reserved for fiction (555-0100 to 555-0199; those
+  are answered only in the operator's simulator, below);
+- the limits below are not reached.
+
+The exception is a phone joining an existing account with a code (below):
+that works in every sign-up mode, because it creates no account.
 
 **While sign-up is open**, any text gets one reply:
 
@@ -63,6 +83,10 @@ A text from a number that has no account.
   (the account is created with this phone; setup begins, below)
 ```
 
+The account is created with this phone verified (texting in proves the
+number), reminders off (they need `REMINDERS ON`, which is the consent),
+and the website's guided first steps not yet seen.
+
 **While sign-up is by invitation**, `JOIN` and an invitation word creates
 the account. Anything else gets:
 
@@ -70,40 +94,80 @@ the account. Anything else gets:
 < Betaharah is a mikvah calendar by text message. Sign-up is by invitation: reply JOIN and your invitation word. Msg&data rates may apply. Reply STOP to stop, HELP for help. Terms: betaharah.com/terms
 ```
 
-and a word that is not valid (or has expired) gets:
+and a word that is not valid (or has expired, or is used up) gets:
 
 ```
 > JOIN WRONG
-< Betaharah: that invitation word is not valid, or it has expired. Nothing was set up. Reply STOP to stop, HELP for help.
+< Betaharah: that code or invitation word is not valid, or it has expired. Nothing was set up. Reply STOP to stop, HELP for help.
 ```
 
+An invitation word is made by the operator (`createInvitationWord` in
+`src/app/store.ts`): 6 to 24 letters and digits with at least one letter,
+any case when typed (`JOIN spring26` is `JOIN SPRING26`), with a number of
+uses and an expiry, and stored only as a keyed fingerprint. It is an
+ordinary sign-up invitation: it is listed, counted and cancelled with the
+others, and it also works on the website when typed in capitals. The
+32-character links the operator makes also work after JOIN, typed exactly.
+
 A word after JOIN that is not valid never creates an account, even while
-sign-up is open, so that a husband who mistypes his wife's invitation code
-does not end up with a separate account.
+sign-up is open, so that a husband who mistypes his wife's code does not
+end up with a separate account.
 
 **While sign-up is closed, nothing is sent**, whatever the text. Why:
 strangers and wrong numbers will text this number. Each reply costs money,
 and a reply invites more texts. When sign-up is closed the operator has
 decided not to take new accounts, so a reply could only say "no", which
 helps nobody enough to be worth paying for every wrong number and every
-automated text. Today's site already sends nothing to strangers. The
-public page says when sign-up is closed.
+automated text. The public page says when sign-up is closed.
 
 By invitation, one reply is sent, because someone who heard about the
 service needs to know that an invitation word is what is missing; a wrong
-word gets one reply, because people mistype. The server should limit
-replies to numbers without an account (for example, at most one reply per
-number per day, and a daily total for the site), because each one costs
-money.
+word gets one reply, because people mistype.
 
-**A phone invited by an account** (see PHONES) replies `JOIN` and the code
-from that invitation. This works whether sign-up is open, by invitation or
-closed, because it adds the phone to an existing account:
+`HELP` from a number without an account gets the HELP text above (while
+sign-up by text is allowed, and within the same limits); STOP and START
+get nothing from the site.
+
+**Limits for numbers without an account** (each reply costs about a cent;
+the constants are in `src/app/conversation.ts`, and everything is counted
+by keyed fingerprints, nothing readable). Past a limit, nothing is sent:
+
+| Limit | Value |
+|---|---|
+| Replies to one number without an account | 1 in 24 hours (`STRANGER_REPLIES_PER_NUMBER`) |
+| Replies to numbers without an account, whole site | 50 a day, UTC (`STRANGER_REPLIES_PER_DAY`) |
+| Accounts created by text, whole site | 25 a day, UTC (`TEXT_SIGNUPS_PER_DAY`) |
+| Texts from one number (with or without an account, SMS and RCS together) | 30 an hour; more are ignored |
+
+So someone who texts "Hi" and then, the same day, `JOIN` with a wrong word
+gets the greeting only; `JOIN` itself is not a reply and still creates the
+account. A text the carrier delivers twice is acted on once.
+
+**A phone joining an account** texts `JOIN` and the code that a phone on
+that account got by sending `ADD` (see PHONES). This works whether sign-up
+is open, by invitation or closed, and whether or not sign-up by text is
+allowed, because it adds the phone to an existing account:
 
 ```
 > JOIN NRMAAABZ
 < This phone is now on the account with the phone ending 0101. Text 9 for status, MENU for everything. Reminders are off for this phone until you text REMINDERS ON.
   [buttons: Status / History / Customs / Reminders]
+```
+
+The code works once, within 7 days, and only for the account that made it
+(a newer code from the same account replaces it). If that account has
+meanwhile reached four phones:
+
+```
+< That account already has the most phones allowed, so this phone was not added. Nothing was changed. A phone on it can send PHONES and remove one.
+```
+
+A phone that is already on an account and texts `JOIN` and a code is told
+so, and nothing changes (the code stays usable by the right phone):
+
+```
+> JOIN NRMAAABZ
+< This phone is already on a Betaharah account, so nothing was changed. To join another account, send LEAVE first, then the JOIN text again.
 ```
 
 ## Setup
@@ -247,18 +311,19 @@ The existing commands are unchanged, with their existing replies:
 > 0
 < Removed: flow Tue Nov 24 night. Tehorah.
 > 1 tomorrow
-< Not understood; nothing was changed. 1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 you may add: day, night, yesterday day, or a time (9pm).
+< Not understood; nothing was changed. 1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm).
 > ?
-< 1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 you may add: day, night, yesterday day, or a time (9pm). A date also works: 1 11/22 night, 2 11/26, 4 12/3. MENU lists the words.
+< 1 flow began, 2 hefsek done, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm). A date also works: 1 11/22 night, 2 11/26, 4 12/3. MENU lists the words.
 ```
 
-Three replies differ from the existing code, for a phone that may not have
-the website: with no location set, the reply says `Not recorded: no
-location is set yet. Send LOCATION and your ZIP code, e.g. LOCATION 08701.`
-(and for 9, `No location is set yet. ...`) instead of "choose your location
-on the website first"; `0` with nothing recent to undo says `Nothing recent
-to undo. Older entries can be erased by text: send HISTORY.`; and `?` adds
-the dated forms and MENU, as above.
+Three replies are worded for both kinds of user, someone who only texts
+and someone who also uses the website (each fits one segment): with no
+location set, `Not recorded: no location is set yet. Text LOCATION and
+your ZIP code, e.g. LOCATION 08701, or choose it on the website.` (and for
+9, `No location is set yet. Text LOCATION ...`); `0` with nothing recent
+to undo says `Nothing recent to undo. Older entries can be erased by text:
+send HISTORY. Or remove them on the website.`; and `?` adds the dated
+forms and MENU, as above. The website shows the same no-location text.
 
 ### Recording: with a date
 
@@ -310,7 +375,7 @@ A dated entry is undone with `0` like any other, while it is the latest.
 > STATUS
 < Tehorah.
 > UNDO
-< Nothing recent to undo. Older entries can be erased by text: send HISTORY.
+< Nothing recent to undo. Older entries can be erased by text: send HISTORY. Or remove them on the website.
 ```
 
 ### HISTORY and ERASE
@@ -420,44 +485,54 @@ account, as on the website.
 
 ```
 > PHONES
-< Phones: A ending 0101 (this phone, reminders off), B ending 0102 (reminders off). ADD and a number adds one, e.g. ADD 7325551234. REMOVE and a letter removes one. LEAVE takes this phone off.
+< Phones: A ending 0101 (this phone, reminders off), B ending 0102 (reminders off). ADD gives a code to add a phone. REMOVE and a letter removes one. LEAVE takes this phone off.
 > REMOVE B
 < Remove the phone ending 0102 from the account? It will no longer see the calendar or get reminders. Reply YES to remove it, NO to keep it.
   [buttons: Yes / No]
 > NO
 < Nothing was changed.
-> ADD 7325551234
-< Text an invitation to (732) 555-1234 to join this account? That phone must accept it from its own phone. Reply YES to send it, NO to stop.
-  [buttons: Yes / No]
-> YES
-< Invitation sent to (732) 555-1234. That phone must reply JOIN and the code within 7 days. Its reminders stay off until it texts REMINDERS ON.
+> YES  (had it been YES)
+< Removed the phone ending 0102 from the account.
+> ADD
+< Have that phone text JOIN NRMAAABZ to this number within 7 days. The code works once, for one phone. Its reminders stay off until it texts REMINDERS ON.
 ```
 
-The invited phone receives:
+Nothing is sent to the other phone: the person passes the code on, and the
+other phone texts `JOIN NRMAAABZ` to this number itself (see "A phone
+joining an account" under Signing up). Its own text proves its number and
+is its own request; its reminders stay off until it sends REMINDERS ON
+itself. Nothing needs YES, because nobody else is texted.
 
-```
-< Betaharah: the phone ending 0101 invited this number to share its Betaharah calendar account. To accept, reply JOIN NRMAAABZ within 7 days. If not, ignore this text. Msg&data rates may apply. Reply STOP to stop, HELP for help.
-```
+`ADD` may be followed by the other phone's number (10 digits, with or
+without +1, spaces, dashes or brackets); the number is only checked
+against the phones already on the account (`The number ending 0102 is
+already on this account. Nothing was changed.`) and is not stored or
+texted. With four phones already: `This account already has 4 phones, the
+most allowed. Send PHONES to remove one first. Nothing was changed.`
 
-Its own reply proves the number and is its agreement to receive texts; its
-reminders stay off until it sends REMINDERS ON itself. Codes are eight
-capital letters (no I or O, no digits). Numbers are written as 10 digits,
-with or without +1, spaces, dashes or brackets. Only the last four digits of
-any phone are ever shown.
+Codes are eight capital letters (no I or O, no digits), work once, for 7
+days, and only for the account that made them; a new `ADD` replaces the
+account's earlier code. Only a keyed fingerprint of a code is stored. If
+the code cannot be stored, the reply is instead `A code for adding a phone
+cannot be made now. Nothing was changed. Try again later, or add the phone
+on the website.` Only the last four digits of any phone are ever shown.
 
 ```
 > LEAVE
 < Take this phone off the account? It will get no more reminders and cannot see the calendar. The other phones keep everything. Reply YES to leave, NO to stay.
   [buttons: Yes / No]
 > YES
-< This phone is off the account. It will get no more texts from Betaharah unless it signs up or is invited again.
+< This phone is off the account. It will get no more texts from Betaharah unless it signs up or joins an account again.
 ```
 
-The only phone on an account cannot leave: `This is the only phone on the
-account, so it cannot leave it. To close the account, send DELETE ACCOUNT.
-Nothing was changed.` `REMOVE` works only right after `PHONES`; `REMOVE`
-with this phone's letter points to LEAVE. An account has at most four
-phones.
+Removing and leaving use the same code as the website (its sessions end,
+and its number is free for another account). The only phone on an account
+cannot leave: `This is the only phone on the account, so it cannot leave
+it. To close the account, send DELETE ACCOUNT. Nothing was changed.`
+`REMOVE` works only right after `PHONES`; `REMOVE` with this phone's letter
+points to LEAVE. An account has at most four phones. On the test account
+the test phone cannot be removed or leave (`This phone could not be taken
+off the account. ...`), as on the website.
 
 ### CALENDAR
 
@@ -500,10 +575,17 @@ again with the warning.
 
 ```
 > WEB
-< Betaharah sign-in link for this phone. It works once, for a short time: https://betaharah.com/...
+< Betaharah sign-in link for this phone. It works once, within 10 minutes: https://betaharah.com/app/?k=<secret>
 ```
 
-(The server makes the link and sends this one text.)
+The server makes the link and sends this one text, as a plain SMS even
+when RCS is on (like a sign-in code). The website page opened by the link
+posts the secret to `POST /api/auth/link`, which signs that browser in as
+this phone (as a sign-in with a texted code does). The link works once,
+for 10 minutes, and only while the phone is still on the account it asked
+from; any other use gets one and the same refusal. Only a keyed
+fingerprint of the secret is stored. The address is the one the site is
+reached at (the same as for calendar links).
 
 ### DELETE ACCOUNT
 
@@ -515,6 +597,12 @@ again with the warning.
 < The account is deleted: all dates, settings and phones. No more texts will be sent unless you sign up again.
 ```
 
+It is the same deletion as on the website: the site's access to Google
+Calendar is withdrawn, and the household, its phones, codes and links are
+deleted, before this reply is sent (so the reply never says so when it did
+not happen; if it fails: `The account could not be deleted. Nothing was
+changed. Try again, or use the website.`).
+
 ### Other replies
 
 ```
@@ -522,6 +610,8 @@ again with the warning.
 < There is no question waiting for an answer, so nothing was changed. MENU lists the words.
 > JOIN         (from a phone that already has an account)
 < This phone is already signed up. MENU lists the words.
+> JOIN ABCDEFGH  (from a phone that already has an account)
+< This phone is already on a Betaharah account, so nothing was changed. To join another account, send LEAVE first, then the JOIN text again.
 > xyz
 < Not understood; nothing was changed. Digits record: 1 flow, 2 hefsek, 3 count broken, 4 mikvah, 5 stain, 9 status, 0 undo. MENU lists the other words.
 > CALENDAR PLEASE
@@ -530,6 +620,18 @@ again with the warning.
 
 A word with something after it that it does not take is not understood and
 changes nothing; the reply says what to send.
+
+A file or picture sent by RCS is not read: it gets the "Not understood"
+reply above and changes nothing.
+
+**Which phones are answered.** A phone on an account is answered when it
+has proved its number (a phone signed up by text or added with a code or
+on the website has; an account the operator set up for a number with a
+password, before its first texted code, has not, and gets no answer, in
+case the number was typed wrong) and has not replied STOP. A phone that may
+not record entries (set on the website) is answered `This phone may not
+record entries. That is changed on the website, under Settings.` for 1 to
+5, 0, UNDO, the dated forms and ERASE, and can use every other word.
 
 ## What is on the website only
 
@@ -582,15 +684,37 @@ YES sent later can never carry out something the person has moved on from.
 question, and setup with it; `SETUP` starts setup again. `STATUS` and `UNDO`
 count as digits.
 
-## RCS buttons
+## RCS
 
-A text that expects one of a few answers carries buttons: lettered options,
-YES and NO, the menu, and the next step of setup. Each button sends exactly
-what an SMS user would type (its postback data), so there is one parser. At
-most 4 buttons per text, each label at most 20 characters. (Telnyx's RCS
-documentation shows suggestions without stating a limit on their number or
-label length; these limits are chosen to be safe, and are an open question
-to check with Telnyx or Google's RCS Business Messaging limits.)
+When the operator has switched RCS on and saved the agent and its
+messaging profile (docs/OPERATOR.md), every text the site sends goes
+through Telnyx's RCS endpoint, with:
+
+- the text;
+- its buttons as suggested replies: each label is shown, and a tap sends
+  the button's postback data, which is exactly what an SMS user would type
+  (`{ reply: { text: label, postback_data: send } }`), so there is one
+  parser;
+- always an SMS fallback with the same text from the site's number, so a
+  phone without RCS receives an ordinary text. Every text is complete
+  without its buttons.
+
+Sign-in codes and the WEB sign-in link always go as plain SMS. Without RCS
+switched on, everything is SMS, as before.
+
+Received RCS messages come to the same webhook as SMS. A typed text is
+read like an SMS; a tapped button is read as its postback data; a shared
+location answers a ZIP question (the nearest ZIP code is used) or, at any
+other time, asks first; a file or picture is "not understood". Only
+messages to the site's own agent are read. The carrier words, the hourly
+limit, repeated deliveries, the limits for numbers without an account and
+the privacy rules are the same for both.
+
+At most 4 buttons per text, each label at most 20 characters. (Telnyx's
+RCS documentation shows suggestions without stating a limit on their
+number or label length; these limits are chosen to be safe, and are an
+open question to check with Telnyx or Google's RCS Business Messaging
+limits.)
 
 ## What it costs
 
@@ -600,90 +724,78 @@ list of customs, the reminder kinds, REMINDERS ON (because of the consent
 wording), PHONES, the calendar link texts, DELETE ACCOUNT, and recordings
 whose reply adds a note. A full setup with all twelve customs answered by
 text is roughly 35 to 40 segments (35 to 40 cents); keeping the customs
-(answer A) makes it about 10. No reply is longer than two segments, and no text received
-gets more than two texts back.
+(answer A) makes it about 10. No reply is longer than two segments, and no
+text received gets more than two texts back. Replies to numbers without an
+account are limited (see "Signing up"): at most 50 a day for the whole
+site, one per number per 24 hours, and at most 25 new accounts a day by
+text. Every text counts against the site's monthly limit and the
+account's monthly limit, as before.
 
-## For the integrator
+## How the server runs it
 
 The engine is `src/app/chat/` (`index.ts` exports everything). It is pure:
 no database, network, clock or randomness of its own. Types are in
-`types.ts`.
+`types.ts`. The server side is `src/app/conversation.ts`; every received
+text takes its one path, from the webhook (`handleInbound`), from the test
+account's text box (`receiveText`), and from the operator's simulator
+(`simulateText`).
 
-### Which function when
-
-1. A text arrives (after STOP / START / HELP are handled as today).
-2. **The number has no account:** `const word = joinWord(text)`; if `word`
-   is not null, look it up (a sign-up invitation, or an invitation from an
-   account to this number). Call
-   `greet({ text, signup, inviteValid, inviteKind })`:
-   - `reply`: send `out`. (Limit these per number and per day.)
-   - `ignore`: send nothing.
-   - `create`: create the account with this phone, verified (texting in
-     proves the number), mark the sign-up invitation used if there was
-     one, then call `begin({ data, from, now }, 'setup')`, save its `chat`
-     and send its `out`.
-   - `join`: check the invitation (`invite`) was issued for this number,
-     add the phone to the household that issued it (verified, `consentAt`
-     null), use up the invitation, then `begin(..., 'joined')` and send
-     its `out`.
-3. **The number is on an account:** call `converse({...})` with the
-   household data, the phone's stored `chat`, `from`, `text` (for an RCS
-   button tap, `suggestion_response.postback_data`; for a shared location,
-   `text: ''` and `location` from `body.location`), `now`,
-   `limits: { maxPhones: MAX_PHONES }`, the ZIP lookups, and
-   `random: randomToken`.
-   - Store the returned `chat` for this phone (inside the encrypted
-     household document, keyed by phone number: two phones may each have a
-     question open). Save the document if `changed` is true or `chat`
-     differs from what was stored.
-   - If `changed` is true, refresh the household's reminders and calendar
-     (use `computed` when present instead of computing again).
-   - Carry out each effect (below); then send `out` to `from`, in order,
-     each through the household's monthly limit. If an effect could not
-     be carried out, send its `ifFailed` text instead of `out`.
-
-The engine records entries through `recordEntry` with source `'sms'`, sets
-`data.sync.dirty`, and changes only the household data; phone records are
-changed only for the phone that wrote (`consentAt`, `verifiedAt` on
-REMINDERS ON, and its reminder kinds). Adding or removing phones is always
-an effect, so that the `phones` table and the household stay in step
-(`accounts.ts`).
+1. A number reserved for fiction is never answered (except in the
+   simulator); more than 30 texts an hour from one number are ignored.
+2. STOP, START and HELP are handled first, as always.
+3. **A number with no account:** the rules and limits under "Signing up";
+   `joinWord(text)` is looked up as a code from ADD (keyed fingerprint,
+   bound to its account) or a sign-up invitation, and `greet()` decides:
+   - `reply`: one text, within the limits;
+   - `ignore`: nothing;
+   - `create`: the account is created with this phone verified, reminders
+     off, the invitation (if any) used, then `begin(..., 'setup')`;
+   - `join`: the code is used up, the phone is added to the account that
+     made it (as on the website, `accounts.addPhone`: verified, reminders
+     off), then `begin(..., 'joined')`.
+4. **A phone on an account** (that proved its number and did not reply
+   STOP): `converse()` with the household, the phone's pending question,
+   the text (for an RCS tap, its postback data; for a shared location, an
+   empty text and the location), the real ZIP lookups
+   (`src/app/zip.ts`), a cryptographically random token source, and the
+   site's address. The pending question is stored per phone inside the
+   encrypted household document (`data.chat`). The replies are counted
+   against the account's monthly limit and recorded in its messages; the
+   effects are carried out; then the replies (at most two) are sent. If an
+   effect cannot be carried out, its `ifFailed` text is sent instead.
+   When something changed, the reminders and the calendar are refreshed,
+   with the picture the engine already worked out: at most one
+   calculation per text.
 
 ### Effects
 
 | Effect | What the server does |
 |---|---|
-| `{ type: 'invite_phone', number, code, days, text, ifFailed }` | Refuse (send `ifFailed`) if `number` is on another account, not an allowed prefix, a fictional test number, or the household is full. Otherwise store an invitation for `code`, bound to `number` and this household, valid `days` days, and text `text` to `number`. When that number replies `JOIN <code>`, greet with `inviteValid: true, inviteKind: 'phone'`. |
-| `{ type: 'remove_phone', number, ifFailed }` | `removePhone(env, householdId, number, now)`. |
-| `{ type: 'leave', number, ifFailed }` | `removePhone` for the phone that wrote. Send `out` first or after; the phone is still allowed to receive this one reply. |
-| `{ type: 'delete_account', ifFailed }` | Send `out` first, then delete the household and its phones. |
-| `{ type: 'web_link', number, text, ifFailed }` | Make a one-time sign-in link for `number` and send one text: `text` followed by the link. `out` is empty for WEB. |
+| `{ type: 'join_code', code, days, ifFailed }` | Stores a keyed fingerprint of `code`, bound to this household, single use, valid `days` days, replacing the household's earlier code; then sends `out` (which tells the person to have the other phone text `JOIN <code>`). Nothing is sent to any other number. |
+| `{ type: 'remove_phone', number, ifFailed }` | `accounts.removePhone`, as the website does. |
+| `{ type: 'leave', number, ifFailed }` | `accounts.removePhone` for the phone that wrote, then the one reply to it. |
+| `{ type: 'delete_account', ifFailed }` | `accounts.deleteAccount`, as the website does (Google access withdrawn, everything deleted), then the reply. |
+| `{ type: 'web_link', number, text, ifFailed }` | A one-time sign-in link for `number` (keyed fingerprint stored, 10 minutes), sent as one plain SMS: `text` followed by the link. `out` is empty for WEB. |
 
 ### The pending question (`ChatState`)
 
 Plain JSON: `{ v: 1, at, setup, q }`. `at` is when the question was asked;
 the engine closes it after 30 minutes (`CHAT_TTL_MS`). `setup` is true
 while in the setup conversation. A malformed or older value is treated as
-no question (`validChat`), so it is safe to store and to drop.
+no question (`validChat`), so it is safe to store and to drop. It is
+dropped when its phone leaves the account.
 
-### RCS
+### The operator's simulator
 
-Send each `OutMessage` as an RCS text with `suggestions` mapped to reply
-suggestions: `{ reply: { text: label, postback_data: send } }`. Set
-`sms_fallback.text` to the same `text`: it is complete on its own.
-
-### Things the engine relies on
-
-- `lookupPostal("08701")` returns `{ name, latitude, longitude, timeZone,
-  elevation, postal }` or null; Canadian codes are passed as `H3W` or
-  `H3W 1A1`. `nearestPostal(lat, lon)` returns the nearest or null.
-  Place names are made GSM-7 in replies (accents GSM-7 lacks are dropped)
-  and stored as given.
-- `random()` returns an unguessable token (24 random bytes, base64url, as
-  `randomToken()`); it becomes the calendar link's secret, and the
-  invitation code is made from it.
-- `origin` (optional, default `https://betaharah.com`) is used in calendar
-  links.
+`simulateText` (`src/app/conversation.ts`) runs a text from a number
+reserved for fiction through the whole path above: the sign-up rules,
+sign-up, the conversation and its effects. Every text is returned instead
+of sent; the accounts it creates are test accounts, which are never texted
+and cost nothing; no site counter moves (so the daily limits for numbers
+without an account are neither used up by it nor applied to it); and it
+never touches an account that is not a test account. A code from ADD
+made in a test account works only in the simulator, and a real account's
+code never works there.
 
 ## Decisions made in building this
 
@@ -691,6 +803,15 @@ suggestions: `{ reply: { text: label, postback_data: send } }`. Set
   invitation word: one reply. Explained under "Signing up".
 - A word after JOIN that is not valid never creates an account, even while
   sign-up is open.
+- Numbers without an account: one reply per number per 24 hours, 50
+  replies a day for the site, 25 new accounts a day by text; past a limit,
+  silence.
+- Adding a phone never texts that phone. `ADD` gives the person who asked
+  a code; the other phone texts `JOIN <code>` itself, which proves its
+  number and is its own request. So it needs no YES.
+- A code from ADD works in every sign-up mode (it creates no account); a
+  newer code replaces the older one; it is used up before the phone is
+  added, so it can never be used twice.
 - Setup is started by `begin(..., 'setup')`, a separate function, rather
   than by a reserved text that a person could also type.
 - A digit command during a lettered question records and keeps the
@@ -704,7 +825,6 @@ suggestions: `{ reply: { text: label, postback_data: send } }`. Set
 - A refused dated entry shows the date as it was read, so a date taken as
   last year is visible.
 - Erasing any entry by text asks first, whatever its age.
-- Inviting a phone asks first, because it texts a third party.
 - Pausing vesatot asks first; resuming does not.
 - An RCS location shared outside a ZIP question asks first.
 - A ZIP code sent with no question is not taken as a change of location.
@@ -719,6 +839,13 @@ suggestions: `{ reply: { text: label, postback_data: send } }`. Set
 - A phone that may not record (set on the website) gets "This phone may not
   record entries" for 1-5, 0, UNDO, dated forms and ERASE; it can still use
   everything else.
-- Invitation codes are eight capital letters without I, O or digits, so
-  they cannot be confused with the digit commands or misread.
+- A phone that has not proved its number gets no answer, as before.
+- Codes are eight capital letters without I, O or digits, so they cannot
+  be confused with the digit commands or misread.
+- DELETE ACCOUNT deletes before replying, and LEAVE removes before
+  replying, so that the reply is never wrong.
+- Sign-in codes and the WEB link go by plain SMS even when RCS is on.
+- Which channel a text went by (Telnyx's answer says RCS or SMS) is
+  returned by the send function but not stored, because storing it would
+  cost a second save of the household for every text.
 - Texts longer than 400 characters are not read.

@@ -28,8 +28,11 @@
  *   6. STOP, START, HELP and the other carrier words never reach this code,
  *      and none is used as a command word.
  *   7. Erasing an entry, removing a phone, leaving, deleting the account,
- *      replacing or removing the calendar link, pausing vesatot and
- *      inviting a phone each need YES.
+ *      replacing or removing the calendar link and pausing vesatot each
+ *      need YES.
+ *   8. Nothing is ever sent to a number that has not texted in: ADD gives
+ *      the person who asked a code, and the other phone texts JOIN and the
+ *      code itself.
  */
 import { localAbs, absToCivil } from '../../engine/civil';
 import { statusText } from '../../engine/present';
@@ -58,7 +61,7 @@ import type {
 
 /** A question closes this long after it was asked. */
 export const CHAT_TTL_MS = 30 * 60_000;
-/** Days an invitation to another phone stays valid. */
+/** Days a code for adding another phone stays valid. */
 export const INVITE_DAYS = 7;
 /** Texts longer than this are not read at all. */
 const MAX_INPUT = 400;
@@ -80,11 +83,6 @@ function capitalFirst(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function pretty(number: string): string {
-  const m = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(number);
-  return m ? `(${m[1]}) ${m[2]}-${m[3]}` : number;
-}
-
 /** "flow Sun Nov 22 night", with ", 2025" when not this year. */
 function entryWithYear(e: Parameters<typeof entryEnglish>[0], thisYear: number): string {
   const abs = 'onah' in e ? (e.onah.part === 'day' ? e.onah.abs : e.onah.abs - 1) : e.kind === 'mikvah' ? e.abs - 1 : e.abs;
@@ -104,7 +102,7 @@ export function postalOf(w: string): string | null {
   return null;
 }
 
-/** An 8-letter invitation code made from the injected random source (no digits, no I or O). */
+/** An 8-letter code for adding a phone, made from the injected random source (no digits, no I or O). */
 export function inviteCode(random: () => string): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   let code = '';
@@ -145,7 +143,6 @@ export function validChat(x: unknown): ChatState | null {
       switch (a.type) {
         case 'erase':
           return typeof a.id === 'string' ? (c as ChatState) : null;
-        case 'invite':
         case 'remove_phone':
           return typeof a.number === 'string' ? (c as ChatState) : null;
         case 'place':
@@ -492,27 +489,6 @@ function confirm(r: Reply, action: ConfirmAction): void {
       r.say(`Erased: ${entryWithYear(stored.entry, thisYear)}.${after ? ` ${statusText(after.timeline, after.place.timeZone)}` : ''}`);
       return;
     }
-    case 'invite': {
-      if (data.phones.some(p => p.number === action.number)) {
-        r.say(`The number ending ${lastFour(action.number)} is already on this account. Nothing was changed.`);
-        return;
-      }
-      if (data.phones.length >= r.input.limits.maxPhones) {
-        r.say(`This account already has ${data.phones.length} phones, the most allowed. Send PHONES to remove one first. Nothing was changed.`);
-        return;
-      }
-      const code = inviteCode(r.input.random);
-      r.effects.push({
-        type: 'invite_phone',
-        number: action.number,
-        code,
-        days: INVITE_DAYS,
-        text: T.invitationText(lastFour(from), code, INVITE_DAYS),
-        ifFailed: T.inviteFailed(pretty(action.number)),
-      });
-      r.say(T.inviteSent(pretty(action.number), INVITE_DAYS));
-      return;
-    }
     case 'remove_phone': {
       if (!data.phones.some(p => p.number === action.number)) {
         r.say(`The phone ending ${lastFour(action.number)} is no longer on the account. Nothing was changed.`);
@@ -600,8 +576,7 @@ function digits(r: Reply, raw: string): { recorded: boolean } {
       return { recorded: false };
     }
     const result = runCommand(data, raw, now);
-    const text = result.text.replace('Older entries can be removed on the website.', 'Older entries can be erased by text: send HISTORY.');
-    r.say(text);
+    r.say(result.text);
     if (result.computed) r.computed = result.computed;
     if (result.changed) r.changed = true;
     return { recorded: result.changed && command.kind !== 'undo' };
@@ -814,30 +789,40 @@ function phones(r: Reply): void {
   const list = data.phones
     .map((p, i) => `${LETTERS[i]} ending ${lastFour(p.number)} (${p.number === from ? 'this phone, ' : ''}reminders ${canText(p) ? 'on' : 'off'})`)
     .join(', ');
-  r.say(`Phones: ${list}. ADD and a number adds one, e.g. ADD 7325551234. REMOVE and a letter removes one. LEAVE takes this phone off.`).ask(
+  r.say(`Phones: ${list}. ADD gives a code to add a phone. REMOVE and a letter removes one. LEAVE takes this phone off.`).ask(
     { kind: 'phones', numbers: data.phones.map(p => p.number) },
     false,
   );
 }
 
+/**
+ * ADD, or ADD and the other phone's number: a code for the other phone to
+ * text back as "JOIN <code>". Nothing is sent to that phone (it has not
+ * texted in), so nothing needs YES. The number, when given, is only checked
+ * against the phones already on the account.
+ */
 function addPhone(r: Reply, arg: string): void {
-  let n = arg.replace(/[\s().-]/g, '');
-  if (/^\d{10}$/.test(n)) n = `+1${n}`;
-  else if (/^1\d{10}$/.test(n)) n = `+${n}`;
-  if (!/^\+[1-9]\d{7,14}$/.test(n)) {
-    r.say(T.ADD_FORMAT);
-    return;
-  }
   const { data } = r.input;
-  if (data.phones.some(p => p.number === n)) {
-    r.say(`The number ending ${lastFour(n)} is already on this account. Nothing was changed.`);
-    return;
+  if (arg !== '') {
+    let n = arg.replace(/[\s().-]/g, '');
+    if (/^\d{10}$/.test(n)) n = `+1${n}`;
+    else if (/^1\d{10}$/.test(n)) n = `+${n}`;
+    if (!/^\+[1-9]\d{7,14}$/.test(n)) {
+      r.say(T.ADD_FORMAT);
+      return;
+    }
+    if (data.phones.some(p => p.number === n)) {
+      r.say(`The number ending ${lastFour(n)} is already on this account. Nothing was changed.`);
+      return;
+    }
   }
   if (data.phones.length >= r.input.limits.maxPhones) {
     r.say(`This account already has ${data.phones.length} phones, the most allowed. Send PHONES to remove one first. Nothing was changed.`);
     return;
   }
-  r.say(T.inviteAsk(pretty(n)), T.YES_NO).ask({ kind: 'confirm', action: { type: 'invite', number: n } }, false);
+  const code = inviteCode(r.input.random);
+  r.effects.push({ type: 'join_code', code, days: INVITE_DAYS, ifFailed: T.ADD_FAILED });
+  r.say(T.addCode(code, INVITE_DAYS));
 }
 
 function removePhone(r: Reply, chat: ChatState | null, letter: string): void {
@@ -982,8 +967,7 @@ function word(r: Reply, chat: ChatState | null, w: string): boolean {
     case 'PHONE':
       return none(() => phones(r));
     case 'ADD':
-      if (arg === '') r.say(T.ADD_FORMAT);
-      else addPhone(r, arg);
+      addPhone(r, arg);
       return true;
     case 'REMOVE':
       if (!/^[A-Z]$/.test(arg)) {
@@ -1021,7 +1005,7 @@ function word(r: Reply, chat: ChatState | null, w: string): boolean {
     case 'GOOGLE':
       return none(() => r.say(T.WEBSITE_GOOGLE));
     case 'JOIN':
-      r.say(T.ALREADY_JOINED);
+      r.say(arg === '' ? T.ALREADY_JOINED : T.ALREADY_ON_ACCOUNT);
       return true;
     case 'YES':
     case 'NO':

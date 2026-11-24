@@ -199,10 +199,19 @@ function boundaryNote(resolved: ResolvedOnah, timeZone: string): string {
     : ` Counted as day (sunrise was ${t}). If it began before sunrise send 0, then the same with: night. If unsure ask a rav.`;
 }
 
+/**
+ * When no location is set. Right for a person who only texts and for one
+ * who uses the website; one SMS segment.
+ */
+export const NO_PLACE_TEXT = 'Not recorded: no location is set yet. Text LOCATION and your ZIP code, e.g. LOCATION 08701, or choose it on the website.';
+
+/** UNDO (0) with nothing recent: older entries are erased by text (HISTORY) or on the website. */
+export const NOTHING_TO_UNDO = 'Nothing recent to undo. Older entries can be erased by text: send HISTORY. Or remove them on the website.';
+
 export function rejectionText(reason: RejectReason, computed: Computed | null): string {
   switch (reason) {
     case 'no_place':
-      return 'Not recorded: choose your location on the website first.';
+      return NO_PLACE_TEXT;
     case 'duplicate':
       return 'Already recorded.';
     case 'future':
@@ -294,7 +303,7 @@ export function runCommand(data: HouseholdData, text: string, now: number): Repl
   if (command.kind === 'undo') {
     const last = [...data.entries].sort((a, b) => b.createdAt - a.createdAt)[0];
     if (!last || now - last.createdAt > UNDO_WINDOW_MS) {
-      return { text: 'Nothing recent to undo. Older entries can be removed on the website.', changed: false };
+      return { text: NOTHING_TO_UNDO, changed: false };
     }
     removeEntry(data, last.entry.id, now);
     const after = compute(data, now);

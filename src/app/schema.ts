@@ -6,8 +6,12 @@
  *   - A household's settings, entries, phone numbers, Google token,
  *     messages and waiting reminders are one encrypted document
  *     (households.data).
- *   - Phone numbers, invitation codes and calendar links appear only as
- *     keyed fingerprints.
+ *   - Phone numbers, invitation codes and words, the codes for adding a
+ *     phone by text, the one-time sign-in links texted by WEB, and calendar
+ *     links appear only as keyed fingerprints. A household's pending
+ *     conversation by text is inside its encrypted document. Counters of
+ *     texts from numbers without an account are keyed by a fingerprint of
+ *     the number.
  *   - Readable: ids, timestamps (among them the time of each household's
  *     next reminder, which the periodic job needs), counters, and the
  *     site's own settings.
@@ -48,7 +52,8 @@ const STATEMENTS = [
     window_count INTEGER NOT NULL
   )`,
   // Invitations made by the operator. 'signup' lets someone sign up with a
-  // texted code while sign-up is by invitation. 'setup' is for one phone
+  // texted code while sign-up is by invitation (or by texting JOIN and an
+  // invitation word: see store.createInvitationWord). 'setup' is for one phone
   // number (phone_hash) and lets its owner create the account with a
   // password, without a texted code.
   `CREATE TABLE IF NOT EXISTS invites (
@@ -61,6 +66,25 @@ const STATEMENTS = [
     max_uses INTEGER NOT NULL,
     uses INTEGER NOT NULL DEFAULT 0
   )`,
+  // A code for adding a phone to a household by text: the household's phone
+  // texted ADD, and the new phone texts JOIN and the code. hash is a keyed
+  // fingerprint of the code; it can be used once, until expires_at.
+  `CREATE TABLE IF NOT EXISTS join_codes (
+    hash TEXT PRIMARY KEY,
+    household_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS join_codes_household ON join_codes (household_id)`,
+  // A one-time sign-in link texted in answer to WEB. hash is a keyed
+  // fingerprint of its secret; phone_hash the phone that asked for it.
+  `CREATE TABLE IF NOT EXISTS link_tokens (
+    hash TEXT PRIMARY KEY,
+    household_id TEXT NOT NULL,
+    phone_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS link_tokens_household ON link_tokens (household_id)`,
   // Rate limits and usage counts.
   `CREATE TABLE IF NOT EXISTS counters (
     key TEXT PRIMARY KEY,
@@ -84,4 +108,4 @@ export async function ensureSchema(db: D1Database): Promise<void> {
   ready.add(db);
 }
 
-export const TABLES = ['households', 'phones', 'codes', 'invites', 'counters', 'site'] as const;
+export const TABLES = ['households', 'phones', 'codes', 'invites', 'join_codes', 'link_tokens', 'counters', 'site'] as const;

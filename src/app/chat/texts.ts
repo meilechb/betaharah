@@ -17,7 +17,7 @@ export const WELCOME_OPEN =
 export const WELCOME_INVITE =
   'Betaharah is a mikvah calendar by text message. Sign-up is by invitation: reply JOIN and your invitation word. Msg&data rates may apply. Reply STOP to stop, HELP for help. Terms: betaharah.com/terms';
 
-export const BAD_INVITATION = 'Betaharah: that invitation word is not valid, or it has expired. Nothing was set up. Reply STOP to stop, HELP for help.';
+export const BAD_INVITATION = 'Betaharah: that code or invitation word is not valid, or it has expired. Nothing was set up. Reply STOP to stop, HELP for help.';
 
 // ---------- setup ----------
 
@@ -90,7 +90,10 @@ export function expired(again: string): string {
 
 export const ALREADY_JOINED = 'This phone is already signed up. MENU lists the words.';
 
-export const NO_PLACE_STATUS = 'No location is set yet. Send LOCATION and your ZIP code, e.g. LOCATION 08701.';
+/** JOIN and a code from a phone that is already on an account. */
+export const ALREADY_ON_ACCOUNT = 'This phone is already on a Betaharah account, so nothing was changed. To join another account, send LEAVE first, then the JOIN text again.';
+
+export const NO_PLACE_STATUS = 'No location is set yet. Text LOCATION and your ZIP code, e.g. LOCATION 08701, or choose it on the website.';
 
 export const READ_ONLY = 'This phone may not record entries. That is changed on the website, under Settings.';
 
@@ -105,7 +108,7 @@ export const REMOVE_NEEDS_LIST = 'Send PHONES first, then REMOVE and the letter 
 export const REMOVE_SELF = 'That is this phone. To take this phone off the account, send LEAVE. Nothing was changed.';
 export const LAST_PHONE = 'This is the only phone on the account, so it cannot leave it. To close the account, send DELETE ACCOUNT. Nothing was changed.';
 
-export const ADD_FORMAT = 'Not understood; nothing was changed. Write ADD and the 10-digit number, e.g. ADD 7325551234.';
+export const ADD_FORMAT = 'Not understood; nothing was changed. Send ADD on its own: it gives a code for the other phone to text to this number.';
 
 export const CUSTOMS_LIST =
   'Customs: reply a letter to see or change one. A wait before hefsek, B onah beinonit day, C onah beinonit length, D veset hachodesh length, E Or Zarua, F haflagah count, G longer haflagah, H flow on the 30th, I long cycles, J vesatot, K Yom Tov, L nightfall. CUSTOMS ALL goes through all 12.';
@@ -152,18 +155,11 @@ export const WEBSITE_TIMES = 'Reminder times, in minutes before sunset and so on
 
 // ---------- phones ----------
 
-export function inviteAsk(pretty: string): string {
-  return `Text an invitation to ${pretty} to join this account? That phone must accept it from its own phone. Reply YES to send it, NO to stop.`;
+/** The reply to ADD: the code the other phone texts back. Nothing is sent to that phone. */
+export function addCode(code: string, days: number): string {
+  return `Have that phone text JOIN ${code} to this number within ${days} days. The code works once, for one phone. Its reminders stay off until it texts REMINDERS ON.`;
 }
-export function inviteSent(pretty: string, days: number): string {
-  return `Invitation sent to ${pretty}. That phone must reply JOIN and the code within ${days} days. Its reminders stay off until it texts REMINDERS ON.`;
-}
-export function inviteFailed(pretty: string): string {
-  return `The invitation to ${pretty} could not be sent. The number may be on another account, or not allowed. Nothing was changed.`;
-}
-export function invitationText(fromLast4: string, code: string, days: number): string {
-  return `Betaharah: the phone ending ${fromLast4} invited this number to share its Betaharah calendar account. To accept, reply JOIN ${code} within ${days} days. If not, ignore this text. Msg&data rates may apply. Reply STOP to stop, HELP for help.`;
-}
+export const ADD_FAILED = 'A code for adding a phone cannot be made now. Nothing was changed. Try again later, or add the phone on the website.';
 
 export function removeAsk(last4: string): string {
   return `Remove the phone ending ${last4} from the account? It will no longer see the calendar or get reminders. Reply YES to remove it, NO to keep it.`;
@@ -176,7 +172,7 @@ export function removeFailed(last4: string): string {
 }
 
 export const LEAVE_ASK = 'Take this phone off the account? It will get no more reminders and cannot see the calendar. The other phones keep everything. Reply YES to leave, NO to stay.';
-export const LEFT = 'This phone is off the account. It will get no more texts from Betaharah unless it signs up or is invited again.';
+export const LEFT = 'This phone is off the account. It will get no more texts from Betaharah unless it signs up or joins an account again.';
 export const LEAVE_FAILED = 'This phone could not be taken off the account. Nothing was changed. Try again, or use the website.';
 
 export const DELETE_ASK =
@@ -206,7 +202,7 @@ export const CALENDAR_NO_LINK = 'There is no calendar link. CALENDAR LINK create
 
 // ---------- website only ----------
 
-export const WEB_LINK_TEXT = 'Betaharah sign-in link for this phone. It works once, for a short time: ';
+export const WEB_LINK_TEXT = 'Betaharah sign-in link for this phone. It works once, within 10 minutes: ';
 export const WEB_FAILED = 'A sign-in link cannot be sent now. Sign in at betaharah.com with this phone number instead.';
 export const WEBSITE_PASSWORD = 'A password is set on the website, under Settings. Send WEB for a sign-in link.';
 export const WEBSITE_DATA = 'Download my data is on the website, under Settings. Send WEB for a sign-in link.';

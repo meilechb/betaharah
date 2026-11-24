@@ -19,10 +19,10 @@ If you run the site, read [docs/OPERATOR.md](docs/OPERATOR.md).
 
 | Step | What happens |
 |---|---|
-| Sign up, and sign in each time | Enter a mobile number, get a six-digit code by text, type it in. Nothing else is asked. A password can be set as well, under Settings. |
+| Sign up, and sign in each time | Text `JOIN` to the site's number and answer the setup questions by text, with no website at all; or enter a mobile number on the website, get a six-digit code by text, type it in. A password can be set as well, under Settings. Everything (location by ZIP code, customs, phones, reminders, calendar link, deleting the account) can be done by text: [docs/TEXTING.md](docs/TEXTING.md). |
 | Location and customs | Sunrise, sunset and nightfall are calculated for the place chosen. Every point on which customs differ is a setting; until they are saved the stricter option of each is used. |
-| Recording | On the website, or by text: `1` flow, `2` hefsek, `3` count broken, `4` immersed, `5` stain, `9` status, `0` undo, `?` commands. After `1`, `3`, `5`: `day`, `night`, `yesterday night`, or a time such as `6:40am`. After `2`, `4`: `yesterday`. |
-| Husband and wife | A second phone is added to the account with a code texted to it. Up to four phones share one account; each chooses its own reminders. |
+| Recording | On the website, or by text: `1` flow, `2` hefsek, `3` count broken, `4` immersed, `5` stain, `9` status, `0` undo, `?` commands, `MENU` for every other word. After `1`, `3`, `5`: `day`, `night`, `yesterday night`, or a time such as `6:40am`. After `2`, `4`: `yesterday`. Past dates: `1 11/22 night`, `2 11/26`, `4 12/3`. By SMS, or by RCS with tap-to-reply buttons once the RCS agent is approved. |
+| Husband and wife | A second phone is added on the website with a code texted to it, or by text: a phone on the account texts `ADD` and gets a code, and the other phone texts `JOIN` and that code. Up to four phones share one account; each chooses its own reminders. |
 | Calendar (optional) | Connect Google Calendar (the site creates one calendar and can see only that one), or create a subscription link for any calendar app. Titles in words, or as symbols only. |
 | Reminders (optional) | Off until turned on for a phone. Nothing is sent on Shabbat or Yom Tov. STOP stops them. |
 | English or Hebrew terms | The site is in English. A setting chooses whether halachic terms are written in English letters (hefsek taharah) or in Hebrew (הפסק טהרה), on the site and in the calendar. Text messages are always in English letters. |
@@ -92,7 +92,10 @@ Every text costs the operator about a cent. Sign-in codes: one a minute and
 five a day per number, eight an hour per network address, 150 a day for the
 whole site. Texts: 3,000 a month for the whole site, 200 a month per
 account. Numbers must begin with +1. The operator changes all of these in
-the console, and can switch sign-up to invitation only, or close it.
+the console, and can switch sign-up to invitation only, or close it. A
+number without an account gets at most one reply a day, the whole site at
+most 50 such replies a day, and at most 25 accounts a day are created by
+text (`src/app/conversation.ts`).
 
 ## Working on it
 

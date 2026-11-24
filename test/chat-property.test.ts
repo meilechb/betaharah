@@ -87,7 +87,6 @@ function randomQuestion(r: () => number, ids: string[]): Question {
     default: {
       const actions = [
         { type: 'erase', id: r() < 0.8 && ids[0] ? (pick(r, ids) as string) : 'gone' },
-        { type: 'invite', number: '+17325551234' },
         { type: 'remove_phone', number: SPOUSE },
         { type: 'leave' },
         { type: 'delete_account' },
@@ -162,9 +161,10 @@ describe('random and adversarial texts against random states', () => {
         expect(mayChangeEntries(location ? '' : text, chat, now), `entries changed by ${label}`).toBe(true);
         expect(out.changed, label).toBe(true);
       }
-      // Only YES (to a question that asked for it) or WEB lead to effects.
+      // Only YES (to a question that asked for it), WEB or ADD lead to effects.
       for (const e of out.effects) {
         if (e.type === 'web_link') expect(normalize(text), label).toBe('WEB');
+        else if (e.type === 'join_code') expect(normalize(text), label).toMatch(/^ADD\b/);
         else expect(normalize(text), label).toBe('YES');
       }
     }

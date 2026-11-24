@@ -6,9 +6,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Session } from '../src/app/auth';
-import { checkPassword, decrypt, encrypt, hashPassword } from '../src/app/crypto';
+import { checkPassword, decrypt, encrypt, hashPassword, randomToken } from '../src/app/crypto';
 import { dashboardState } from '../src/app/dashboard';
+import { converse } from '../src/app/chat';
 import { compute } from '../src/app/household';
+import { lookupPostal, nearestPostal } from '../src/app/zip';
 import { DEFAULT_SITE_CONFIG, newHousehold, type HouseholdData } from '../src/app/model';
 import { rebuildQueue } from '../src/app/queue';
 import { DEFAULT_APP_SETTINGS, PLACES, REMINDER_KINDS } from '../src/app/settings';
@@ -101,6 +103,40 @@ describe('cost of one request', () => {
     console.log(`reading and writing a household: ${each.toFixed(2)} ms for ${(plain.length / 1024).toFixed(1)} KB`);
     expect(plain.length).toBeLessThan(100_000);
     expect(each).toBeLessThan(2);
+  });
+
+  it('a text handled by the conversation engine: one picture worked out, a few milliseconds', async () => {
+    const data = longHistory(now);
+    rebuildQueue(data, compute(data, now)!.reminders, now);
+    const stored = await encrypt(KEY, JSON.stringify(data), 'household:h');
+    // What the webhook does for one text from a phone on an account, at most:
+    // open the document, let the engine read the text (recording works the
+    // picture out once, and passes it on), rebuild the waiting reminders from
+    // that same picture, and save.
+    const handle = async (text: string) => {
+      const doc = JSON.parse(await decrypt(KEY, stored, 'household:h')) as HouseholdData;
+      const out = converse({ data: doc, chat: null, from: '+17325550101', text, now, limits: { maxPhones: 4 }, lookupPostal, nearestPostal, random: randomToken });
+      if (out.changed) {
+        // The server works a picture out only when the engine did not pass one on.
+        const c = out.computed ?? compute(doc, now)!;
+        rebuildQueue(doc, c.reminders, now);
+        const desired = c.events.map(e => toDesired(e, 'America/New_York'));
+        planSync(desired, [], now - 400 * 86_400_000);
+      }
+      await encrypt(KEY, JSON.stringify(doc), 'household:h');
+      return out;
+    };
+    const first = await handle('1 night');
+    expect(first.changed).toBe(true);
+    expect(first.computed).toBeDefined(); // passed on: no second calculation
+    const record = await best(() => handle('1 night'));
+    const status = await best(() => handle('STATUS'));
+    const menu = await best(() => handle('MENU'));
+    const place = await best(() => handle('LOCATION 11219'));
+    console.log(
+      `one text by the engine: recording ${record.toFixed(2)} ms, status ${status.toFixed(2)} ms, a word ${menu.toFixed(2)} ms, a new location (picture worked out by the server) ${place.toFixed(2)} ms`,
+    );
+    for (const each of [record, status, menu, place]) expect(each).toBeLessThan(6);
   });
 
   it('checking or setting a password fits in a request', async () => {

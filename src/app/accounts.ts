@@ -6,9 +6,10 @@
  * enforces that (the number's fingerprint is its primary key); the
  * household's own list of phones is kept in step with it here.
  */
-import { DEFAULT_SITE_CONFIG, MAX_PHONES, newHousehold, type SiteConfig } from './model';
+import { DEFAULT_SITE_CONFIG, MAX_PHONES, newHousehold, type HouseholdData, type SiteConfig } from './model';
 import { parsePhoneNumber, REMINDER_KINDS, ValidationError, type PhoneRecord } from './settings';
-import type { Env } from './env';
+import type { Deps, Env } from './env';
+import { revokeToken } from './google';
 import { changeHousehold, createHousehold, deleteHousehold, deletePhone, getPhone, insertPhone, phoneHash, type PhoneRow } from './store';
 
 /**
@@ -45,10 +46,14 @@ export type Created = { ok: true; phone: PhoneRow } | { ok: false; reason: 'take
  * was proved by a texted code; `password` is an already-hashed password or
  * null.
  */
-export async function createAccount(env: Env, args: { number: string; verified: boolean; password: string | null; now: number }): Promise<Created> {
+export async function createAccount(
+  env: Env,
+  args: { number: string; verified: boolean; password: string | null; now: number; /** Anything to set before the household is first saved. */ init?: (data: HouseholdData) => void },
+): Promise<Created> {
   const hash = await phoneHash(env, args.number);
   const data = newHousehold();
   data.phones.push(newPhone(args.number, args.verified, args.now));
+  args.init?.(data);
   const household = await createHousehold(env, data, args.now);
   if (!(await insertPhone(env.DB, hash, household.id, args.password, args.now))) {
     // The number was registered by another request in the same moment.
@@ -102,6 +107,10 @@ export async function removePhone(env: Env, householdId: string, number: string,
     if (data.phones.length <= 1) return 'last' as const;
     data.phones = data.phones.filter(p => p.number !== number);
     data.queue = data.queue.filter(q => q.to !== number); // nothing more waits for it
+    if (data.chat && number in data.chat) {
+      delete data.chat[number];
+      if (Object.keys(data.chat).length === 0) data.chat = null;
+    }
     return 'ok' as const;
   });
   if (!changed || changed.result === 'missing') return { ok: false, reason: 'missing' };
@@ -109,4 +118,14 @@ export async function removePhone(env: Env, householdId: string, number: string,
   const hash = await phoneHash(env, number);
   await deletePhone(env.DB, hash, householdId);
   return { ok: true, hash };
+}
+
+/**
+ * Deletes an account: withdraws the site's access to Google Calendar, then
+ * deletes the household, its phones, and every code and link that belongs
+ * to it. The same for the website and for DELETE ACCOUNT by text.
+ */
+export async function deleteAccount(env: Env, deps: Deps, household: { id: string; google: HouseholdData['google'] }): Promise<void> {
+  if (household.google) await revokeToken(deps, household.google.refreshToken);
+  await deleteHousehold(env.DB, household.id);
 }
