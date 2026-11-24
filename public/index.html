@@ -100,7 +100,7 @@
           <p class="hero-sms" id="hero-sms" hidden></p>
           <p class="signup-note" id="signup-note" role="status" hidden></p>
           <ul class="hero-facts">
-            <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>A phone number is all it takes</li>
+            <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Signing in with Google, or with your phone</li>
             <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Private to your account</li>
             <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Nothing sent on Shabbat or Yom Tov</li>
           </ul>
@@ -267,7 +267,7 @@
             <li class="fs fs-clean">
               <span class="fs-mark" aria-hidden="true"><span class="mk clean lg">7</span></span>
               <h3>Seven clean days</h3>
-              <p>Each day with its two bedikot, days 1 and 7 marked as required. A flow in between voids the count.</p>
+              <p>Each day, with its bedikot. Days 1 and 7 are marked as required. Text <code>3</code> if the count is broken; it starts over.</p>
             </li>
             <li class="fs fs-mikvah">
               <span class="fs-mark" aria-hidden="true"><span class="mk mikvah lg">M</span></span>
@@ -396,8 +396,9 @@
             <p class="eyebrow">Your calendar</p>
             <h2 id="calendar-title">In the calendar you already use.</h2>
             <p class="section-lead">
-              Connect Google Calendar, or add a private link to Apple Calendar, Outlook or any calendar app. The dates arrive as events, written out, or as
-              symbols only, for a calendar other people may see.
+              Optional. Connect Google Calendar, or add a private link to Apple Calendar, Outlook, or any calendar app. The dates arrive as events, written out, or as
+              symbols only, for a calendar other people may see. Signing in with Google does not do this: that sign-in only recognizes you. Connecting a calendar is a
+              separate step. The site makes one new calendar and cannot see the calendars already in the account.
             </p>
           </div>
           <div class="cal-compare">
@@ -456,8 +457,9 @@
             <p class="eyebrow">Reminders</p>
             <h2 id="reminders-title">A text before each thing that has a time.</h2>
             <p>
-              Before sunset on the day of the hefsek. Each morning and afternoon of the clean days, for the bedikot. Mikvah night, and the next morning if no
-              immersion was recorded. Before each onah. Each phone turns on the kinds it wants, and when.
+              Before sunset on the day of the hefsek. Each morning and afternoon of the clean days, for the bedikot. The morning after the hefsek is recorded, a text
+              to book the mikvah. Mikvah night. Before each onah. Each phone turns on the kinds it wants, and when. You do not have to text that you immersed: after
+              the night of mikvah, the calendar goes on.
             </p>
             <div class="shabbat-note">
               <svg class="ic" aria-hidden="true"><use href="#i-ban" /></svg>
@@ -544,44 +546,12 @@
             </div>
             <div>
             <p class="section-lead">
-              No website, no app, no browser. Text <code>JOIN</code>, answer three questions, and the account is set up. After that, recording, status, customs,
-              reminders, a second phone, the calendar link and deleting the account are all done by text.
+              No website and no app. Text <code>JOIN</code>, then your ZIP code or a Canadian postal code. Keep the usual customs, or answer them by text, and record
+              the last period. After that, <code>MENU</code> lists the rest: status, customs, reminders, a second phone, the calendar link, and deleting the account.
             </p>
             <p class="offline-cta" id="offline-cta" hidden></p>
             <p class="offline-note" id="offline-note" role="status" hidden></p>
             </div>
-          </div>
-          <ol class="signup-steps">
-            <li class="ss">
-              <p class="ss-n"><span>1</span>Sign up</p>
-              <ol class="thread on-dark">
-                <li class="b out"><span class="visually-hidden">You send: </span>JOIN</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Welcome to Betaharah. This phone is signed up. Step 1 of 3: reply with your ZIP code (in Canada, your postal code, e.g. H3W 1A1). It sets the times of sunset.</li>
-              </ol>
-            </li>
-            <li class="ss">
-              <p class="ss-n"><span>2</span>Location and customs</p>
-              <ol class="thread on-dark">
-                <li class="b out"><span class="visually-hidden">You send: </span>08701</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Location set: Lakewood, NJ 08701. Sunset and nightfall are now worked out for it.</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Step 2 of 3: customs. … A: keep them for now. B: answer the 12 questions by text. C: do it later on the website. Reply A, B or C.</li>
-              </ol>
-            </li>
-            <li class="ss">
-              <p class="ss-n"><span>3</span>The last period</p>
-              <ol class="thread on-dark">
-                <li class="b out"><span class="visually-hidden">You send: </span>1 11/1 night</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Recorded: flow Sun Nov 1 night, 2026. Hefsek from Fri Nov 6. 0 to undo. …</li>
-                <li class="b out"><span class="visually-hidden">You send: </span>DONE</li>
-                <li class="b in"><span class="visually-hidden">Reply: </span>Setup is finished. From now on text 1 when a flow begins, 2 after the hefsek, 4 after immersion, 9 for status. …</li>
-              </ol>
-            </li>
-          </ol>
-          <div class="words">
-            <p>Every other command is a word. Text <code>MENU</code> for the list:</p>
-            <ul aria-label="Command words">
-              <li>STATUS</li><li>HISTORY</li><li>UNDO</li><li>LOCATION</li><li>CUSTOMS</li><li>NIGHTFALL</li><li>REMINDERS</li><li>PHONES</li><li>CALENDAR</li><li>TERMS</li><li>WEB</li><li>SETUP</li><li>DELETE ACCOUNT</li>
-            </ul>
           </div>
         </div>
       </section>
@@ -597,7 +567,7 @@
             <li>
               <span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-phone" /></svg></span>
               <h3>Only what signing in needs</h3>
-              <p>A phone number is enough. Signing in with Google keeps the email address and name on that Google account, used only to recognize you.</p>
+              <p>A phone number is enough. Signing in with Google keeps the email and name on that account, only to recognize you. It does not connect a calendar.</p>
             </li>
             <li>
               <span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-lock" /></svg></span>
@@ -607,7 +577,7 @@
             <li>
               <span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-eye" /></svg></span>
               <h3>No ads, no tracking</h3>
-              <p>Your information is never sold or given to anyone.</p>
+              <p>There is no advertising. Your dates are not sold.</p>
             </li>
             <li>
               <span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-down" /></svg></span>
@@ -626,33 +596,6 @@
             </li>
           </ul>
           <p class="priv-link"><a class="arrow-link" href="/privacy">Read the Privacy page<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a></p>
-        </div>
-      </section>
-
-      <!-- ===================== how it starts ===================== -->
-      <section class="section alt" id="start" aria-labelledby="start-title">
-        <div class="wrap">
-          <div class="section-head center">
-            <p class="eyebrow">How it starts</p>
-            <h2 id="start-title">Three steps, once.</h2>
-          </div>
-          <ol class="start-steps">
-            <li>
-              <span class="n" aria-hidden="true">1</span>
-              <h3>Sign up with your phone number</h3>
-              <p>On the website, a six-digit code is texted to you. Or text JOIN. There is nothing else to fill in.</p>
-            </li>
-            <li>
-              <span class="n" aria-hidden="true">2</span>
-              <h3>Choose your location and customs</h3>
-              <p>Sunrise, sunset and nightfall are worked out for it.</p>
-            </li>
-            <li>
-              <span class="n" aria-hidden="true">3</span>
-              <h3>Record the last period</h3>
-              <p>When it began, and the hefsek and immersion that followed. From then on, record as things happen.</p>
-            </li>
-          </ol>
         </div>
       </section>
 
@@ -725,8 +668,8 @@
               <summary><span>Can I use it with Google Calendar, or on an iPhone?</span><svg class="ic" aria-hidden="true"><use href="#i-chev" /></svg></summary>
               <div class="ans">
                 <p>
-                  Yes. Connect Google Calendar from Settings, and the dates appear in a calendar of their own there. For Apple Calendar on an iPhone, iPad or Mac, or
-                  for Outlook, add your private calendar link.
+                  Yes, if you choose to. Connecting Google Calendar, from Settings, puts the dates in one new calendar. It does not read the calendars you already
+                  have, and it is not the same as signing in with Google. For Apple Calendar on an iPhone, iPad or Mac, or for Outlook, add your private calendar link.
                 </p>
               </div>
             </details>
@@ -758,7 +701,7 @@
       <section class="closing" aria-labelledby="closing-title">
         <div class="wrap closing-in">
           <h2 id="closing-title">Set up your calendar.</h2>
-          <p>Free. A phone number is all it asks for.</p>
+          <p>Free. Sign in with Google, or with your phone.</p>
           <div class="hero-actions center">
             <a class="btn btn-light btn-lg" href="/app/" id="closing-start">Get started free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
           </div>
