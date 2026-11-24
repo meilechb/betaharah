@@ -95,7 +95,7 @@ const ACCOUNT_PASSWORD = 'a good long password';
     if ((await page.inputValue('#cname')) !== 'Local Tester') throw new Error('not kept');
   });
   await step('operator: invitation for one number', async () => {
-    await page.fill('#inum', '(732) 555-0101');
+    await page.fill('#inum', '(732) 444-0101');
     await page.click('button:has-text("Create invitation")');
     await page.waitForSelector('.alert.ok code.copy');
     inviteLink = (await text('.alert.ok code.copy')).trim();
@@ -127,7 +127,7 @@ const ACCOUNT_PASSWORD = 'a good long password';
   await step('set up the account from the invitation', async () => {
     await page.goto(inviteLink.replace(/^https?:\/\/[^/]+/, base));
     await page.waitForSelector('h2:has-text("Set up your account")');
-    await page.fill('#number', '732-555-0101');
+    await page.fill('#number', '732-444-0101');
     await page.fill('#pw1', ACCOUNT_PASSWORD);
     await page.fill('#pw2', 'something else entirely');
     await page.click('button[type=submit]');
@@ -219,10 +219,18 @@ const ACCOUNT_PASSWORD = 'a good long password';
     await page.waitForSelector('ul.list .title:has-text("Flow: ")');
     if (!(await text('#root')).includes('Recorded on the website')) throw new Error('source');
   });
+  await step('removing an entry asks first; Escape keeps it', async () => {
+    await page.click('ul.list button:has-text("Remove")');
+    await page.waitForSelector('dialog[open] h2:has-text("Remove this entry?")');
+    if (!(await page.evaluate(() => document.activeElement && document.activeElement.textContent === 'Cancel'))) throw new Error('Cancel does not have the focus');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog', { state: 'detached' });
+    await page.waitForSelector('ul.list .title:has-text("Flow: ")');
+  });
   await step('settings: phones, calendar, reminders, sign-in, data', async () => {
     await page.click('nav.tabs button:has-text("Settings")');
     const t = await text('#root');
-    for (const s of ['(732) 555-0101', 'this phone', 'not verified', 'Text messaging is not available on this site yet', 'Subscription link', 'Coming reminders', 'Signed in with (732) 555-0101', 'Download my data', 'Delete my account']) {
+    for (const s of ['(732) 444-0101', 'this phone', 'not verified', 'Text messaging is not available on this site yet', 'Subscription link', 'Coming reminders', 'Signed in with (732) 444-0101', 'Download my data', 'Delete my account']) {
       if (!t.includes(s)) throw new Error('missing: ' + s);
     }
     if (/\{[a-z_]+\}/.test(t)) throw new Error('an unfilled term');
@@ -261,7 +269,7 @@ const ACCOUNT_PASSWORD = 'a good long password';
   await step('sign out, and back in with the password', async () => {
     await page.click('button:has-text("Sign out"):not(:has-text("everywhere"))');
     await page.waitForSelector('form.login');
-    await page.fill('#number', '(732) 555-0101');
+    await page.fill('#number', '(732) 444-0101');
     await page.fill('#pw', 'the wrong password');
     await page.click('button[type=submit]');
     await page.waitForSelector('.alert.bad:has-text("Wrong number or password")');
@@ -283,8 +291,13 @@ const ACCOUNT_PASSWORD = 'a good long password';
     await page.setViewportSize({ width: 420, height: 900 });
   });
   await step('delete the account', async () => {
-    page.once('dialog', d => d.accept('DELETE'));
     await page.click('button:has-text("Delete my account")');
+    await page.waitForSelector('dialog[open] h2:has-text("Delete the account?")');
+    await page.fill('dialog input', 'delete');
+    await page.click('dialog button[type=submit]');
+    await page.waitForSelector('dialog .error:has-text("Nothing has been deleted")');
+    await page.fill('dialog input', 'DELETE');
+    await page.click('dialog button[type=submit]');
     await page.waitForURL(base + '/');
     await page.goto(base + '/app/');
     await page.waitForSelector('form.login');
