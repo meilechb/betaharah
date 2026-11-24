@@ -15,12 +15,15 @@ code; it is the only other document you need.
 | `public/app/onboarding.js` | The "Getting started" card (`onboardingCard()`), to become the guided setup. | Sign-up agent |
 | `public/app/auth.css` | Styles for the sign-in views and the guided setup. | Sign-up agent |
 | `public/app/views/today.js`, `log.js`, `customs.js`, `shared.js` | The tabs, and pieces two tabs use (`alertsBlock`, `termsToggle`, `saveApp`). | Dashboard agent |
+| `public/app/views/calendar.js` | Today's month calendar: the month, the legend (always shown, in two groups), and the chosen day with its one-click buttons and what is marked on it. | Dashboard agent |
+| `public/app/views/record.js` | Recording, in one place: `recordNow(body, button, where)` for one-click entries (the next step, a day's buttons), `notice(where)` for the server's confirmation with Undo or its refusal, `openRecord(preset, openerId)` and `recordPanel()` for the full form on Today, `recordCard()` for "Add a past entry" on the Log. | Dashboard agent |
+| `public/app/views/marks.js` | The marks of the kinds of days, used by the dashboard and the console's calculation test: `mark()` (H✓/M✓ recorded, H? the hefsek day not recorded, outlined M a mikvah night, dashed expected), `entryMark(kind)`, `legend()`, and the words beside a title: `plainTitle()` (no " (projected)"), `stateTag()` ("recorded", "not recorded", "expected"), `spoken()`, `describe()`, `assumption()`. | Dashboard agent |
 | `public/app/views/settings/*.js`, `public/app/settings.css` | The Settings tab: `index.js` draws the list of sections (each row with a one-line summary) and the open section; one module per section; `route.js` keeps the open section in the address (`#settings/phones`); `ui.js` has the rows and switches. | Settings |
 | `test/ui/settings.cjs` | The browser run of every Settings section, on the test account and on a new account. | Settings |
 | `public/app/dashboard.css` | Styles for the signed-in tabs. | Dashboard agent |
 | `public/index.html`, `public/landing.css` | The public landing page. | Console and landing agent |
 | `public/landing-try.js` | "Try it" on the home page (`#try`): a visitor's dates worked out by `POST /api/try`, with the same marks as the dashboard; without JavaScript the section is a sentence and a link. | Console and landing agent |
-| `public/admin/sections/calc.js` | The console's "Calculation test" (`#calc`), from `POST /api/admin/sandbox`. It imports `mark()` from `public/app/views/marks.js`; its calendar styles repeat the dashboard's under `.calc` in `admin.css`. | Console and landing agent |
+| `public/admin/sections/calc.js` | The console's "Calculation test" (`#calc`), from `POST /api/admin/sandbox`. It imports `mark()` (with the H✓, M✓, H? and outlined M marks) from `public/app/views/marks.js`; its calendar styles repeat the dashboard's under `.calc` in `admin.css`. | Console and landing agent |
 | `test/ui/sandbox.cjs` | The browser run of the calculation test and of "Try it". | Console and landing agent |
 | `public/admin/*` (`admin.js`, `admin.css`) | The operator console. `admin.js` is still a classic script; it may become a module that imports `/app/lib.js`. | Console and landing agent |
 | `test/ui-check.cjs` | The browser run of every page. Whoever changes markup it relies on updates it. | Shared |
@@ -65,7 +68,7 @@ so in your report; do not edit the frozen files.
 
 - `main.js` draws the whole page from `S` and the drafts with `render()`. Views
   are functions that return nodes; they hold their own small form state in
-  module variables (for example `rec` in `today.js`).
+  module variables (for example `rec` in `record.js`).
 - After any change, call the API, then `saved(message)` adopts the new state,
   redraws and shows a toast: `run(() => api('PUT', '/api/app', draft.app), saved('Saved.'), button)`.
   The third argument is the button to show as busy.
@@ -77,6 +80,40 @@ so in your report; do not edit the frozen files.
 - `S` and `P` are live bindings: `import { S } from '../store.js'` and read
   `S.x`. Change them only through `adopt()`, `setPublic()`, `signOutLocally()`.
 - The shape of `S` is `dashboardState()` in `src/app/dashboard.ts`.
+
+## The Today tab
+
+Top to bottom on a phone; from 960 px the calendar is the left column and the
+rest stays in this order on the right (`.today-layout` in `dashboard.css`).
+
+1. **Where things stand** (`statusCard` in `today.js`): the server's headline
+   and sentence, then the one thing to record next as one primary button
+   (`#next-step`), chosen from `S.status.phase`: "A period began" (tehorah);
+   "The hefsek taharah was done today" (before the hefsek, by day, once the
+   grid's projected hefsek day has come); "She immersed tonight" (mikvah night);
+   "She immersed on the evening of …" (the mikvah night passed with nothing
+   recorded). The clean days and a postponed immersion have no button. Links
+   open the full form preset: "It began earlier", "On another night",
+   "Record something else". Then today's items, the next onat perishah while
+   tehorah, today's sunset, and the alerts; under the note about a period with
+   no immersion recorded before it, "Record that immersion".
+2. **The full form** (`recordPanel` in `record.js`), only after a link opened
+   it, with Close. It keeps every choice: any kind, another date, by day, at
+   night or a clock time, a note, the vesatot switch.
+3. **Calendar** (`calendar.js`): the month, the legend, and the chosen day.
+   For today or an earlier day, "What happened on this day?" records with one
+   click (`POST /api/entries` with `{ kind, date, part }`), with more under
+   "Other things to add"; then "On this day".
+4. **Coming up**: "Until the immersion" (the hefsek day, the clean days as one
+   row, the mikvah night, with the server's assumption when they are
+   projected), then "Onot of separation", one row each, with the reasons shown.
+   The calendar button on a row shows that day on the calendar.
+5. "Text this number", or on the test account "Try a text", last.
+
+Titles never show the server's " (projected)": the page says "not recorded"
+(the hefsek day), "expected" (projected) or "recorded" in a label beside them.
+A confirmation (with Undo) or a refusal is shown where the entry was recorded
+from: the status card, the chosen day, or the form.
 
 ## Tokens (`:root` in `site.css`)
 

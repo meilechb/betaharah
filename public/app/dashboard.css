@@ -290,7 +290,7 @@ details > summary:focus-visible {
 .mk.projected.clean {
   border-style: dashed;
 }
-/* "H?": the day a hefsek taharah can be done, wider than one letter */
+/* "H?", "H✓", "M✓": wider than one letter */
 .mk.wide {
   width: auto;
   min-width: 18px;
@@ -298,9 +298,25 @@ details > summary:focus-visible {
   border-radius: var(--radius-sm);
   white-space: nowrap;
 }
+/* a mikvah night worked out by the calendar: outlined (dashed while it is only expected) */
+.mk.mikvah.plan {
+  background: transparent;
+  border: 2px solid var(--mikvah);
+  color: var(--mikvah);
+}
+.mk-pair {
+  display: inline-flex;
+  gap: 2px;
+  flex: none;
+}
 
 /* ======================= Today ======================= */
 
+/*
+ * One column, in the page's order: where things stand, the form when it is open, the calendar,
+ * coming up, texting. From 960 px: the calendar on the left, the rest in that order on the right.
+ * The last row takes what is left of the calendar's height, so the cards on the right stay together.
+ */
 .today-layout {
   display: grid;
   gap: 0 var(--space-6);
@@ -310,26 +326,29 @@ details > summary:focus-visible {
 @media (min-width: 960px) {
   .today-layout {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: repeat(5, auto) 1fr;
   }
-}
-/* On one column the cards keep the page's order: status, calendar, record, then the rest. */
-
-/* On a phone and a tablet the record card is far down: a button that stays on screen jumps to it. */
-.record-jump {
-  display: none;
-}
-@media (max-width: 959px) {
-  .record-jump {
-    display: inline-flex;
-    position: fixed;
-    right: var(--gutter);
-    bottom: calc(var(--tabbar-h, 0px) + var(--space-4));
-    z-index: 14;
-    box-shadow: var(--shadow-lg);
-    border-radius: var(--radius-pill);
+  .today-layout > * {
+    grid-column: 2;
   }
-  .record-jump.hidden-by-card {
-    display: none;
+  .today-layout > .calendar-card {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+  .today-layout > .status-card {
+    grid-row: 1;
+  }
+  .today-layout > .record-panel {
+    grid-row: 2;
+  }
+  .today-layout > .upcoming-card {
+    grid-row: 3;
+  }
+  .today-layout > .text-card {
+    grid-row: 4;
+  }
+  .today-layout > .demo-card {
+    grid-row: 5;
   }
 }
 
@@ -409,6 +428,34 @@ details > summary:focus-visible {
 }
 .status-card .alerts {
   margin-top: var(--space-4);
+}
+/* the next step: one button, and links to the full form */
+.next {
+  margin: var(--space-4) 0 0;
+}
+.next .rec-done,
+.next .rec-error {
+  margin: 0 0 var(--space-3);
+}
+.next .next-button {
+  min-height: 52px;
+}
+.next-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+}
+.next.has-main .next-links {
+  margin-top: var(--space-1);
+}
+.next-links button.link {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+}
+.alert-action {
+  display: block;
+  margin-top: var(--space-2);
 }
 .empty-status p {
   margin-bottom: var(--space-4);
@@ -732,8 +779,35 @@ table.month .day.none {
     top: 5px;
   }
 }
-.legend-box {
-  margin: var(--space-2) var(--space-2) 0;
+.cal-how {
+  margin: calc(-1 * var(--space-1)) var(--space-2) var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+table.month .day .mk.wide {
+  width: auto;
+  padding: 0 2px;
+}
+/* the legend: what she recorded, what the calendar works out, and how a day is drawn */
+.legend-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin: var(--space-3) var(--space-2) 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.legend-group h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+.legend-group ul.legend {
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+}
+.legend-groups ul.legend-days {
+  grid-column: 1 / -1;
+  color: var(--muted);
 }
 ul.legend {
   list-style: none;
@@ -831,9 +905,13 @@ ul.events .mk {
 .ev-title {
   font-weight: var(--weight-bold);
 }
-.ev.projected .ev-title,
-.up-row.projected .up-title {
-  font-style: italic;
+/* "recorded", "not recorded", "expected": a label beside the title */
+.ev-title .tag,
+.up-title .tag,
+.ti-title .tag {
+  font-style: normal;
+  font-weight: var(--weight-normal);
+  vertical-align: 1px;
 }
 .ev-when {
   font-size: var(--text-sm);
@@ -844,20 +922,84 @@ ul.events .mk {
   font-size: var(--text-sm);
   margin-top: var(--space-1);
 }
-.day-detail .actions {
-  margin-top: var(--space-3);
+/* the chosen day: what happened on it, and what is marked on it */
+.day-q {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-base);
+}
+.addgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: var(--space-2);
+}
+button.addbtn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+button.addbtn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.day-night-note {
+  margin: var(--space-2) 0 0;
+}
+.day-result .alert {
+  margin: var(--space-3) 0 0;
+}
+.day-more {
+  margin-top: var(--space-2);
+}
+.day-more > summary {
+  cursor: pointer;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+.day-more .addgrid {
+  margin-bottom: var(--space-2);
+}
+.timeform {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 var(--space-1);
+}
+.timeform .field {
+  margin: 0;
 }
 
-/* coming up */
-.week + .week {
+/* coming up: until the immersion, then the onot of separation */
+.up-group + .up-group {
   margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
 }
-.week h3 {
+.up-group h3 {
   margin: 0 0 var(--space-1) !important;
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: var(--text-base);
+}
+.up-assume {
+  margin: 0 0 var(--space-2);
   color: var(--muted);
+}
+.up-desc {
+  margin-top: var(--space-1);
 }
 .up-list {
   list-style: none;

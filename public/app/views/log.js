@@ -5,7 +5,7 @@
 import { api, button, card, confirmDialog, emptyState, h, icon } from '../lib.js';
 import { S, t, when } from '../store.js';
 import { thread, tryTextCard } from './demo.js';
-import { mark } from './marks.js';
+import { entryMark } from './marks.js';
 import { recordCard } from './record.js';
 import { refresh, region, saveChange, saveStatus } from './shared.js';
 
@@ -45,11 +45,10 @@ function entryRow(e) {
   const kindText = at > 0 ? e.text.slice(0, at) : e.text;
   const rest = at > 0 ? e.text.slice(at + 2) : '';
   const open = openEntry === e.id;
-  const markKind = e.kind === 'stain' ? 'flow' : e.kind;
   return h(
     'li',
     { class: 'entry' + (open ? ' open' : '') },
-    e.kind === 'broken' ? h('span', { class: 'mk broken', 'aria-hidden': 'true' }, '×') : mark({ kind: markKind }, { number: 1 }),
+    entryMark(e.kind),
     h(
       'div',
       { class: 'entry-main' },

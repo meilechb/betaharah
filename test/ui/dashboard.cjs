@@ -88,7 +88,9 @@ const H = { 'x-betaharah': '1' };
     if (events.length === 0) throw new Error('the test account has no events this month');
     for (const e of events) {
       const label = await page.getAttribute(`#day-${e.startDate}`, 'aria-label');
-      if (!label || !label.includes(e.title)) throw new Error(e.startDate + ' does not mention ' + e.title + ': ' + label);
+      const title = e.title.replace(' (projected)', '');
+      if (!label || !label.includes(title)) throw new Error(e.startDate + ' does not mention ' + title + ': ' + label);
+      if (label.includes('(projected)')) throw new Error(e.startDate + ' says "(projected)": ' + label);
       const marks = await page.locator(`#day-${e.startDate} .marks .mk`).count();
       if (marks === 0) throw new Error('no mark on ' + e.startDate);
     }
@@ -103,7 +105,7 @@ const H = { 'x-betaharah': '1' };
     await page.click(`#day-${target.startDate}`);
     await page.waitForSelector(`#day-${target.startDate}[aria-pressed="true"]`);
     const detail = await page.textContent('.day-detail');
-    if (!detail.includes(target.title)) throw new Error('details do not list ' + target.title);
+    if (!detail.includes(target.title.replace(' (projected)', ''))) throw new Error('details do not list ' + target.title);
     if (!/Sunrise \d/.test(detail)) throw new Error('no sunrise in the details');
   });
 
@@ -130,17 +132,62 @@ const H = { 'x-betaharah': '1' };
     if ((await page.textContent('#cal-title')) !== monthName(today)) throw new Error('Today did not come back');
   });
 
-  await step('legend opens', async () => {
-    await page.click('#cal-legend');
-    await page.waitForSelector('ul.legend li:has-text("Dashed: projected")', { state: 'visible' });
+  await step('legend: always shown under the month, in two groups', async () => {
+    await page.waitForSelector('#legend-recorded h4:text-is("What you recorded")', { state: 'visible' });
+    await page.waitForSelector('#legend-worked-out h4:text-is("What the calendar works out")', { state: 'visible' });
+    const recorded = await page.textContent('#legend-recorded');
+    for (const p of ['Flow or stain: a period began', 'Hefsek taharah, recorded', 'Immersion, recorded']) if (!recorded.includes(p)) throw new Error('recorded group: no ' + p);
+    const worked = await page.textContent('#legend-worked-out');
+    for (const p of ['The day the hefsek taharah can be done. Not recorded.', 'Day 1 to 7 of the seven clean days', 'Mikvah night', 'Veset onah, by day or at night', 'Or Zarua only', 'Dashed: expected']) if (!worked.includes(p)) throw new Error('worked-out group: no ' + p);
+    if ((await page.textContent('#legend-recorded .mk.hefsek.done')) !== 'H✓') throw new Error('no H✓ in the legend');
+    if ((await page.textContent('#legend-worked-out .mk.hefsek.projected')) !== 'H?') throw new Error('no H? in the legend');
+    if ((await page.locator('#legend-worked-out .mk.mikvah.plan').count()) !== 1) throw new Error('no outlined M in the legend');
+  });
+
+  await step('the recorded hefsek taharah and immersion are marked with a tick; the planned mikvah night is outlined', async () => {
+    const hefsek = s0.grid.events.find(e => e.kind === 'hefsek' && e.title.includes('✓') && e.startDate.slice(0, 7) === today.slice(0, 7));
+    if (hefsek) {
+      if ((await page.textContent(`#day-${hefsek.startDate} .mk.hefsek`)) !== 'H✓') throw new Error('the recorded hefsek is not H✓');
+      await page.click(`#day-${hefsek.startDate}`);
+      await page.waitForSelector('#day-events .ev.hefsek .tag:text-is("recorded")');
+    }
+    const plan = s0.grid.events.find(e => e.kind === 'mikvah' && !e.title.includes('✓') && e.startDate.slice(0, 7) === today.slice(0, 7));
+    if (plan && (await page.textContent(`#day-${plan.startDate} .mk.mikvah.plan`)) !== 'M') throw new Error('the mikvah night is not an outlined M');
+    await page.click(`#day-${today}`);
+  });
+
+  // ----- where things stand: the next step -----
+
+  await step('where things stand, in the clean days: no button to press, only "Record something else"; no floating button', async () => {
+    const st = await state();
+    if (st.status.phase !== 'counting') throw new Error('the test account is not in the clean days: ' + st.status.phase);
+    if (await page.locator('#next-step').count()) throw new Error('a next-step button in the clean days');
+    await page.waitForSelector('.status-card #next-else:has-text("Record something else")');
+    await page.waitForSelector('.status-card .today-box .ti-title');
+    if (await page.locator('#record-jump').count()) throw new Error('the floating Record button is still there');
+    const fixed = await page.$$eval('.panel-today button', els => els.filter(el => getComputedStyle(el).position === 'fixed').length);
+    if (fixed) throw new Error(fixed + ' fixed buttons on Today');
+    if (await page.locator('#record-panel').count()) throw new Error('the form is open before it was asked for');
+    if (/\(projected\)/.test(await page.textContent('#root'))) throw new Error('"(projected)" on the page');
   });
 
   // ----- recording -----
 
+  await step('"Record something else" opens the form under the status card; Close closes it', async () => {
+    await page.click('#next-else');
+    await page.waitForSelector('#record-panel #rec-kind-flow');
+    const order = await page.evaluate(() => [document.querySelector('.status-card'), document.getElementById('record-panel'), document.querySelector('.calendar-card')].map(el => el.getBoundingClientRect().top));
+    if (!(order[0] < order[1] && order[1] < order[2])) throw new Error('the form is not under the status card: ' + order.join(', '));
+    await page.click('#rec-close');
+    await page.waitForSelector('#record-panel', { state: 'detached' });
+    if ((await page.evaluate(() => document.activeElement.id)) !== 'next-else') throw new Error('the focus did not go back to the link');
+  });
+
   await step('a refusal is shown next to the form', async () => {
+    await page.click('#next-else');
     await page.click('#rec-kind-mikvah');
     await page.click('#rec-submit');
-    await page.waitForSelector('.record-card .rec-error');
+    await page.waitForSelector('#record-panel .rec-error');
   });
 
   await step('record an entry for another time', async () => {
@@ -152,9 +199,37 @@ const H = { 'x-betaharah': '1' };
     await page.click('#r-rec-how-day');
     await page.fill('#rec-note', 'checked by the browser test');
     await page.click('#rec-submit');
-    await page.waitForSelector('.record-card .rec-done');
+    await page.waitForSelector('.status-card .rec-done');
     const msg = await page.textContent('.rec-done');
     if (!/Recorded/i.test(msg)) throw new Error('confirmation: ' + msg);
+    if (await page.locator('#record-panel').count()) throw new Error('the form stayed open');
+  });
+
+  await step('the day panel: one click records on that day, a refusal is shown beside the buttons, Undo removes it', async () => {
+    const yesterday = new Date(Date.parse(today + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
+    if (!(await page.locator('#day-' + yesterday).count())) await page.click('#cal-prev');
+    await page.click('#day-' + yesterday);
+    await page.waitForSelector('#day-panel h4:text-is("What happened on this day?")');
+    for (const id of ['dp-add-flow-day', 'dp-add-flow-night', 'dp-add-hefsek', 'dp-add-mikvah']) await page.waitForSelector('#' + id);
+    const before = (await state()).entryCount;
+    await page.click('#dp-add-mikvah');
+    await page.waitForSelector('#day-panel .rec-error');
+    if ((await state()).entryCount !== before) throw new Error('the refused immersion was recorded');
+    await page.click('#day-more summary');
+    await page.click('#dp-add-stain-day');
+    await page.waitForSelector('#day-panel .rec-done');
+    if ((await state()).entryCount !== before + 1) throw new Error('not recorded');
+    await page.click('#rec-undo');
+    await page.waitForSelector('#day-panel .rec-done:has-text("Removed")');
+    if ((await state()).entryCount !== before) throw new Error('Undo did not remove it');
+    // a future day shows only what is marked on it
+    const later = new Date(Date.parse(today + 'T12:00:00Z') + 2 * 86400000).toISOString().slice(0, 10);
+    await page.click('#cal-today');
+    if (!(await page.locator('#day-' + later).count())) await page.click('#cal-next');
+    await page.click('#day-' + later);
+    await page.waitForSelector('#day-panel h4:text-is("On this day")');
+    if (await page.locator('#dp-add-flow-day').count()) throw new Error('buttons to record on a future day');
+    await page.click('#cal-today');
   });
 
   await step('the entry is in the Log with its note, and can be removed', async () => {
@@ -175,6 +250,16 @@ const H = { 'x-betaharah': '1' };
     await page.click('#rec-kind-hefsek');
     await page.waitForSelector('#rec-date');
     await page.click('#rec-cancel');
+  });
+
+  await step('coming up: until the immersion, then each onah with its reasons shown', async () => {
+    await tab('Today');
+    await page.waitForSelector('#up-steps h3:text-is("Until the immersion")');
+    await page.waitForSelector('#up-steps .up-clean_day.group');
+    await page.waitForSelector('#up-onot h3:text-is("Onot of separation")');
+    const first = await page.textContent('#up-onot .up-row .up-desc');
+    if (!/beinonit|haflagah|hachodesh/i.test(first)) throw new Error('no reason shown: ' + first);
+    if (await page.locator('#up-onot details').count()) throw new Error('reasons hidden behind a toggle');
   });
 
   // ----- Try a text -----

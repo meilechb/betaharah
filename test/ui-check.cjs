@@ -276,17 +276,18 @@ const problems = [];
 
   // ===================== the dashboard =====================
 
-  await step('today: status, then the calendar, then recording, in the page’s order', async () => {
+  await step('today: status with the next step, then the calendar, then coming up, in the page’s order', async () => {
     const st = await state();
     if (st.status.phase !== 'tehorah') throw new Error('phase ' + st.status.phase);
     if ((await page.textContent('#status-headline')).trim() !== 'Tehorah') throw new Error('headline');
-    const order = await page.evaluate(() => ['.status-card', '.calendar-card', '.record-card', '.upcoming-card'].map(s => document.querySelector(s)).map(el => (el ? el.getBoundingClientRect().top + scrollY : -1)));
-    if (order.some(x => x < 0) || !(order[0] < order[1] && order[1] < order[2] && order[2] < order[3])) throw new Error('order on a phone: ' + order.join(', '));
+    const order = await page.evaluate(() => ['.status-card', '.calendar-card', '.upcoming-card'].map(s => document.querySelector(s)).map(el => (el ? el.getBoundingClientRect().top + scrollY : -1)));
+    if (order.some(x => x < 0) || !(order[0] < order[1] && order[1] < order[2])) throw new Error('order on a phone: ' + order.join(', '));
     // A tehorah woman sees the next onat perishah next to the status.
     await page.waitForSelector('.status-card .next-line');
-    // The Record button stays on screen and jumps to the record card.
-    await page.click('#record-jump');
-    await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'rec-suggested');
+    // One thing to do next, in the status card; no floating button and no form until asked for.
+    if ((await page.textContent('.status-card #next-step')).trim() !== 'A period began') throw new Error('next step: ' + (await page.textContent('#next-step')));
+    await page.waitForSelector('.status-card #next-earlier:has-text("It began earlier")');
+    if (await page.locator('#record-jump, #record-panel, #rec-suggested').count()) throw new Error('a floating button or an open form');
     await noSideways();
     await shot('20-today-390');
   });
@@ -321,29 +322,28 @@ const problems = [];
 
   await step('today: the day detail says when its Hebrew date ends; a mikvah night is "after" nightfall', async () => {
     await has('.day-detail .date-change', 'The night after it belongs to');
+    await has('#day-panel h4', 'What happened on this day?');
     const st = await state();
     const m = st.upcoming.find(u => u.kind === 'mikvah');
     if (m && !/after \d/.test(m.when)) throw new Error('mikvah when: ' + m.when);
   });
 
   await step('recording: a slow request shows the button busy; a failed one says what happened; nothing is recorded', async () => {
-    await page.click('#rec-suggested');
-    await page.waitForSelector('#rec-submit');
     await page.route('**/api/entries', async route => {
       await new Promise(r => setTimeout(r, 1500));
       await route.abort('failed');
     });
-    await page.click('#rec-submit');
-    await page.waitForSelector('#rec-submit[aria-busy="true"]', { timeout: 1200 });
-    await has('.rec-error', 'could not be reached');
+    await page.click('#next-step');
+    await page.waitForSelector('#next-step[aria-busy="true"]', { timeout: 1200 });
+    await has('.status-card .rec-error', 'could not be reached');
     await page.unroute('**/api/entries');
     if ((await state()).entryCount !== 3) throw new Error('something was recorded');
     await shot('21-record-failed');
   });
 
   await step('recording: then it works, with the server’s sentence, and Undo removes exactly that entry', async () => {
-    await page.click('#rec-submit');
-    await has('.rec-done', 'Recorded: flow');
+    await page.click('#next-step');
+    await has('.status-card .rec-done', 'Recorded: flow');
     const st = await state();
     if (st.entryCount !== 4 || st.status.phase !== 'before_hefsek') throw new Error('not recorded: ' + st.status.phase);
     // During a niddah period the next onat perishah is not next to the task of the day.
@@ -358,19 +358,18 @@ const problems = [];
     const second = await context.newPage();
     watch(second);
     await second.goto(base + '/app/#today');
-    await second.waitForSelector('#rec-suggested');
-    await page.click('#rec-suggested');
-    await page.click('#rec-submit');
+    await second.waitForSelector('#next-step');
+    await page.click('#next-step');
     await has('.rec-done', 'Recorded: flow');
-    await second.click('#rec-suggested');
-    await second.click('#rec-submit');
-    await has('.rec-error', 'Already recorded', second);
+    await second.click('#next-step');
+    await has('.status-card .rec-error', 'Already recorded', second);
     await second.close();
     await page.click('#rec-undo');
     await has('.rec-done', 'Removed');
   });
 
   await step('an expired session in the middle of a form: back to sign-in with a note, then in again with the password', async () => {
+    await page.click('#next-else');
     await page.click('#rec-kind-stain');
     await page.route('**/api/entries', route => route.fulfill({ status: 401, json: { error: 'Please sign in.' } }));
     await page.click('#rec-submit');
@@ -473,6 +472,151 @@ const problems = [];
     await page.fill('#pw', ACCOUNT_PASSWORD);
     await page.click('button[type=submit]');
     await page.waitForSelector('nav.tabs');
+  });
+
+  // ----- the same account, walked through a period with the day buttons and the next-step button -----
+  // Time cannot be stepped, so each phase is reached with dates in the past.
+
+  const WALK_FLOW = isoDaysAgo(16);
+  const longDate = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' });
+  /** Chooses a day on the calendar, moving back a month when it is not shown. */
+  const pickDay = async date => {
+    await tab('Today');
+    for (let k = 0; k < 4 && !(await page.locator('#day-' + date).count()); k += 1) await page.click('#cal-prev');
+    await page.click('#day-' + date);
+    await page.waitForSelector(`#day-${date}[aria-pressed="true"]`);
+  };
+  /** Records with a button of the chosen day and waits for the server's sentence. */
+  const dayButton = async (date, id) => {
+    await pickDay(date);
+    await page.click('#' + id);
+    await has('#day-panel .rec-done', 'Recorded');
+    return state();
+  };
+  const removeAll = async () => {
+    for (const e of (await state()).entries) await api('DELETE', '/api/entries/' + encodeURIComponent(e.id));
+    await page.goto('about:blank');
+    await page.goto(base + '/app/#today');
+    await page.waitForSelector('#status-headline');
+  };
+  const noProjected = async () => {
+    const text = await page.textContent('#root');
+    if (/\(projected\)/.test(text)) throw new Error('"(projected)" on the page');
+    const labels = await page.$$eval('[aria-label]', els => els.map(e => e.getAttribute('aria-label')).filter(l => l.includes('(projected)')));
+    if (labels.length) throw new Error('"(projected)" in a label: ' + labels[0]);
+  };
+  const walkShot = async name => {
+    await noSideways();
+    await shot(name);
+  };
+
+  await step('walk: tehorah, "It began earlier" opens the form preset to a flow on another date', async () => {
+    await removeAll();
+    if ((await state()).status.phase !== 'tehorah') throw new Error('not tehorah');
+    await page.click('#next-earlier');
+    await page.waitForSelector('#record-panel #rec-kind-flow[aria-pressed="true"]');
+    if (!(await page.isChecked('#r-rec-mode-other'))) throw new Error('not on another time');
+    if ((await page.inputValue('#rec-date')) !== (await state()).grid.today) throw new Error('the date is not today');
+    if ((await page.evaluate(() => document.activeElement.id)) !== 'rec-date') throw new Error('the focus is not on the date');
+    await page.click('#rec-close');
+    await page.waitForSelector('#record-panel', { state: 'detached' });
+    await walkShot('50-walk-tehorah');
+  });
+
+  let walkHefsek = '';
+  await step('walk: a period with the day button; the hefsek day is "H?" and "not recorded", the rest "expected"', async () => {
+    const st = await dayButton(WALK_FLOW, 'dp-add-flow-day');
+    if (st.status.phase !== 'before_hefsek') throw new Error('phase ' + st.status.phase);
+    const hefsek = st.grid.events.find(e => e.kind === 'hefsek' && e.projected);
+    walkHefsek = hefsek.startDate;
+    await pickDay(walkHefsek);
+    if ((await page.textContent(`#day-${walkHefsek} .mk.hefsek.projected`)) !== 'H?') throw new Error('the hefsek day is not H?');
+    if (!(await page.getAttribute('#day-' + walkHefsek, 'aria-label')).includes('not recorded')) throw new Error('the day does not say "not recorded"');
+    await page.waitForSelector('#day-events .ev.hefsek .tag:text-is("not recorded")');
+    await page.waitForSelector('#up-steps .up-hefsek .tag:text-is("not recorded")');
+    await page.waitForSelector('#up-steps .up-clean_day .tag:text-is("expected")');
+    await page.waitForSelector('#up-steps .up-mikvah .tag:text-is("expected")');
+    await has('#up-assume', 'This assumes the hefsek taharah is done on the first day it can be.');
+    await noProjected();
+    // The next step: the hefsek taharah, only while it can be done today.
+    const canToday = st.today.part === 'day' && walkHefsek <= st.today.civilDate;
+    if (canToday && (await page.textContent('#next-step')).trim() !== 'The hefsek taharah was done today') throw new Error('next step: ' + (await page.textContent('#next-step')));
+    if (!canToday && (await page.locator('#next-step').count())) throw new Error('a next-step button while the hefsek cannot be done today');
+    await walkShot('51-walk-before-hefsek');
+  });
+
+  await step('walk: the hefsek taharah with the day button: the count, with no button to press', async () => {
+    const st = await dayButton(isoDaysAgo(3), 'dp-add-hefsek');
+    if (st.status.phase !== 'counting') throw new Error('phase ' + st.status.phase);
+    if ((await page.textContent(`#day-${isoDaysAgo(3)} .mk.hefsek.done`)) !== 'H✓') throw new Error('the recorded hefsek is not H✓');
+    await page.waitForSelector('#day-events .ev.hefsek .tag:text-is("recorded")');
+    if (await page.locator('#next-step').count()) throw new Error('a next-step button in the count');
+    await noProjected();
+    await walkShot('52-walk-counting');
+    await page.click('#rec-undo');
+    await has('#day-panel .rec-done', 'Removed');
+  });
+
+  await step('walk: a hefsek taharah a week ago: the seventh clean day by day, then "She immersed tonight" once it is the mikvah night', async () => {
+    try {
+      const st = await dayButton(isoDaysAgo(7), 'dp-add-hefsek');
+      if (st.status.phase === 'counting') {
+        // By day the seventh clean day is still counted; there is nothing to press until the night.
+        if (st.status.day !== 7) throw new Error('day ' + st.status.day);
+        if (await page.locator('#next-step').count()) throw new Error('a next-step button on the seventh clean day');
+        return;
+      }
+      if (st.status.phase !== 'mikvah_tonight') throw new Error('phase ' + st.status.phase);
+      if ((await page.textContent('#next-step')).trim() !== 'She immersed tonight') throw new Error('next step: ' + (await page.textContent('#next-step')));
+      await page.click('#next-step');
+      // Before nightfall the server refuses it, with its sentence beside the button; after nightfall it is recorded.
+      await page.waitForSelector('.status-card .rec-done, .status-card .rec-error');
+      if (await page.locator('.status-card .rec-done').count()) {
+        if ((await state()).status.phase !== 'tehorah') throw new Error('recorded, but not tehorah');
+        await page.click('#rec-undo');
+        await has('.status-card .rec-done', 'Removed');
+      }
+    } finally {
+      for (const e of (await state()).entries.filter(x => x.kind !== 'flow')) await api('DELETE', '/api/entries/' + encodeURIComponent(e.id));
+    }
+  });
+
+  const WALK_HEFSEK = addDays(WALK_FLOW, 5);
+  const WALK_MIKVAH = addDays(WALK_HEFSEK, 7);
+  await step('walk: the mikvah night passed with no immersion recorded: "She immersed on the evening of ..."; "On another night" opens the form', async () => {
+    const st = await dayButton(WALK_HEFSEK, 'dp-add-hefsek');
+    if (st.status.phase !== 'mikvah_not_recorded') throw new Error('phase ' + st.status.phase);
+    if ((await page.textContent('#next-step')).trim() !== 'She immersed on the evening of ' + longDate(WALK_MIKVAH)) throw new Error('next step: ' + (await page.textContent('#next-step')));
+    await pickDay(WALK_MIKVAH);
+    if ((await page.textContent(`#day-${WALK_MIKVAH} .mk.mikvah.plan`)) !== 'M') throw new Error('the mikvah night is not an outlined M');
+    await walkShot('53-walk-mikvah-not-recorded');
+    await page.click('#next-other-night');
+    await page.waitForSelector('#record-panel #rec-kind-mikvah[aria-pressed="true"]');
+    if ((await page.inputValue('#rec-date')) !== WALK_MIKVAH) throw new Error('the form is not on the mikvah night');
+    await page.click('#rec-cancel');
+    await page.waitForSelector('#record-panel', { state: 'detached' });
+    await page.click('#next-step');
+    await has('.status-card .rec-done', 'Recorded');
+    const after = await state();
+    if (after.status.phase !== 'tehorah') throw new Error('phase after the immersion ' + after.status.phase);
+    if ((await page.textContent(`#day-${WALK_MIKVAH} .mk.mikvah.done`)) !== 'M✓') throw new Error('the immersion is not M✓');
+    await page.click('#rec-undo');
+    await has('.status-card .rec-done', 'Removed');
+  });
+
+  await step('walk: a period with no immersion recorded before it: "Record that immersion" opens the form on that night, and records it', async () => {
+    const st = await dayButton(isoDaysAgo(1), 'dp-add-flow-day');
+    if (!st.alerts.some(a => a.text.startsWith('No immersion is recorded for the period before the latest one'))) throw new Error('no note: ' + JSON.stringify(st.alerts));
+    const night = st.grid.events.find(e => e.kind === 'mikvah' && /no immersion recorded/.test(e.title));
+    if (!night || night.startDate !== WALK_MIKVAH) throw new Error('the night with no immersion: ' + JSON.stringify(night));
+    await page.click('#record-missing-immersion');
+    await page.waitForSelector('#record-panel #rec-kind-mikvah[aria-pressed="true"]');
+    if ((await page.inputValue('#rec-date')) !== WALK_MIKVAH) throw new Error('the form is not on that night: ' + (await page.inputValue('#rec-date')));
+    await page.click('#rec-submit');
+    await has('.status-card .rec-done', 'Recorded');
+    if ((await state()).alerts.some(a => a.text.startsWith('No immersion is recorded'))) throw new Error('the note is still there');
+    if (await page.locator('#record-missing-immersion').count()) throw new Error('the button is still there');
+    await removeAll();
   });
 
   let feed = '';

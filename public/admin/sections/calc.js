@@ -520,13 +520,6 @@ function stateTag(e) {
   return null;
 }
 
-/** The mark of an event in this page: as in the app, with a tick for what was entered and "?" for a hefsek taharah that was not. */
-function calcMark(e, opts) {
-  if (e.kind === 'hefsek') return h('span', { class: 'mk hefsek wide ' + (isDone(e) ? 'done' : 'projected'), 'aria-hidden': 'true' }, isDone(e) ? 'H✓' : 'H?');
-  if (e.kind === 'mikvah') return h('span', { class: 'mk mikvah wide ' + (isDone(e) ? 'done' : e.projected ? 'projected' : 'plan'), 'aria-hidden': 'true' }, isDone(e) ? 'M✓' : 'M');
-  return mark(e, opts);
-}
-
 /** What a mark stands for, for a screen reader and the day's label. */
 function spoken(e) {
   const t = plainTitle(e);
@@ -636,7 +629,7 @@ function monthTable(i, grid, month, labelId) {
           },
           h('span', { class: 'cd' }, String(d)),
           h('span', { class: 'hd', lang: scenario.terms === 'he' ? 'he' : null }, day.hebrewDay),
-          h('span', { class: 'marks' }, events.map(e => calcMark(e))),
+          h('span', { class: 'marks' }, events.map(e => mark(e))),
         ),
       ),
     );
@@ -674,8 +667,8 @@ function legend() {
         'ul',
         { class: 'legend' },
         item(mark({ kind: 'flow' }), cap(fill('{flow} or {stain}: a period began'))),
-        item(calcMark({ kind: 'hefsek', title: '✓' }), cap(fill('{hefsek}, done'))),
-        item(calcMark({ kind: 'mikvah', title: '✓' }), cap(fill('{immersion}, done'))),
+        item(mark({ kind: 'hefsek', title: '✓' }), cap(fill('{hefsek}, done'))),
+        item(mark({ kind: 'mikvah', title: '✓' }), cap(fill('{immersion}, done'))),
       ),
     ),
     h(
@@ -685,9 +678,9 @@ function legend() {
       h(
         'ul',
         { class: 'legend' },
-        item(calcMark({ kind: 'hefsek', projected: true }), cap(fill('the day the {hefsek} can be done. It was not entered.'))),
+        item(mark({ kind: 'hefsek', projected: true }), cap(fill('the day the {hefsek} can be done. It was not entered.'))),
         item(mark({ kind: 'clean_day' }, { number: 1 }), fill('Day 1 to 7 of the {clean_days}')),
-        item(calcMark({ kind: 'mikvah' }), cap(fill('{mikvah_night}'))),
+        item(mark({ kind: 'mikvah' }), cap(fill('{mikvah_night}'))),
         item(h('span', { class: 'calc-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap(fill('{veset_onah}: separation, by day or at night'))),
         item(mark({ kind: 'onah', light: true }, { night: true }), cap(fill('{or_zarua} only'))),
         item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), fill('Dashed: expected, if the {hefsek} is done on the first day it can be')),
@@ -747,7 +740,7 @@ function eventRow(e, opts) {
   return h(
     'li',
     { class: 'ev ' + e.kind + (e.projected ? ' projected' : '') },
-    calcMark(e, { number: n }),
+    mark(e, { number: n }),
     h(
       'div',
       { class: 'ev-main' },
@@ -765,8 +758,8 @@ const labelOf = kind => (ui.result ? ui.result.state.labels.kinds[kind] : kind);
 function kindMark(kind) {
   if (kind === 'flow' || kind === 'stain') return mark({ kind: 'flow' });
   if (kind === 'broken') return h('span', { class: 'mk broken', 'aria-hidden': 'true' }, '×');
-  if (kind === 'hefsek') return calcMark({ kind: 'hefsek', title: '✓' });
-  return calcMark({ kind: 'mikvah', title: '✓' });
+  if (kind === 'hefsek') return mark({ kind: 'hefsek', title: '✓' });
+  return mark({ kind: 'mikvah', title: '✓' });
 }
 
 function addDate(entry, btn) {

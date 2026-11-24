@@ -1,14 +1,17 @@
 /*
  * The month calendar on the Today tab, drawn from S.grid (src/app/grid.ts):
  * a weekday header, each day with its civil and Hebrew day, marks for what
- * falls on it, Shabbat and Yom Tov shaded, today outlined. Choosing a day
- * shows its details below the month. Arrow keys move between days.
+ * falls on it, Shabbat and Yom Tov shaded, today outlined; the legend, always
+ * shown, in two groups (what she recorded, what the calendar works out); and
+ * the chosen day: its date, sunrise and sunset, for today or an earlier day
+ * one-click buttons for what happened on it, and what is marked on it.
+ * Arrow keys move between days.
  */
-import { button, card, h, icon } from '../lib.js';
+import { button, card, checkRow, h, icon, selectField, textField } from '../lib.js';
 import { S, t } from '../store.js';
-import { cleanDayNumber, isNight, legend, mark } from './marks.js';
+import { cleanDayNumber, describe, entryMark, isNight, legend, mark, plainTitle, spoken, stateTag } from './marks.js';
 import { addDays, fmtDate, longDate, refresh, region, weekdayOf } from './shared.js';
-import { openRecordFor } from './record.js';
+import { clearNotice, notice, recordNow, refuse } from './record.js';
 
 const WEEKDAYS = [
   ['Sun', 'Sunday'],
@@ -22,7 +25,7 @@ const WEEKDAYS = [
 const KIND_ORDER = { flow: 0, hefsek: 1, clean_day: 2, mikvah: 3, onah: 4 };
 
 /** What is shown: the month ('YYYY-MM') and the chosen day. */
-const cal = { month: null, selected: null, grid: null, legendOpen: false };
+const cal = { month: null, selected: null, grid: null };
 
 let idx = { grid: null, days: new Map(), starting: new Map(), continuing: new Map(), months: [] };
 
@@ -56,6 +59,7 @@ export function showDate(date) {
   if (!S.grid) return;
   const i = index();
   if (!i.days.has(date)) return;
+  if (date !== cal.selected) clearNotice('day');
   cal.selected = date;
   cal.month = date.slice(0, 7);
   refresh('cal');
@@ -87,28 +91,36 @@ function hebrewSpan(i, month) {
   return a === b ? a : a + ' – ' + b;
 }
 
-function eventLabel(e) {
-  return e.title + (e.projected && !/projected/.test(e.title) ? ' (projected)' : '');
-}
-
 function dayLabel(date, day, events) {
   const parts = [longDate(date) + ', ' + day.hebrewDay + ' ' + day.hebrewMonth];
   if (date === S.grid.today) parts.push('Today');
   if (day.rest) parts.push(t('{shabbat} or {yom_tov}'));
-  for (const e of events) parts.push(eventLabel(e));
+  for (const e of events) parts.push(spoken(e));
   if (events.length === 0) parts.push('Nothing marked');
   return parts.join('. ') + '.';
 }
 
-function select(date, focus) {
+/**
+ * Chooses a day. focus: put the focus on it. reveal: a click, on a narrow
+ * screen: bring the day's panel into view when it is below the screen.
+ */
+function select(date, focus, reveal) {
   const i = index();
   if (!i.days.has(date)) return;
+  if (date !== cal.selected) clearNotice('day');
   cal.selected = date;
   cal.month = date.slice(0, 7);
   refresh('cal');
   if (focus) {
     const el = document.getElementById('day-' + date);
-    if (el) el.focus();
+    if (el) el.focus({ preventScroll: reveal });
+  }
+  if (reveal) {
+    const panel = document.getElementById('day-panel');
+    if (panel) {
+      const box = panel.getBoundingClientRect();
+      if (box.top > window.innerHeight - 120) panel.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    }
   }
 }
 
@@ -136,6 +148,7 @@ function goMonth(month) {
   if (!i.months.includes(month)) return;
   cal.month = month;
   const days = S.grid.days.filter(d => d.date.startsWith(month));
+  clearNotice('day');
   cal.selected = S.grid.today.startsWith(month) ? S.grid.today : days[0].date;
   refresh('cal');
 }
@@ -172,7 +185,7 @@ function monthGrid(i) {
             'aria-pressed': String(selected),
             'aria-current': isToday ? 'date' : null,
             'aria-label': dayLabel(date, day, events),
-            onclick: () => select(date, true),
+            onclick: () => select(date, true, true),
           },
           h('span', { class: 'cd' }, String(d)),
           h('span', { class: 'hd', lang: S.terms === 'he' ? 'he' : null }, day.hebrewDay, day.monthStart ? h('span', { class: 'hm' }, ' ' + day.hebrewMonth) : null),
@@ -209,6 +222,8 @@ function nightOf(date) {
 function eventRow(e, continuing) {
   const n = e.kind === 'clean_day' ? cleanDayNumber(e) : null;
   const night = !continuing && !e.allDay && isNight(e) && e.kind !== 'flow';
+  const state = stateTag(e, S.grid.today);
+  const desc = continuing ? '' : describe(e, { dated: true });
   return h(
     'li',
     { class: 'ev ' + e.kind + (e.projected ? ' projected' : '') },
@@ -216,11 +231,90 @@ function eventRow(e, continuing) {
     h(
       'div',
       { class: 'ev-main' },
-      h('div', { class: 'ev-title' }, e.title, e.projected && !/projected/.test(e.title) ? ' (projected)' : ''),
+      h('div', { class: 'ev-title' }, plainTitle(e), state ? ' ' : null, state),
       h('div', { class: 'ev-when' }, continuing ? 'From the evening before, until ' + e.end : (night ? nightOf(e.startDate) : '') + eventTime(e)),
-      e.description && !continuing ? h('div', { class: 'ev-desc' }, e.description) : null,
+      desc ? h('div', { class: 'ev-desc' }, desc) : null,
     ),
   );
+}
+
+// ---------- recording on the chosen day ----------
+
+/** The choices under "Other things to add": the kind and time typed, whether a flow counts for the vesatot. */
+const dayUi = { time: '', timeKind: 'flow', veset: true };
+
+/** One button that records one entry on this day, at once. */
+function addButton(id, body, label) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: 'addbtn',
+      id,
+      onclick: e => {
+        const b = { ...body };
+        if (b.kind === 'flow' && !dayUi.veset) b.veset = false;
+        recordNow(b, e.currentTarget, 'day');
+      },
+    },
+    entryMark(body.kind),
+    h('span', {}, label),
+  );
+}
+
+/** "What happened on this day?": four buttons, and the rest under "Other things to add". */
+function dayActions(date) {
+  const kinds = S.labels.kinds;
+  return [
+    h('h4', { class: 'day-q', id: 'day-add-title' }, 'What happened on this day?'),
+    h(
+      'div',
+      { class: 'addgrid', role: 'group', 'aria-labelledby': 'day-add-title' },
+      addButton('dp-add-flow-day', { kind: 'flow', date, part: 'day' }, kinds.flow + ', by day'),
+      addButton('dp-add-flow-night', { kind: 'flow', date, part: 'night' }, kinds.flow + ', at night'),
+      addButton('dp-add-hefsek', { kind: 'hefsek', date }, kinds.hefsek),
+      addButton('dp-add-mikvah', { kind: 'mikvah', date }, kinds.mikvah + ', that evening'),
+    ),
+    h('p', { class: 'small muted day-night-note' }, t('"At night" is the night that begins on the evening of this date, after {sunset}.')),
+    h('div', { class: 'day-result', id: 'day-result' }, notice('day')),
+    h(
+      'details',
+      { class: 'day-more', id: 'day-more' },
+      h('summary', {}, 'Other things to add'),
+      h(
+        'div',
+        { class: 'addgrid' },
+        addButton('dp-add-stain-day', { kind: 'stain', date, part: 'day' }, kinds.stain + ', by day'),
+        addButton('dp-add-stain-night', { kind: 'stain', date, part: 'night' }, kinds.stain + ', at night'),
+        addButton('dp-add-broken-day', { kind: 'broken', date, part: 'day' }, kinds.broken + ', by day'),
+        addButton('dp-add-broken-night', { kind: 'broken', date, part: 'night' }, kinds.broken + ', at night'),
+      ),
+      h('p', { class: 'small muted' }, t('A {stain} is recorded only when a {rav} has said that it makes her {niddah}. "' + kinds.broken + '" is for when the {clean_days} must start again.')),
+      h(
+        'form',
+        {
+          class: 'timeform',
+          novalidate: true,
+          onsubmit: e => {
+            e.preventDefault();
+            if (!dayUi.time) {
+              refuse('day', 'Enter the time.');
+              document.getElementById('dp-time')?.focus();
+              return;
+            }
+            const body = { kind: dayUi.timeKind, date, time: dayUi.time };
+            if (body.kind === 'flow' && !dayUi.veset) body.veset = false;
+            recordNow(body, e.submitter || document.getElementById('dp-add-time'), 'day');
+          },
+        },
+        selectField({ id: 'dp-time-kind', label: 'At a time I know', value: dayUi.timeKind, wide: false, options: ['flow', 'stain', 'broken'].map(k => ({ value: k, label: kinds[k] })), onchange: e => (dayUi.timeKind = e.target.value) }),
+        textField({ id: 'dp-time', label: 'Time', type: 'time', wide: false, value: dayUi.time, oninput: e => (dayUi.time = e.target.value) }),
+        button({ label: 'Record at this time', type: 'submit', size: 'sm', attrs: { id: 'dp-add-time' } }),
+      ),
+      h('p', { class: 'small muted' }, 'With a time, the calendar works out whether it was day or night.'),
+      checkRow({ id: 'dp-veset', label: t('A {flow} recorded here counts for the {vesatot}'), help: t('Leave this on unless a {rav} said it does not count.'), checked: dayUi.veset, onchange: e => (dayUi.veset = e.target.checked) }),
+    ),
+  ];
 }
 
 function dayDetail(i) {
@@ -232,11 +326,11 @@ function dayDetail(i) {
   const past = date <= S.grid.today;
   return h(
     'div',
-    { class: 'day-detail', 'aria-labelledby': 'detail-title', role: 'region' },
+    { class: 'day-detail', id: 'day-panel', 'aria-labelledby': 'detail-title', role: 'region' },
     h(
       'div',
       { class: 'detail-head' },
-      h('h3', { id: 'detail-title' }, longDate(date), date === S.grid.today ? h('span', { class: 'tag info' }, 'Today') : null),
+      h('h3', { id: 'detail-title' }, longDate(date) + ', ' + date.slice(0, 4), date === S.grid.today ? h('span', { class: 'tag info' }, 'Today') : null),
       h('p', { class: 'hebrew-date', lang: S.terms === 'he' ? 'he' : null }, day.hebrewDay + ' ' + day.hebrewMonth),
     ),
     nextDay(i, date, day),
@@ -247,16 +341,11 @@ function dayDetail(i) {
       h('span', {}, icon('moon', { size: 'sm' }), cap(t('{sunset} ')) + (day.sunset || '—')),
       day.rest ? h('span', { class: 'tag' }, t('{shabbat} or {yom_tov}')) : null,
     ),
+    past ? dayActions(date) : null,
+    h('h4', { class: 'day-q', id: 'day-events-title' }, 'On this day'),
     events.length || continuing.length
-      ? h('ul', { class: 'events' }, continuing.map(e => eventRow(e, true)), events.map(e => eventRow(e, false)))
-      : h('p', { class: 'muted' }, 'Nothing is marked on this day.'),
-    past
-      ? h(
-          'div',
-          { class: 'actions' },
-          button({ label: date === S.grid.today ? 'Record something today' : 'Record something on this day', icon: 'plus', size: 'sm', variant: 'secondary', attrs: { id: 'cal-record' }, onclick: () => openRecordFor(date) }),
-        )
-      : null,
+      ? h('ul', { class: 'events', id: 'day-events', 'aria-labelledby': 'day-events-title' }, continuing.map(e => eventRow(e, true)), events.map(e => eventRow(e, false)))
+      : h('p', { class: 'muted', id: 'day-events' }, 'Nothing is marked on this day.'),
   );
 }
 
@@ -286,6 +375,7 @@ export function calendarCard() {
       return h(
         'div',
         {},
+        h('p', { class: 'cal-how', id: 'cal-how' }, 'Choose a day to see what is marked on it, or to record what happened on it.'),
         h(
           'div',
           { class: 'month-nav' },
@@ -295,12 +385,7 @@ export function calendarCard() {
           button({ label: 'Today', size: 'sm', disabled: onToday, attrs: { id: 'cal-today' }, onclick: () => select(S.grid.today, true) }),
         ),
         monthGrid(i),
-        h(
-          'details',
-          { class: 'legend-box', open: cal.legendOpen, ontoggle: e => (cal.legendOpen = e.currentTarget.open) },
-          h('summary', { id: 'cal-legend' }, 'What the marks mean'),
-          legend(),
-        ),
+        legend(),
         dayDetail(i),
       );
     }),
