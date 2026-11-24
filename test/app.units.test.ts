@@ -18,7 +18,6 @@ import {
 } from '../src/app/crypto';
 import type { ExistingEvent } from '../src/app/google';
 import { authorizationUrl, CALENDAR_SCOPE } from '../src/app/google';
-import { HELP_TEXT } from '../src/app/commands';
 import { DEFAULT_SITE_CONFIG, newHousehold } from '../src/app/model';
 import { codeText, HELP_REPLY, inboundKind, REMINDERS_ON_TEXT, TEST_TEXT } from '../src/app/service';
 import {
@@ -454,8 +453,8 @@ describe('received texts', () => {
 
 describe('the texts the site sends', () => {
   it('each fits one text message in the basic character set', () => {
-    const basic = /^[A-Za-z0-9 .,:;()\-\/?!'&@]+$/;
-    for (const text of [codeText('123456'), REMINDERS_ON_TEXT, HELP_REPLY, TEST_TEXT, HELP_TEXT]) {
+    const basic = /^[A-Za-z0-9 .,:;()\-\/?!'&@\n]+$/;
+    for (const text of [codeText('123456'), REMINDERS_ON_TEXT, HELP_REPLY, TEST_TEXT]) {
       expect(text, text).toMatch(basic);
       expect(text.length, text).toBeLessThanOrEqual(160);
     }

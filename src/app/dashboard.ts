@@ -6,7 +6,8 @@ import { choicesFor, TZEIT_TITLE, tzeitPresetsFor } from '../engine/settings';
 import { allTerms, capital, fill, hebrewDate } from '../engine/terms';
 import { onahAt } from '../engine/zmanim';
 import type { Session } from './auth';
-import { HELP_TEXT, resolveHefsekDay } from './commands';
+import { NO_TEXTS, optionsOf, type SiteTexts } from './chat/site-texts';
+import { resolveHefsekDay } from './commands';
 import { buildGrid, isoDate, type Grid } from './grid';
 import type { Computed, DraftEntry, Where } from './household';
 import { canText, donateReady, googleReady, MAX_PHONES, smsReady, type HouseholdData, type Site } from './model';
@@ -41,27 +42,15 @@ export interface UpcomingItem {
 export type StatusPhase = 'tehorah' | 'before_hefsek' | 'before_first_day' | 'counting' | 'postponed' | 'mikvah_tonight';
 
 /**
- * The text commands, for the page's tables. They are what is typed and
- * what the texts say, so they stay in English letters whatever the
- * household's choice of terms (the texts are always in English letters).
+ * The main options by text, for the page (Settings, Texting, and Today):
+ * the labels of the main menu in the operator's wording. Any message's
+ * options can be answered by word; there are no digit commands.
  */
-export const TEXT_COMMANDS: ReadonlyArray<{ text: string; meaning: string }> = [
-  { text: '1', meaning: 'a flow began' },
-  { text: '2', meaning: 'the hefsek is done' },
-  { text: '3', meaning: 'the count is broken' },
-  { text: '4', meaning: 'immersed (optional)' },
-  { text: '5', meaning: 'a stain' },
-  { text: '9', meaning: 'the status' },
-  { text: '0', meaning: 'undo the last entry' },
-  { text: '?', meaning: 'the list of commands' },
-  { text: 'MENU', meaning: 'every other word: location, customs, reminders, phones, calendar and more' },
-  { text: 'STOP', meaning: 'stop all texts to this phone' },
-  { text: 'START', meaning: 'receive texts again' },
-];
+const MAIN_MEANINGS = ['a period began: the reply asks when', 'the hefsek is done: the reply asks which day', 'where things stand', 'history, undo, a stain, settings, the account'];
 
-/** What may follow a digit, in the words the texts use. */
-export const TEXT_COMMANDS_NOTE =
-  'After 1, 3 or 5 add: day, night, yesterday day, yesterday night, or a time (9pm). After 2 or 4: yesterday. A past date also works: 1 11/22 night, 2 11/26, 4 12/3.';
+export function mainOptions(texts: SiteTexts | undefined): string[] {
+  return optionsOf(texts ?? NO_TEXTS, 'menu.main').map(([, label]) => label);
+}
 
 export interface StateArgs {
   data: HouseholdData;
@@ -284,11 +273,11 @@ export function dashboardState(args: StateArgs) {
       number: data.demo ? (site.secrets.telnyxNumber ?? DEMO_TEXTING_NUMBER) : smsReady(site) ? (site.secrets.telnyxNumber ?? null) : null,
       usedThisMonth: textsThisMonth(data, now),
       monthlyLimit: site.config.householdMonthlyLimit,
-      /** The reply to "?", as one sentence (kept for older pages). */
-      commands: HELP_TEXT,
-      /** The same, as rows for a table, with what may follow a digit. */
-      commandList: TEXT_COMMANDS,
-      commandNote: TEXT_COMMANDS_NOTE,
+      /** The main options by text, as the texts show them (PERIOD, HEFSEK, STATUS, MORE). */
+      mainOptions: mainOptions(site.texts),
+      /** The same as rows for a table (the setup's last screen shows them), and one line on how texting works. */
+      commandList: mainOptions(site.texts).map((text, i) => ({ text, meaning: MAIN_MEANINGS[i] ?? '' })),
+      commandNote: 'Every text ends with its options. Answer with one, or in words: period last night, hefsek yesterday.',
     },
     messages: data.messages,
     /** Whether the site has a Donate page (Settings, Your data, links to it). */

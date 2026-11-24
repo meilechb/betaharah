@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HELP_TEXT, parseClock, parseCommand, resolveHefsekDay, resolveMikvahNight, resolveWhen, type ResolveContext } from '../src/app/commands';
+import { parseClock, parseDayWords, parseOnahWords, resolveHefsekDay, resolveMikvahNight, resolveWhen, type ResolveContext } from '../src/app/commands';
 import { civilToAbs, localToInstant } from '../src/engine/civil';
 import type { GeoPoint } from '../src/engine/sun';
 import { dayTimes } from '../src/engine/zmanim';
@@ -12,35 +12,31 @@ const MON = civilToAbs({ y: 2026, m: 11, d: 23 });
 const TUE = MON + 1;
 const ctx = (now: number): ResolveContext => ({ now, place: LAKEWOOD, zopts: ZOPTS, boundaryMarginMs: 20 * 60_000 });
 
-describe('reading a message', () => {
-  it('the plain codes', () => {
-    expect(parseCommand('1')).toEqual({ kind: 'flow', when: { type: 'now' } });
-    expect(parseCommand('2')).toEqual({ kind: 'hefsek', yesterday: false });
-    expect(parseCommand('3')).toEqual({ kind: 'broken', when: { type: 'now' } });
-    expect(parseCommand('4')).toEqual({ kind: 'mikvah', yesterday: false });
-    expect(parseCommand('5')).toEqual({ kind: 'stain', when: { type: 'now' } });
-    expect(parseCommand('9')).toEqual({ kind: 'status' });
-    expect(parseCommand('0')).toEqual({ kind: 'undo' });
-    expect(parseCommand(' 1 \n')).toEqual({ kind: 'flow', when: { type: 'now' } });
-    expect(parseCommand('1.')).toEqual({ kind: 'flow', when: { type: 'now' } });
+describe('reading when, in words (no digits are commands)', () => {
+  const w = (t: string) => parseOnahWords(t.split(/\s+/));
+  it('now, day, night, last night, tonight, yesterday', () => {
+    expect(w('now')).toEqual({ type: 'now' });
+    expect(w('night')).toEqual({ type: 'onah', part: 'night', yesterday: false });
+    expect(w('last night')).toEqual({ type: 'onah', part: 'night', yesterday: false });
+    expect(w('tonight')).toEqual({ type: 'onah', part: 'night', yesterday: false });
+    expect(w('d')).toEqual({ type: 'onah', part: 'day', yesterday: false });
+    expect(w('today by day')).toEqual({ type: 'onah', part: 'day', yesterday: false });
+    expect(w('yesterday day')).toEqual({ type: 'onah', part: 'day', yesterday: true });
+    expect(w('Y N')).toEqual({ type: 'onah', part: 'night', yesterday: true });
+    expect(w('it began yesterday night')).toEqual({ type: 'onah', part: 'night', yesterday: true });
   });
-
-  it('help', () => {
-    for (const t of ['?', 'help', 'HELP', 'info']) expect(parseCommand(t)).toEqual({ kind: 'help' });
-    expect(HELP_TEXT.length).toBeLessThanOrEqual(160);
+  it('a clock time', () => {
+    expect(w('9pm')).toEqual({ type: 'time', minutes: 21 * 60, yesterday: false });
+    expect(w('at 9:30 PM')).toEqual({ type: 'time', minutes: 21 * 60 + 30, yesterday: false });
+    expect(w('yesterday 21:30')).toEqual({ type: 'time', minutes: 21 * 60 + 30, yesterday: true });
+    expect(w('6:15am')).toEqual({ type: 'time', minutes: 6 * 60 + 15, yesterday: false });
   });
-
-  it('when it happened', () => {
-    expect(parseCommand('1 night')).toEqual({ kind: 'flow', when: { type: 'onah', part: 'night', yesterday: false } });
-    expect(parseCommand('1 d')).toEqual({ kind: 'flow', when: { type: 'onah', part: 'day', yesterday: false } });
-    expect(parseCommand('1 yesterday day')).toEqual({ kind: 'flow', when: { type: 'onah', part: 'day', yesterday: true } });
-    expect(parseCommand('1 Y N')).toEqual({ kind: 'flow', when: { type: 'onah', part: 'night', yesterday: true } });
-    expect(parseCommand('1 9pm')).toEqual({ kind: 'flow', when: { type: 'time', minutes: 21 * 60, yesterday: false } });
-    expect(parseCommand('1 9:30 PM')).toEqual({ kind: 'flow', when: { type: 'time', minutes: 21 * 60 + 30, yesterday: false } });
-    expect(parseCommand('5 yesterday 21:30')).toEqual({ kind: 'stain', when: { type: 'time', minutes: 21 * 60 + 30, yesterday: true } });
-    expect(parseCommand('3 6:15am')).toEqual({ kind: 'broken', when: { type: 'time', minutes: 6 * 60 + 15, yesterday: false } });
-    expect(parseCommand('2 yesterday')).toEqual({ kind: 'hefsek', yesterday: true });
-    expect(parseCommand('4 y')).toEqual({ kind: 'mikvah', yesterday: true });
+  it('a hefsek: today or yesterday', () => {
+    expect(parseDayWords(['today'])).toEqual({ yesterday: false });
+    expect(parseDayWords(['yesterday.'])).toEqual({ yesterday: true });
+    expect(parseDayWords(['it', 'was', 'yesterday'])).toEqual({ yesterday: true });
+    expect(parseDayWords(['tomorrow'])).toBeNull();
+    expect(parseDayWords([])).toBeNull();
   });
 
   it('clock times', () => {
@@ -54,13 +50,9 @@ describe('reading a message', () => {
     for (const bad of ['13pm', '0am', '24:00', '9:60', '9', '930', '9:3', 'pm', '9:30xm']) expect(parseClock(bad)).toBeNull();
   });
 
-  it('changes nothing for anything it does not fully understand', () => {
-    for (const t of [
-      '', 'hello', '11', '12', '6', '7', '8', '1 tomorrow', '1 yesterday', '1 day night', '1 night 9pm', '1 9pm 10pm',
-      '2 night', '2 9pm', '4 day', '9 now', '0 0', '1 yesterday yesterday', 'one', '1st', '1 25:00', '+1', '-1', '1,2',
-      'stop', 'yes',
-    ]) {
-      expect(parseCommand(t), JSON.stringify(t)).toEqual({ kind: 'unknown' });
+  it('nothing for anything it does not fully understand (then the question "when?" is asked)', () => {
+    for (const t of ['', 'hello', '1', '11', '6', 'tomorrow', 'yesterday', 'day night', 'night 9pm', '9pm 10pm', 'yesterday yesterday', 'one', '1st', '25:00', 'last day', 'last', 'constructor', '__proto__ 9pm']) {
+      expect(w(t), JSON.stringify(t)).toBeNull();
     }
   });
 });
@@ -165,11 +157,5 @@ describe('the day of a hefsek and the night of an immersion', () => {
     expect(resolveMikvahNight(false, ctx(at(24, 1)))).toBe(TUE); // still Monday night
     expect(resolveMikvahNight(false, ctx(at(24, 10)))).toBe(TUE); // Tuesday morning: last night
     expect(resolveMikvahNight(true, ctx(at(24, 10)))).toBe(MON); // the night before
-  });
-
-  it('does not mistake the built-in names of an object for a command', () => {
-    for (const text of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf', 'constructor day', '__proto__ 9pm']) {
-      expect(parseCommand(text), text).toEqual({ kind: 'unknown' });
-    }
   });
 });

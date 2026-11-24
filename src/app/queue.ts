@@ -53,7 +53,7 @@ export function rebuildQueue(data: HouseholdData, reminders: readonly Reminder[]
         if (!p.reminders.includes(r.kind)) continue;
         const id = `${r.key}|${p.number}`;
         if (done.has(id)) continue;
-        next.push({ key: r.key, to: p.number, at: r.at, until: r.until, text: r.text, status: 'pending', notBefore: notBefore.get(id) ?? 0, doneAt: null });
+        next.push({ key: r.key, to: p.number, at: r.at, until: r.until, text: r.text, msg: r.msg, status: 'pending', notBefore: notBefore.get(id) ?? 0, doneAt: null });
       }
     }
   }
@@ -80,6 +80,7 @@ function drop(q: QueuedReminder, now: number): void {
   q.status = 'dropped';
   q.doneAt = now;
   q.text = '';
+  delete q.msg;
 }
 
 const monthOf = (now: number): string => new Date(now).toISOString().slice(0, 7);
@@ -187,6 +188,7 @@ export function settle(data: HouseholdData, taken: Pick<QueuedReminder, 'key' | 
     q.status = 'sent';
     q.doneAt = now;
     q.text = '';
+    delete q.msg;
   } else if (result === 'failed' && now + RETRY_MS < q.until) {
     q.status = 'pending';
     q.doneAt = null;

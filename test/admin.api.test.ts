@@ -628,15 +628,16 @@ describe('invitation words and the text simulator', () => {
     };
     const hello = await say('Hi');
     expect(hello.outcome).toBe('replied');
-    expect(hello.replies[0].suggestions).toEqual([{ label: 'Join', send: 'JOIN' }]);
+    expect(hello.replies[0].suggestions).toEqual([{ label: 'JOIN', send: 'JOIN' }]);
     const joined = await say('JOIN');
     expect(joined.outcome).toBe('created');
     expect(typeof joined.householdId).toBe('string');
     expect((await say('08701')).replies.map((r: any) => r.text)[0]).toContain('Lakewood, NJ 08701');
-    expect((await say('A')).outcome).toBe('conversed');
-    expect((await say('1 11/19 day')).replies[0].text).toMatch(/^Recorded: flow/);
+    expect((await say('KEEP FOR NOW')).outcome).toBe('conversed');
+    expect((await say('Nov 19 day')).replies[0].text).toMatch(/^Recorded: flow/);
     const menu = await say('MENU');
-    expect(menu.replies[0].text).toMatch(/^Words:/);
+    expect(menu.replies[0].text).toBe('Betaharah.\nReply: PERIOD, HEFSEK, STATUS, MORE');
+    expect(menu.replies[0].suggestions.map((x: any) => x.send)).toEqual(['PERIOD', 'HEFSEK', 'STATUS', 'MORE']);
     expect(world.telnyx.sent).toEqual([]);
     // the account it made is a test account, listed among the accounts
     const list = (await op.get('/api/admin/accounts')).json.accounts;
@@ -664,5 +665,73 @@ describe('invitation words and the text simulator', () => {
     const op = await site();
     const caps = (await op.get('/api/admin/state')).json.textCaps;
     expect(caps).toEqual({ strangerRepliesPerNumber: 1, strangerRepliesPerDay: 50, textSignupsPerDay: 25, strangerRepliesToday: 0, textSignupsToday: 0 });
+  });
+});
+
+describe('the Texts page: every text, in the operator\'s wording', () => {
+  const simulate = async (op: Client, text: string, from = '+17325550150') => {
+    const r = await op.post('/api/admin/simulate', { from, text });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    return r.json.replies as Array<{ text: string; suggestions?: Array<{ label: string; send: string }> }>;
+  };
+
+  it('lists every message with when it is sent, its options, length and segments; the filed texts are marked', async () => {
+    const op = await site();
+    const r = await op.get('/api/admin/texts');
+    expect(r.status).toBe(200);
+    const main = r.json.messages.find((m: any) => m.key === 'menu.main');
+    expect(main).toMatchObject({ group: 'Other', body: 'Betaharah.', changed: false, length: 46, segments: 1 });
+    expect(main.options.map((o: any) => o.label)).toEqual(['PERIOD', 'HEFSEK', 'STATUS', 'MORE']);
+    expect(r.json.messages.filter((m: any) => m.filed).map((m: any) => m.key)).toEqual(['carrier.code', 'carrier.help', 'carrier.start']);
+    expect(r.json.prefix).toBe('Reply:');
+    expect(r.json.words.find((w: any) => w.action === 'period').words).toEqual(['period', 'flow', 'started', 'bleeding']);
+    expect((await new Client().get('/api/admin/texts')).status).toBe(401);
+  });
+
+  it('a changed body and label are used in the next text, and a reply to the new label is understood; reset puts them back', async () => {
+    const op = await site({ sms: false, config: { textSignup: true } });
+    await simulate(op, 'JOIN');
+    const saved = await op.put('/api/admin/texts/menu.main', { body: 'Betaharah menu.', labels: { status: 'WHERE AM I' } });
+    expect(saved.status, JSON.stringify(saved.json)).toBe(200);
+    expect(saved.json.messages.find((m: any) => m.key === 'menu.main')).toMatchObject({ changed: true, body: 'Betaharah menu.' });
+    const menu = await simulate(op, 'menu');
+    expect(menu[0]!.text).toBe('Betaharah menu.\nReply: PERIOD, HEFSEK, WHERE AM I, MORE');
+    expect(menu[0]!.suggestions!.map(s => s.send)).toEqual(['PERIOD', 'HEFSEK', 'WHERE AM I', 'MORE']);
+    // tapping the new button sends its label
+    expect((await simulate(op, 'WHERE AM I'))[0]!.text).toMatch(/^No location is set yet\./);
+    const reset = await op.del('/api/admin/texts/menu.main');
+    expect(reset.json.messages.find((m: any) => m.key === 'menu.main')).toMatchObject({ changed: false, body: 'Betaharah.' });
+    expect((await simulate(op, 'menu'))[0]!.text).toBe('Betaharah.\nReply: PERIOD, HEFSEK, STATUS, MORE');
+    // a body saved unchanged is not stored
+    await op.put('/api/admin/texts/menu.main', { body: 'Betaharah.', labels: { status: 'STATUS' } });
+    expect((await op.get('/api/admin/texts')).json.messages.find((m: any) => m.key === 'menu.main').changed).toBe(false);
+  });
+
+  it('refuses what cannot be sent, naming the field', async () => {
+    const op = await site();
+    const put = (key: string, body: unknown) => op.put(`/api/admin/texts/${key}`, body);
+    expect((await put('record.flow', { body: 'Recorded.' })).json).toEqual({ error: '{entry} must stay in the text.', field: 'body' });
+    expect((await put('record.flow', { body: 'Recorded {entry} {when}' })).json.field).toBe('body');
+    expect((await put('menu.main', { body: 'Menu “now”' })).json).toEqual({ error: expect.stringMatching(/^a curly quote is not in the basic SMS alphabet/), field: 'body' });
+    expect((await put('menu.main', { body: 'x'.repeat(300) })).json.error).toMatch(/at most 306 \(two SMS segments\)/);
+    expect((await put('menu.main', { body: 'Menu.', labels: { status: 'STOP' } })).json.field).toBe('label.status');
+    expect((await put('menu.main', { body: 'Menu.', labels: { status: 'HEFSEK' } })).json.field).toBe('label.status');
+    expect((await put('menu.main', { body: 'Menu.', labels: { status: 'TOO LONG FOR A BUTTON X' } })).json.field).toBe('label.status');
+    expect((await put('no.such', { body: 'x' })).status).toBe(404);
+    expect((await put('carrier.help', { body: 'Betaharah: text ? for commands.', labels: { x: 'Y' } })).status).toBe(400);
+    expect((await op.get('/api/admin/texts')).json.messages.every((m: any) => !m.changed)).toBe(true);
+  });
+
+  it('the general words and the options prefix are saved, checked and used', async () => {
+    const op = await site({ sms: false, config: { textSignup: true } });
+    await simulate(op, 'JOIN');
+    const bad = await op.put('/api/admin/texts-words', { words: { status: 'status, hefsek' }, prefix: 'Reply:' });
+    expect(bad.json).toEqual({ error: '"hefsek" is already a word for "Hefsek done".', field: 'words.status' });
+    expect((await op.put('/api/admin/texts-words', { words: {}, prefix: '' })).json.field).toBe('prefix');
+    const ok = await op.put('/api/admin/texts-words', { words: { status: 'status, situation' }, prefix: 'Options:' });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect(ok.json.words.find((w: any) => w.action === 'status').words).toEqual(['status', 'situation']);
+    const answer = await simulate(op, 'situation');
+    expect(answer[0]!.text).toBe('No location is set yet.\nOptions: LOCATION, MENU');
   });
 });

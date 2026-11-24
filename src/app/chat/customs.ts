@@ -18,7 +18,7 @@ export interface SmsOption {
   value: CustomValue;
   /** The option as texted, after its letter. */
   text: string;
-  /** A few words, used in confirmations and (after the letter) on the RCS button; with the letter at most 20 characters. */
+  /** A few words, used in confirmations and after "Now:". */
   short: string;
 }
 
@@ -26,7 +26,7 @@ export interface SmsCustom {
   key: CustomKey;
   /** Short name, used in confirmations and in the list of customs. */
   name: string;
-  /** The question as texted, before the options. */
+  /** The question as texted, with its options in words (the registry adds "Now:"). */
   question: string;
   /** A note after the options, or ''. */
   note: string;
@@ -37,7 +37,7 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'minWaitDays',
     name: 'wait before hefsek',
-    question: 'Days before the hefsek (the day she became niddah is day 1).',
+    question: 'Days before the hefsek, the day she became niddah being day 1: five (Ashkenazi, some Sephardi) or four (some Sephardi).',
     note: '',
     options: [
       { value: '5', text: 'five (Ashkenazi, some Sephardi)', short: 'Five days' },
@@ -47,18 +47,18 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'beinonitDays',
     name: 'onah beinonit day',
-    question: 'Onah beinonit: day (the flow is day 1).',
+    question: 'Onah beinonit (the flow is day 1): day 30, day 31, or both.',
     note: '',
     options: [
-      { value: '30', text: 'day 30', short: 'Day 30 only' },
-      { value: '31', text: 'day 31', short: 'Day 31 only' },
-      { value: '30_31', text: 'days 30 and 31', short: 'Days 30 and 31' },
+      { value: '30', text: 'day 30', short: 'Day 30' },
+      { value: '31', text: 'day 31', short: 'Day 31' },
+      { value: '30_31', text: 'days 30 and 31', short: 'Both' },
     ],
   },
   {
     key: 'beinonitLength',
     name: 'onah beinonit length',
-    question: 'Onah beinonit: length.',
+    question: 'Onah beinonit length: the onah of the flow, or the full day.',
     note: '',
     options: [
       { value: 'onah', text: 'the onah of the flow', short: 'One onah' },
@@ -68,7 +68,7 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'chodeshLength',
     name: 'veset hachodesh length',
-    question: 'Veset hachodesh: length.',
+    question: 'Veset hachodesh length: the onah of the flow, or the full day.',
     note: '',
     options: [
       { value: 'onah', text: 'the onah of the flow', short: 'One onah' },
@@ -78,7 +78,7 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'orZarua',
     name: 'Or Zarua',
-    question: 'Or Zarua: the onah before each veset onah.',
+    question: 'Or Zarua, the onah before each veset onah: observed or not.',
     note: '',
     options: [
       { value: 'yes', text: 'observed', short: 'Observed' },
@@ -88,49 +88,49 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'haflagahMethod',
     name: 'haflagah count',
-    question: 'Veset haflagah: counted.',
+    question: 'Veset haflagah counted in days, flow to flow, or in onot, hefsek to flow (Chabad).',
     note: '',
     options: [
       { value: 'days', text: 'in days, flow to flow', short: 'In days' },
-      { value: 'onot_from_hefsek', text: 'in onot, hefsek to flow (Chabad)', short: 'Onot from hefsek' },
+      { value: 'onot_from_hefsek', text: 'in onot, hefsek to flow (Chabad)', short: 'In onot' },
     ],
   },
   {
     key: 'longerHaflagah',
     name: 'longer haflagah',
-    question: 'Longer haflagah not yet passed.',
+    question: 'A longer haflagah not yet passed: only the latest is kept, or longer ones too.',
     note: '',
     options: [
       { value: 'latest_only', text: 'only the latest', short: 'Latest only' },
-      { value: 'keep_unsurpassed', text: 'kept too', short: 'Keep longer ones' },
+      { value: 'keep_unsurpassed', text: 'kept too', short: 'Longer ones too' },
     ],
   },
   {
     key: 'chodesh30',
     name: 'flow on the 30th',
-    question: 'Flow on the 30th, next month of 29 days.',
+    question: 'A flow on the 30th, when the next month has 29 days: the 1st of the month after, the 29th, both, or none.',
     note: '',
     options: [
       { value: 'first_of_following', text: 'the 1st of the month after', short: '1st of next month' },
       { value: 'day29', text: 'the 29th', short: 'The 29th' },
       { value: 'both', text: 'both', short: 'Both' },
-      { value: 'none', text: 'neither', short: 'None that month' },
+      { value: 'none', text: 'neither', short: 'None' },
     ],
   },
   {
     key: 'longCycle',
     name: 'long cycles',
-    question: 'Cycles past day 31, three in a row.',
+    question: 'Three cycles in a row past day 31: onah beinonit and veset hachodesh as usual, or not until a shorter cycle.',
     note: '',
     options: [
-      { value: 'observe', text: 'onah beinonit and veset hachodesh as usual', short: 'Observed as usual' },
+      { value: 'observe', text: 'onah beinonit and veset hachodesh as usual', short: 'As usual' },
       { value: 'exempt', text: 'not observed until a shorter cycle', short: 'Not observed' },
     ],
   },
   {
     key: 'vesatot',
     name: 'vesatot',
-    question: 'Vesatot.',
+    question: 'Vesatot: calculated, or paused.',
     note: '',
     options: [
       { value: 'active', text: 'calculated', short: 'Calculated' },
@@ -140,7 +140,7 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'yomTov',
     name: 'Yom Tov',
-    question: 'Yom Tov.',
+    question: 'Yom Tov: outside Israel, or Israel.',
     note: '',
     options: [
       { value: 'diaspora', text: 'outside Israel', short: 'Outside Israel' },
@@ -150,7 +150,7 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'tzeit',
     name: 'nightfall',
-    question: 'Nightfall.',
+    question: 'Nightfall: the sun 8.5 or 7.083 degrees down, or 50 or 72 minutes (Rabbeinu Tam) after sunset.',
     note: '',
     options: [
       { value: { kind: 'degrees', value: 8.5 }, text: 'sun 8.5 degrees down', short: '8.5 degrees' },

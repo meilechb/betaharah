@@ -1,16 +1,14 @@
 /**
- * Text-message commands.
+ * When something recorded by text happened, from the words written after
+ * "period", "stain", "broken", "hefsek" or after a question "when?":
  *
- *   1  a flow began            2  hefsek taharah done
- *   3  the count was broken    4  immersed (optional: the calendar takes it
- *                                 that she immersed on the mikvah night)
- *   5  a stain (niddah without a flow)
- *   9  status                  0  undo the last entry
+ *   now, day, night, last night, tonight, yesterday day, yesterday night,
+ *   or a clock time ("9pm", "9:30pm", "21:30", "yesterday 9pm")    a period, stain or broken count
+ *   today, yesterday                                               a hefsek
+ *   tonight, last night, yesterday                                 an immersion
  *
- * 1, 3 and 5 may be followed by when it happened: "yesterday", "day" or
- * "night", or a clock time ("9pm", "9:30pm", "21:30"). 2 and 4 may be
- * followed by "yesterday". Nothing is guessed: a message that is not
- * understood changes nothing.
+ * Nothing is guessed: words that are not understood give null, and the
+ * question "when?" is asked with its options. Digits are never commands.
  */
 import { absToCivil, localAbs, localToInstant } from '../engine/civil';
 import type { Onah, OnahPart } from '../engine/onah';
@@ -23,25 +21,6 @@ export type WhenSpec =
   | { type: 'time'; minutes: number; yesterday: boolean }
   /** A whole onah. */
   | { type: 'onah'; part: OnahPart; yesterday: boolean };
-
-export type ParsedCommand =
-  | { kind: 'flow' | 'stain' | 'broken'; when: WhenSpec }
-  | { kind: 'hefsek'; yesterday: boolean }
-  | { kind: 'mikvah'; yesterday: boolean }
-  | { kind: 'status' }
-  | { kind: 'undo' }
-  | { kind: 'help' }
-  | { kind: 'unknown' };
-
-const CODES: Record<string, 'flow' | 'hefsek' | 'broken' | 'mikvah' | 'stain' | 'status' | 'undo'> = {
-  '1': 'flow',
-  '2': 'hefsek',
-  '3': 'broken',
-  '4': 'mikvah',
-  '5': 'stain',
-  '9': 'status',
-  '0': 'undo',
-};
 
 /** "9pm", "9:30pm", "9:30 pm" (already joined), "21:30", "12am". Returns minutes after midnight, or null. */
 export function parseClock(token: string): number | null {
@@ -63,59 +42,64 @@ export function parseClock(token: string): number | null {
   return null;
 }
 
-export function parseCommand(text: string): ParsedCommand {
-  const cleaned = text
-    .toLowerCase()
-    .replace(/[.,!]+/g, ' ')
-    // "9:30 pm" -> "9:30pm"
-    .replace(/(\d)\s+(am|pm)\b/g, '$1$2')
-    .trim();
-  if (cleaned === '' ) return { kind: 'unknown' };
-  if (cleaned === '?' || cleaned === 'help' || cleaned === 'info') return { kind: 'help' };
-  const tokens = cleaned.split(/\s+/);
-  // Only the listed digits are commands. (A plain lookup would also find the names every object has, such as "constructor".)
-  const first = tokens[0] as string;
-  if (!Object.hasOwn(CODES, first)) return { kind: 'unknown' };
-  const code = CODES[first] as (typeof CODES)[string];
-  const rest = tokens.slice(1);
+/** Words that say nothing about when ("I got my period", "it began"). */
+const FILLER = new Set(['i', 'my', 'it', 'the', 'a', 'got', 'has', 'have', 'had', 'just', 'was', 'is', 'began', 'begun', 'begin', 'did', 'done', 'please', 'by', 'at', 'on', 'today']);
 
-  if (code === 'status' || code === 'undo') {
-    return rest.length === 0 ? { kind: code } : { kind: 'unknown' };
+/** The tokens as typed, lowercased, "9:30 pm" joined, without the filler words. */
+export function whenTokens(tokens: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const raw of tokens) {
+    const t = raw.toLowerCase().replace(/^[^a-z0-9:/]+|[^a-z0-9:/]+$/g, '');
+    if (t === '') continue;
+    const prev = out[out.length - 1];
+    if ((t === 'am' || t === 'pm') && prev !== undefined && /\d$/.test(prev)) out[out.length - 1] = prev + t;
+    else out.push(t);
   }
+  return out.filter(t => !FILLER.has(t));
+}
 
+/** When a period, stain or broken count happened, from words without a date; null if not understood (or nothing said). */
+export function parseOnahWords(tokens: readonly string[]): WhenSpec | null {
+  const t = whenTokens(tokens);
+  if (t.length === 0) return null;
+  if (t.length === 1 && t[0] === 'now') return { type: 'now' };
   let yesterday = false;
   let part: OnahPart | null = null;
   let minutes: number | null = null;
-  for (const token of rest) {
+  let last = false;
+  for (const token of t) {
     if (token === 'yesterday' || token === 'y') {
-      if (yesterday) return { kind: 'unknown' };
+      if (yesterday) return null;
       yesterday = true;
-    } else if (token === 'night' || token === 'n') {
-      if (part) return { kind: 'unknown' };
+    } else if (token === 'last') {
+      last = true;
+    } else if (token === 'night' || token === 'n' || token === 'tonight') {
+      if (part) return null;
       part = 'night';
     } else if (token === 'day' || token === 'd') {
-      if (part) return { kind: 'unknown' };
+      if (part) return null;
       part = 'day';
     } else {
       const clock = parseClock(token);
-      if (clock === null || minutes !== null) return { kind: 'unknown' };
+      if (clock === null || minutes !== null) return null;
       minutes = clock;
     }
   }
-
-  if (code === 'hefsek' || code === 'mikvah') {
-    if (part || minutes !== null) return { kind: 'unknown' };
-    return { kind: code, yesterday };
-  }
-  if (part && minutes !== null) return { kind: 'unknown' }; // one or the other
-  if (minutes !== null) return { kind: code, when: { type: 'time', minutes, yesterday } };
-  if (part) return { kind: code, when: { type: 'onah', part, yesterday } };
-  if (yesterday) return { kind: 'unknown' }; // "yesterday" alone does not say day or night
-  return { kind: code, when: { type: 'now' } };
+  // "last night" is the latest night; "last" with anything else says nothing.
+  if (last && (part !== 'night' || yesterday)) return null;
+  if (part && minutes !== null) return null; // one or the other
+  if (minutes !== null) return { type: 'time', minutes, yesterday };
+  if (part) return { type: 'onah', part, yesterday };
+  return null; // "yesterday" alone does not say day or night
 }
 
-export const HELP_TEXT =
-  '1 flow, 2 hefsek, 3 count broken, 4 mikvah (optional), 5 stain, 9 status, 0 undo. After 1/3/5 add: day, night, yesterday day, yesterday night, or a time (9pm).';
+/** The day of a hefsek from words: "today" or "yesterday"; null otherwise. */
+export function parseDayWords(tokens: readonly string[]): { yesterday: boolean } | null {
+  const t = tokens.map(x => x.toLowerCase().replace(/[^a-z]/g, '')).filter(x => x !== '' && x !== 'it' && x !== 'was' && x !== 'done' && x !== 'did' && x !== 'i' && x !== 'please');
+  if (t.length === 1 && t[0] === 'today') return { yesterday: false };
+  if (t.length === 1 && t[0] === 'yesterday') return { yesterday: true };
+  return null;
+}
 
 export interface ResolveContext {
   now: number;

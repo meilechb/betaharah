@@ -450,10 +450,10 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await page.click('#setup-skip');
   });
 
-  await step('setup: the last screen, the text commands, and into the dashboard', async () => {
+  await step('setup: the last screen, the main options by text, and into the dashboard', async () => {
     await heading('The setup is finished');
     const rows = await page.$$eval('table.commands tbody tr', trs => trs.map(tr => tr.textContent));
-    if (rows.length < 5 || !rows[0].startsWith('1')) throw new Error('commands: ' + rows.join(' | '));
+    if (rows.length !== 4 || !rows[0].startsWith('PERIOD')) throw new Error('options: ' + rows.join(' | '));
     await expectText('.setup-texting', '(732) 999-0000');
     await shot('36-setup-done');
     await page.click('#setup-finish');

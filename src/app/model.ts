@@ -1,5 +1,6 @@
 /** What is stored for one household, and for the site as a whole. */
 import type { LogEntry } from '../engine/cycle';
+import type { SiteTexts } from './chat/site-texts';
 import type { ChatState } from './chat/types';
 import { DEFAULT_HALACHIC_SETTINGS, type HalachicSettings } from '../engine/settings';
 import { DEFAULT_APP_SETTINGS, type AppSettings, type PhoneRecord } from './settings';
@@ -38,8 +39,10 @@ export interface QueuedReminder {
   at: number;
   /** It is no longer sent from this time on. */
   until: number;
-  /** The words to send; emptied once it has been dealt with. */
+  /** The words to send, in the default wording; emptied once it has been dealt with. */
   text: string;
+  /** The same by its message key, sent in the operator's wording with its options; dropped once dealt with. */
+  msg?: { key: string; vars: Record<string, string>; day?: number };
   status: 'pending' | 'sending' | 'sent' | 'dropped';
   /** After a failed attempt: not to be tried again before this time. */
   notBefore: number;
@@ -215,6 +218,8 @@ export const SITE_SECRET_KEYS = [
 export interface Site {
   config: SiteConfig;
   secrets: SiteSecrets;
+  /** The operator's wording of the texts (src/app/chat/site-texts.ts); the defaults when absent. */
+  texts?: SiteTexts;
 }
 
 export function smsReady(site: Site): boolean {

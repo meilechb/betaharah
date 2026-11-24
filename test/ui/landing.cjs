@@ -52,7 +52,7 @@ const HOME_PHRASES = [
 const TECHNICAL = [/AES/, /decrypt/i, /encrypt/i, /Telnyx/, /cookie/i, /\bserver\b/i, /night of Shabbat/];
 const FOOTER_PHRASES = ['Message frequency varies', 'Message and data rates may apply', 'Reply STOP to stop, HELP for help', 'It does not give halachic rulings or medical advice'];
 const DOCS = [
-  { path: '/help', h1: 'Help', phrases: ['On this page', 'Recording by text message', 'Using it by text only', 'MENU', 'JOIN', 'It does not give halachic rulings'] },
+  { path: '/help', h1: 'Help', phrases: ['On this page', 'Recording by text message', 'Using it by text only', 'Reply: PERIOD, HEFSEK, STATUS, MORE', 'The main options', 'period last night', 'It does not give halachic rulings'] },
   { path: '/privacy', h1: 'Privacy', phrases: ['On this page', 'What encryption does not do', 'Signing up by text', 'No mobile information is shared with third parties or affiliates for marketing or promotional purposes.'] },
   { path: '/terms', h1: 'Terms', phrases: ['On this page', 'It does not give halachic rulings', 'Message frequency varies', 'Message and data rates may apply', 'STOP', 'START', 'HELP'] },
 ];

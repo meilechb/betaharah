@@ -273,19 +273,30 @@ const H = { 'x-betaharah': '1' };
 
   await step('Try a text: a typed text and its reply', async () => {
     await tab('Today');
-    await page.fill('#demo-text', '9');
+    await page.fill('#demo-text', 'status');
     await page.click('#demo-send');
-    await page.waitForSelector('#demo-thread .msg.in .bubble:has-text("9")');
+    await page.waitForSelector('#demo-thread .msg.in .bubble:has-text("status")');
     await page.waitForSelector('#demo-thread .msg.out');
     const tagText = await page.textContent('#demo-thread .msg.out .tag');
     if (tagText !== 'simulated') throw new Error('status tag: ' + tagText);
     if ((await page.inputValue('#demo-text')) !== '') throw new Error('the box was not emptied');
   });
 
-  await step('Try a text: a quick button', async () => {
-    const before = await page.locator('#demo-thread .msg').count();
-    await page.click('#demo-q-q');
+  await step('Try a text: the options of the reply are buttons; a quick button', async () => {
+    // the reply to "status" ends with its options, shown as buttons that send the option
+    await page.waitForSelector('#demo-thread .msg.out .bubble:has-text("Reply: PERIOD, HEFSEK, HISTORY, MORE")');
+    const labels = await page.$$eval('.reply-extras .chip', b => b.map(x => x.textContent.trim()));
+    if (labels.join() !== 'PERIOD,HEFSEK,HISTORY,MORE') throw new Error('buttons: ' + labels.join());
+    let before = await page.locator('#demo-thread .msg').count();
+    await page.click('.reply-extras button[aria-label="Send MORE"]');
     await page.waitForFunction(n => document.querySelectorAll('#demo-thread .msg').length > n, before);
+    await page.waitForSelector('#demo-thread .msg.in .bubble:has-text("MORE")');
+    await page.waitForSelector('.reply-extras button[aria-label="Send OTHER ENTRIES"]');
+    before = await page.locator('#demo-thread .msg').count();
+    await page.click('#demo-q-MENU');
+    await page.waitForFunction(n => document.querySelectorAll('#demo-thread .msg').length > n, before);
+    // no digit commands are offered
+    if (await page.locator('.quick-btn strong:text-matches("^[0-9?]$")').count()) throw new Error('a digit is offered');
   });
 
   await step('the texts are in the Log, marked simulated', async () => {
@@ -443,7 +454,7 @@ const H = { 'x-betaharah': '1' };
     if (await page.locator('#text-card').count()) throw new Error('both cards shown');
   });
 
-  await step('today: "Text this number" with the number, three digits and a link to every command', async () => {
+  await step('today: "Text this number" with the number, the main options and a link to Texting', async () => {
     await reshape(REAL);
     await openToday();
     await page.waitForSelector('#text-card h2:has-text("Text this number"), #text-card :text("Text this number")');
@@ -451,9 +462,9 @@ const H = { 'x-betaharah': '1' };
     const number = s.sms.number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3');
     if ((await page.textContent('#text-number')).trim() !== number) throw new Error('number: ' + (await page.textContent('#text-number')));
     if ((await page.getAttribute('#text-number', 'href')) !== 'sms:' + s.sms.number) throw new Error('not a text link');
-    const digits = await page.$$eval('#text-card kbd', k => k.map(x => x.textContent));
-    if (digits.join(' ') !== '1 2 9') throw new Error('digits: ' + digits.join(' '));
-    if (!(await page.textContent('#text-card')).includes('Status')) throw new Error('no meaning for 9');
+    const options = await page.$$eval('#text-card kbd', k => k.map(x => x.textContent));
+    if (options.join(' ') !== 'PERIOD HEFSEK STATUS MORE') throw new Error('options: ' + options.join(' '));
+    if (!(await page.textContent('#text-note')).includes('Every text ends with its options; answer by word.')) throw new Error('no line on options');
     await noLeftovers('today');
     await page.click('#text-all');
     await hashIs('#settings/texting');

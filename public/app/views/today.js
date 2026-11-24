@@ -10,7 +10,7 @@
  */
 import { alert, button, card, emptyState, h, icon, linkButton, pretty } from '../lib.js';
 import { S, t } from '../store.js';
-import { DIGITS } from './settings/texting.js';
+import { mainRows } from './settings/texting.js';
 import { onboardingCard } from '../onboarding.js';
 import { calendarCard, showDate } from './calendar.js';
 import { tryTextCard } from './demo.js';
@@ -47,20 +47,16 @@ const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
 // ---------- texting ----------
 
-/** The digits shown on Today; the rest are under Settings → Texting. */
-const TODAY_DIGITS = ['1', '2', '9'];
-
 /**
- * "Text this number": the site's number and the most used digits, when texting
+ * "Text this number": the site's number and the main options, when texting
  * works here and the account has a phone to text from. The test account has
- * "Try a text" instead, which already shows the number and the digits.
+ * "Try a text" instead.
  */
 function textCard() {
   const sms = S.sms;
   if (!sms || !sms.ready || !sms.number || sms.simulated || S.demo) return null;
   if (!S.phones || S.phones.length === 0) return null;
-  const list = Array.isArray(sms.commandList) ? sms.commandList : null;
-  const rows = DIGITS.filter(([d]) => TODAY_DIGITS.includes(d) && (!list || list.some(x => x && x.text === d)));
+  const rows = mainRows();
   const number = pretty(sms.number);
   return card(
     { title: 'Text this number', icon: 'message', className: 'text-card', attrs: { id: 'text-card' } },
@@ -73,7 +69,7 @@ function textCard() {
     h(
       'table',
       { class: 'text-digits' },
-      h('caption', { class: 'visually-hidden' }, 'Texts to send'),
+      h('caption', { class: 'visually-hidden' }, 'The main options'),
       h('thead', { class: 'visually-hidden' }, h('tr', {}, h('th', { scope: 'col' }, 'Text'), h('th', { scope: 'col' }, 'What it does'))),
       h(
         'tbody',
@@ -81,7 +77,7 @@ function textCard() {
         rows.map(([code, meaning]) => h('tr', {}, h('th', { scope: 'row' }, h('kbd', {}, code)), h('td', {}, cap(t(meaning))))),
       ),
     ),
-    h('p', { class: 'help' }, h('a', { href: '#settings/texting', id: 'text-all' }, 'All commands'), '.'),
+    h('p', { class: 'help', id: 'text-note' }, 'Every text ends with its options; answer by word. ', h('a', { href: '#settings/texting', id: 'text-all' }, 'More')),
   );
 }
 

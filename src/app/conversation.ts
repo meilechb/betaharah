@@ -26,14 +26,14 @@
  * code or a token.
  */
 import { addPhone, createAccount, deleteAccount, prefixAllowed, removePhone } from './accounts';
-import { begin, converse, greet, joinWord, type ChatState, type Effect, type OutMessage } from './chat';
+import { begin, converse, greet, joinWord, LINK_MARK, serverText, type ChatState, type Effect, type OutMessage } from './chat';
 import { randomToken } from './crypto';
 import { DEMO_NUMBER, isFictionalNumber } from './demo';
 import type { Deps, Env } from './env';
 import { compute, type Computed } from './household';
 import { addMessage, lastFour, MAX_PHONES, MAX_SEEN_TEXTS, smsReady, type HouseholdData, type Site } from './model';
 import { allowText, refundText } from './queue';
-import { allowInbound, HELP_REPLY, inboundKind, refreshHousehold, sendHouseholdText, START_REPLY, type HouseholdSmsOutcome } from './service';
+import { allowInbound, helpReply, inboundKind, refreshHousehold, sendHouseholdText, startReply, type HouseholdSmsOutcome } from './service';
 import { ValidationError } from './settings';
 import type { InboundMessage } from './sms';
 import {
@@ -89,8 +89,6 @@ export const textSignupsKey = (now: number): string => `signup-text:${new Date(n
 /** The site's address for links in texts, when the request does not give one. */
 const DEFAULT_ORIGIN = 'https://betaharah.com';
 
-/** Said when a code from ADD reaches a household that is full by then. */
-export const JOIN_FULL = 'That account already has the most phones allowed, so this phone was not added. Nothing was changed. A phone on it can send PHONES and remove one.';
 
 // ---------- what is sent ----------
 
@@ -100,9 +98,13 @@ export interface SentText {
   suggestions?: OutMessage['suggestions'];
 }
 
+const sentOf = (t: { text: string; suggestions?: OutMessage['suggestions'] }): SentText => (t.suggestions ? { text: t.text, suggestions: t.suggestions } : { text: t.text });
+
 /** A text planned in answer: what to send, and what is recorded in the household's messages. */
 interface Planned {
   text: string;
+  /** By RCS: the body above the buttons. */
+  rcsText?: string;
   suggestions?: OutMessage['suggestions'];
   /** Recorded in place of the text (a sign-in link is not kept). */
   record: string;
@@ -130,7 +132,7 @@ async function deliver(run: Run, to: string, texts: Planned[], simulated: boolea
       outcomes.push({ ok: false, reason: 'site_limit', detail: 'monthly limit' });
       continue;
     }
-    const outcome = await sendHouseholdText(run.env, run.deps, run.site, simulated, { to, text: t.text, suggestions: t.suggestions, now: run.now, smsOnly: t.link === true });
+    const outcome = await sendHouseholdText(run.env, run.deps, run.site, simulated, { to, text: t.text, rcsText: t.rcsText, suggestions: t.suggestions, now: run.now, smsOnly: t.link === true });
     outcomes.push(outcome);
     if (!outcome.ok && outcome.reason === 'blocked') {
       for (let i = outcomes.length; i < texts.length; i++) outcomes.push({ ok: false, reason: 'blocked', detail: 'opted out' });
@@ -156,7 +158,7 @@ function plan(data: HouseholdData, site: Site, to: string, texts: Array<Omit<Pla
   });
 }
 
-const fromEngine = (m: OutMessage): Omit<Planned, 'allowed'> => (m.suggestions ? { text: m.text, suggestions: m.suggestions, record: m.text } : { text: m.text, record: m.text });
+const fromEngine = (m: OutMessage): Omit<Planned, 'allowed'> => (m.suggestions ? { text: m.text, rcsText: m.body, suggestions: m.suggestions, record: m.text } : { text: m.text, record: m.text });
 
 /** How a received text is recorded in the household's messages. */
 function inboundBody(message: Pick<InboundMessage, 'text'> & { location?: InboundMessage['location'] }): string {
@@ -291,10 +293,12 @@ export async function receiveText(
       refresh = phone.optedOut;
       phone.optedOut = false;
       // The wording filed for the toll-free verification, in addition to the carrier's own confirmation.
-      texts = [{ text: START_REPLY, record: START_REPLY }];
+      const start = startReply(site.texts);
+      texts = [{ text: start, record: start }];
     } else if (kind === 'help' || kind === 'help_answered') {
       // Sent also when Telnyx marks the keyword as already answered: the filed wording is this one.
-      texts = [{ text: HELP_REPLY, record: HELP_REPLY }];
+      const help = helpReply(site.texts);
+      texts = [{ text: help, record: help }];
     } else if (kind === 'command' && phone.verifiedAt !== null && !phone.optedOut) {
       const out = converse({
         data,
@@ -308,6 +312,7 @@ export async function receiveText(
         nearestPostal,
         random: randomToken,
         origin: run.origin,
+        texts: site.texts,
       });
       setChat(data, from, out.chat);
       texts = out.out.map(fromEngine);
@@ -316,7 +321,7 @@ export async function receiveText(
       computed = out.computed;
       for (const e of effects) {
         // The link itself is made after saving; its text is planned here so that it is counted like any other.
-        if (e.type === 'web_link') texts.push({ text: e.text, record: `${e.text}(link)`, link: true });
+        if (e.type === 'web_link') texts.push({ text: e.text, record: e.text.replace(LINK_MARK, '(link)'), link: true });
       }
     }
     const planned = plan(data, site, from, texts, simulated, now);
@@ -331,7 +336,7 @@ export async function receiveText(
   const demo = household.data.demo;
 
   // The effects, which only the server can carry out. If one cannot be, its "could not" text is sent instead.
-  let failedText: string | null = null;
+  let failedText: OutMessage | null = null;
   let final = planned;
   let reload = false;
   let deleted = false;
@@ -340,7 +345,7 @@ export async function receiveText(
     try {
       const done = await carryOut(run, id, demo, e, google);
       if (done.kind === 'failed') failedText = e.ifFailed;
-      else if (done.kind === 'link') final = final.map(p => (p.link ? { ...p, text: `${p.text}${done.url}` } : p));
+      else if (done.kind === 'link') final = final.map(p => (p.link ? { ...p, text: p.text.replace(LINK_MARK, done.url) } : p));
       else if (done.kind === 'phones') reload = true;
       else if (done.kind === 'deleted') deleted = true;
     } catch (err) {
@@ -348,10 +353,10 @@ export async function receiveText(
       failedText = e.ifFailed;
     }
   }
-  if (failedText !== null) final = [{ text: failedText, record: failedText, allowed: true }];
+  if (failedText !== null) final = [{ ...fromEngine(failedText), allowed: true }];
 
   const outcomes = await deliver(run, from, final, simulated);
-  const replies: SentText[] = final.filter((_, i) => outcomes[i]?.ok).map(t => (t.suggestions ? { text: t.text, suggestions: t.suggestions } : { text: t.text }));
+  const replies: SentText[] = final.filter((_, i) => outcomes[i]?.ok).map(sentOf);
 
   if (deleted) return { household: null, reply: replies[0]?.text ?? null, replies, refresh: false, computed: null, deleted: true };
   const settled = await settleTexts(run, id, from, planned, final, outcomes, failedText !== null);
@@ -422,7 +427,7 @@ async function stranger(run: Run, message: ReceivedMessage, hash: string): Promi
   if (!prefixAllowed(message.from, site.config)) return nothing;
   if (!run.simulate && !smsReady(site)) return nothing;
   // HELP and START get the wording filed for the toll-free verification, whatever the sign-up settings are.
-  if (kind === 'help' || kind === 'help_answered' || kind === 'start') return keywordReply(run, message, hash, kind === 'start' ? START_REPLY : HELP_REPLY);
+  if (kind === 'help' || kind === 'help_answered' || kind === 'start') return keywordReply(run, message, hash, kind === 'start' ? startReply(site.texts) : helpReply(site.texts));
 
   const typed = joinWord(message.text);
   // A code from ADD: only for the household that made it, and the simulator's only for a test account (and the reverse).
@@ -432,19 +437,19 @@ async function stranger(run: Run, message: ReceivedMessage, hash: string): Promi
     if (!owner || owner.data.demo !== run.simulate) join = null;
   }
   if (join) {
-    const g = greet({ text: message.text, signup: site.config.signup, inviteValid: true, inviteKind: 'phone' });
+    const g = greet({ text: message.text, signup: site.config.signup, inviteValid: true, inviteKind: 'phone', texts: site.texts });
     if (g.action === 'join') return joinByCode(run, message, hash, join);
   }
 
   if (!site.config.textSignup || site.config.signup === 'closed') return nothing;
   const invite = typed !== null ? await findSignupInvite(env, typed, now) : null;
-  const g = greet({ text: message.text, signup: site.config.signup, inviteValid: typed === null ? null : invite !== null, inviteKind: invite ? 'signup' : undefined });
+  const g = greet({ text: message.text, signup: site.config.signup, inviteValid: typed === null ? null : invite !== null, inviteKind: invite ? 'signup' : undefined, texts: site.texts });
   if (g.action === 'ignore' || g.action === 'join') return nothing;
   if (g.action === 'reply') return strangerReply(run, message.from, hash, g.out);
   // create
   if (!run.simulate && (await bump(env.DB, textSignupsKey(now), 2 * DAY, now)) > TEXT_SIGNUPS_PER_DAY) return nothing;
   if (invite && !(await useInvite(env.DB, invite.hash, now))) {
-    const again = greet({ text: message.text, signup: site.config.signup, inviteValid: false });
+    const again = greet({ text: message.text, signup: site.config.signup, inviteValid: false, texts: site.texts });
     return again.action === 'reply' ? strangerReply(run, message.from, hash, again.out) : nothing;
   }
   return createByText(run, message);
@@ -471,15 +476,15 @@ async function keywordReply(run: Run, message: ReceivedMessage, hash: string, te
 }
 
 /** One reply to a number without an account, within the caps. */
-async function strangerReply(run: Run, to: string, hash: string, out: SentText[]): Promise<{ outcome: StrangerOutcome; replies: SentText[]; householdId: null }> {
+async function strangerReply(run: Run, to: string, hash: string, out: OutMessage[]): Promise<{ outcome: StrangerOutcome; replies: SentText[]; householdId: null }> {
   const { env, now } = run;
   if (!run.simulate) {
     if ((await bump(env.DB, strangerKey(hash), DAY, now)) > STRANGER_REPLIES_PER_NUMBER) return { outcome: 'ignored', replies: [], householdId: null };
     if ((await bump(env.DB, strangerDayKey(now), 2 * DAY, now)) > STRANGER_REPLIES_PER_DAY) return { outcome: 'ignored', replies: [], householdId: null };
   }
-  const texts: Planned[] = out.map(m => ({ text: m.text, suggestions: m.suggestions, record: m.text, allowed: true }));
+  const texts: Planned[] = out.map(m => ({ ...fromEngine(m), allowed: true }));
   const outcomes = await deliver(run, to, texts, run.simulate);
-  const replies = texts.filter((_, i) => outcomes[i]?.ok).map(t => (t.suggestions ? { text: t.text, suggestions: t.suggestions } : { text: t.text }));
+  const replies = texts.filter((_, i) => outcomes[i]?.ok).map(sentOf);
   return { outcome: replies.length > 0 ? 'replied' : 'ignored', replies, householdId: null };
 }
 
@@ -496,7 +501,7 @@ async function createByText(run: Run, message: ReceivedMessage): Promise<{ outco
       data.demo = run.simulate;
       data.seenTexts = [message.eventId];
       addMessage(data, { direction: 'in', phone: lastFour(message.from), body: inboundBody(message), at: now, status: run.simulate ? 'simulated' : 'received' });
-      const first = begin({ data, from: message.from, now }, 'setup');
+      const first = begin({ data, from: message.from, now, texts: site.texts }, 'setup');
       setChat(data, message.from, first.chat);
       planned = plan(data, site, message.from, first.out.map(fromEngine), run.simulate, now);
     },
@@ -505,7 +510,7 @@ async function createByText(run: Run, message: ReceivedMessage): Promise<{ outco
   if (!made.ok) return { outcome: 'ignored', replies: [], householdId: null };
   const outcomes = await deliver(run, message.from, planned, run.simulate);
   await settleTexts(run, made.phone.household_id, message.from, planned, planned, outcomes);
-  const replies = planned.filter((_, i) => outcomes[i]?.ok).map(t => (t.suggestions ? { text: t.text, suggestions: t.suggestions } : { text: t.text }));
+  const replies = planned.filter((_, i) => outcomes[i]?.ok).map(sentOf);
   return { outcome: 'created', replies, householdId: made.phone.household_id };
 }
 
@@ -521,13 +526,13 @@ async function joinByCode(
   if (!(await spendJoinCode(env, join.hash, join.householdId, now))) return { outcome: 'ignored', replies: [], householdId: null };
   const added = await addPhone(env, join.householdId, message.from, now);
   if (!added.ok) {
-    return added.reason === 'full' ? strangerReply(run, message.from, hash, [{ text: JOIN_FULL }]) : { outcome: 'ignored', replies: [], householdId: null };
+    return added.reason === 'full' ? strangerReply(run, message.from, hash, [serverText(site.texts, 'signup.join_full')]) : { outcome: 'ignored', replies: [], householdId: null };
   }
   const changed = await changeHousehold(env, join.householdId, now, data => {
     data.seenTexts.push(message.eventId);
     if (data.seenTexts.length > MAX_SEEN_TEXTS) data.seenTexts.splice(0, data.seenTexts.length - MAX_SEEN_TEXTS);
     addMessage(data, { direction: 'in', phone: lastFour(message.from), body: inboundBody(message), at: now, status: data.demo ? 'simulated' : 'received' });
-    const first = begin({ data, from: message.from, now }, 'joined');
+    const first = begin({ data, from: message.from, now, texts: site.texts }, 'joined');
     setChat(data, message.from, first.chat);
     return { demo: data.demo, planned: plan(data, site, message.from, first.out.map(fromEngine), data.demo, now) };
   });
@@ -535,7 +540,7 @@ async function joinByCode(
   const { planned, demo } = changed.result;
   const outcomes = await deliver(run, message.from, planned, demo);
   await settleTexts(run, join.householdId, message.from, planned, planned, outcomes);
-  const replies = planned.filter((_, i) => outcomes[i]?.ok).map(t => (t.suggestions ? { text: t.text, suggestions: t.suggestions } : { text: t.text }));
+  const replies = planned.filter((_, i) => outcomes[i]?.ok).map(sentOf);
   return { outcome: 'joined', replies, householdId: join.householdId };
 }
 

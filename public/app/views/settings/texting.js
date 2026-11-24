@@ -1,39 +1,40 @@
 /*
  * Settings: Texting. The number to text, this month's usage against the
- * limit, and the commands as a reference (docs/TEXTING.md).
- *
- * The digits come from the server (S.sms.commandList and S.sms.commandNote,
- * in the words the texts use) when it sends them; the words that list does
- * not have (MENU's second level, from docs/TEXTING.md) are listed here, in
- * one place, with the fallbacks.
+ * limit, and how texting works: every text ends with its options, which
+ * can be answered by word. The main options come from the server
+ * (S.sms.mainOptions, in the operator's wording); there are no digits.
  */
 import { h, icon, pretty } from '../../lib.js';
 import { S, t } from '../../store.js';
 import { blockRow, group, infoRow } from './ui.js';
 
-export const DIGITS = [
-  ['1', '{flow} began'],
-  ['2', '{hefsek} done'],
-  ['3', 'Count broken'],
-  ['4', '{immersion} done'],
-  ['5', '{stain}'],
-  ['9', 'Status: where you are now'],
-  ['0', 'Undo the last entry'],
-  ['?', 'The digits, and how to add a day, a time or a date'],
-];
+/** The main options as shipped, when the server does not send them. */
+export const MAIN_OPTIONS = ['PERIOD', 'HEFSEK', 'STATUS', 'MORE'];
+
+/** What each main option does, in order. */
+const MAIN_MEANINGS = ['{flow} began: asks when', '{hefsek} done: asks which day', 'Where you are now', 'History, undo, a {stain}, settings'];
+
+/** The main options, from the server when it sends them. */
+export function mainOptions() {
+  const list = S.sms && Array.isArray(S.sms.mainOptions) ? S.sms.mainOptions.filter(x => typeof x === 'string') : null;
+  return list && list.length === MAIN_OPTIONS.length ? list : MAIN_OPTIONS;
+}
+
+/** The main options with what they do, as rows. */
+export function mainRows() {
+  return mainOptions().map((label, i) => [label, MAIN_MEANINGS[i] || '']);
+}
 
 const WORDS = [
-  ['MENU', 'Every word'],
-  ['STATUS', 'Where you are now (same as 9)'],
+  ['MENU', 'The main options'],
+  ['UNDO', 'Undo the last entry'],
   ['HISTORY', 'The latest entries, to remove one'],
   ['LOCATION', 'Show or change the place'],
   ['CUSTOMS', 'Show or change a custom'],
   ['REMINDERS', 'This phone’s reminders'],
   ['PHONES', 'The phones on the account'],
-  ['ADD', 'A code for another phone to join'],
   ['CALENDAR', 'The calendar link'],
   ['WEB', 'A one-time sign-in link'],
-  ['SETUP', 'The first questions again'],
   ['DELETE ACCOUNT', 'Deletes the account, after asking'],
 ];
 
@@ -42,16 +43,6 @@ const CARRIER = [
   ['START', 'Receive texts again'],
   ['HELP', 'Where to get help'],
 ];
-
-/** The digit rows from the server's list, or null. */
-function digitsFromServer() {
-  const list = S.sms && Array.isArray(S.sms.commandList) ? S.sms.commandList : null;
-  if (!list || !list.every(x => x && typeof x.text === 'string' && typeof x.meaning === 'string')) return null;
-  const rows = list.filter(x => /^[0-9?]$/.test(x.text)).map(x => [x.text, x.meaning]);
-  return rows.length ? rows : null;
-}
-
-const DIGITS_NOTE = 'After 1, 3 or 5 you may add day, night, yesterday day, yesterday night, or a time such as 9pm. A date also works: 1 11/22 night, 2 11/26.';
 
 function commandTable(id, caption, rows, stack) {
   return h(
@@ -92,8 +83,6 @@ function view() {
       ],
     };
   }
-  const digits = digitsFromServer() || DIGITS;
-  const note = typeof sms.commandNote === 'string' && sms.commandNote ? sms.commandNote : DIGITS_NOTE;
   return {
     title: 'Texting',
     parent: '',
@@ -118,8 +107,11 @@ function view() {
         }),
         usage(),
       ),
-      group({ title: 'Record with a digit', id: 'txt-digits', footer: note }, blockRow(commandTable('cmd-digits', 'Digits', digits))),
-      group({ title: 'Words', id: 'txt-words', footer: 'Send a word alone to see its options.' }, blockRow(commandTable('cmd-words', 'Words', WORDS, true))),
+      group(
+        { title: 'Options', id: 'txt-options', footer: 'Every text ends with its options. Answer with an option, or in words, for example: period last night.' },
+        blockRow(commandTable('cmd-options', 'The main options', mainRows())),
+      ),
+      group({ title: 'Words', id: 'txt-words', footer: 'These work at any time.' }, blockRow(commandTable('cmd-words', 'Words', WORDS, true))),
       group({ title: 'For every text service', id: 'txt-carrier' }, blockRow(commandTable('cmd-carrier', 'Carrier words', CARRIER))),
       h('p', { class: 'help st-foot' }, 'More on the ', h('a', { href: '/help' }, 'Help page'), '.'),
     ],

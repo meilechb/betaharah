@@ -412,14 +412,16 @@ const H = { 'x-betaharah': '1' };
 
   // ----- Texting, sign-in, your data -----
 
-  await step('texting: the number, the usage and the commands', async () => {
+  await step('texting: the number, the usage, the main options and the words (no digits)', async () => {
     await openSection('texting', 'Texting');
     const t = await page.textContent('.st-body');
     if (!t.includes('(888) 555-0100')) throw new Error('no number');
     if (!/Texts simulated this month: \d+ of \d+/.test(t)) throw new Error('no usage');
-    for (const w of ['1', '9', '0', 'MENU', 'STATUS', 'HISTORY', 'LOCATION', 'CUSTOMS', 'REMINDERS', 'PHONES', 'ADD', 'CALENDAR', 'WEB', 'SETUP', 'DELETE ACCOUNT', 'STOP', 'START']) {
+    for (const w of ['PERIOD', 'HEFSEK', 'STATUS', 'MORE', 'MENU', 'UNDO', 'HISTORY', 'LOCATION', 'CUSTOMS', 'REMINDERS', 'PHONES', 'CALENDAR', 'WEB', 'DELETE ACCOUNT', 'STOP', 'START']) {
       if ((await page.locator(`.st-commands kbd:text-is("${w}")`).count()) !== 1) throw new Error('missing ' + w);
     }
+    if (await page.locator('.st-commands kbd:text-matches("^[0-9?]$")').count()) throw new Error('a digit is listed');
+    if (!t.includes('Every text ends with its options. Answer with an option, or in words')) throw new Error('no line on options');
   });
 
   await step('sign-in: password errors beside their fields; sign-out everywhere asks first', async () => {

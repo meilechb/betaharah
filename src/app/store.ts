@@ -9,6 +9,7 @@
  */
 import { parseHalachicSettings } from '../engine/settings';
 import { validChat } from './chat/engine';
+import { NO_TEXTS, parseSiteTexts, type SiteTexts } from './chat/site-texts';
 import type { ChatState } from './chat/types';
 import { decrypt, encrypt, fingerprint, randomId } from './crypto';
 import type { Env } from './env';
@@ -132,7 +133,21 @@ export async function loadSite(env: Env): Promise<Site> {
   const map = new Map(results.map(r => [r.key, r.value]));
   const config = map.has('config') ? parseSiteConfig(JSON.parse(map.get('config') as string)) : DEFAULT_SITE_CONFIG;
   const secrets = map.has('secrets') ? (JSON.parse(await decrypt(env.ENCRYPTION_KEY, map.get('secrets') as string, 'site')) as SiteSecrets) : {};
-  return { config, secrets };
+  // The operator's wording of the texts: in the same query, so that no text costs another.
+  let texts = NO_TEXTS;
+  if (map.has('texts')) {
+    try {
+      texts = parseSiteTexts(JSON.parse(map.get('texts') as string));
+    } catch {
+      texts = NO_TEXTS;
+    }
+  }
+  return { config, secrets, texts };
+}
+
+/** Saves the operator's wording of the texts (already checked: site-texts.ts). */
+export async function saveSiteTexts(env: Env, texts: SiteTexts, now: number): Promise<void> {
+  await putSite(env.DB, 'texts', JSON.stringify(texts), now);
 }
 
 export async function saveSiteConfig(env: Env, input: unknown, now: number): Promise<SiteConfig> {

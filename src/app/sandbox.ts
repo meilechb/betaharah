@@ -195,7 +195,7 @@ export function runSandbox(input: unknown, limits: SandboxLimits) {
       outcomes[index] = { index, ok: true, entryId: added.entry.id };
       last = added;
     } else {
-      outcomes[index] = { index, ok: false, error: rejectionText(added.reason, added.computed, 'page') };
+      outcomes[index] = { index, ok: false, error: rejectionText(added.reason, added.computed) };
     }
   });
 
@@ -214,7 +214,7 @@ export function runSandbox(input: unknown, limits: SandboxLimits) {
     terms: data.app.terms,
     outcomes,
     /** What POST /api/entries answers after the last entry that was recorded. */
-    message: recorded ? confirmationText({ ok: true, entry: recorded.entry, computed, notes: recorded.notes }, null).replace(' 0 to undo.', '') : null,
+    message: recorded ? confirmationText({ ok: true, entry: recorded.entry, computed, notes: recorded.notes }, null) : null,
     state: {
       now: calc.now,
       timeZone: calc.timeZone,

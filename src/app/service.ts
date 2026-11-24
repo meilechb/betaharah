@@ -4,6 +4,7 @@
  * each household's reminders and calendar current, answering received
  * texts, and the periodic job.
  */
+import { filedText, messageOut, NO_TEXTS, serverText, type ChatState, type OutMessage, type SiteTexts } from './chat';
 import { fingerprint, randomCode } from './crypto';
 import { DEMO_NUMBER } from './demo';
 import { noteSmsOutcome } from './admin-notes';
@@ -43,19 +44,33 @@ const DAY = 86_400_000;
 
 export const CODE_MINUTES = 10;
 
-export function codeText(code: string): string {
-  return `Betaharah code: ${code}. It expires in ${CODE_MINUTES} minutes. Do not share it.`;
+/** The sign-in code text (filed with the carrier; the operator may change it on the Texts page). */
+export function codeText(code: string, texts?: SiteTexts): string {
+  return filedText(texts ?? NO_TEXTS, 'carrier.code', { code, minutes: String(CODE_MINUTES) });
 }
 
 /**
- * Sent when reminders are turned on, and when a phone texts START.
- * Wording filed for the toll-free verification.
+ * Sent when reminders are turned on on the website, and when a phone texts
+ * START. Wording filed for the toll-free verification.
  */
-export const START_REPLY = "Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.";
-export const REMINDERS_ON_TEXT = START_REPLY;
+export function startReply(texts?: SiteTexts): string {
+  return filedText(texts ?? NO_TEXTS, 'carrier.start');
+}
 /** Reply to HELP. Wording filed for the toll-free verification. */
-export const HELP_REPLY = 'Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.';
-export const TEST_TEXT = 'Betaharah: test message. Text 9 for status, ? for the list of commands.';
+export function helpReply(texts?: SiteTexts): string {
+  return filedText(texts ?? NO_TEXTS, 'carrier.help');
+}
+/** The filed wording, as shipped. */
+export const START_REPLY = startReply();
+export const HELP_REPLY = helpReply();
+
+/** The test text, with its options. */
+export function testText(texts?: SiteTexts): OutMessage {
+  return serverText(texts, 'other.test');
+}
+/** The same texts in their shipped wording. */
+export const REMINDERS_ON_TEXT = START_REPLY;
+export const TEST_TEXT = testText().text;
 
 // ---------- sending a text ----------
 
@@ -86,8 +101,15 @@ export interface TextToSend {
   text: string;
   now: number;
   suggestions?: RcsSuggestion[];
+  /** By RCS: the text above the buttons (the body without the options line). `text` stays the SMS fallback. */
+  rcsText?: string;
   /** Send as a plain SMS even when RCS is on (sign-in codes and sign-in links: the plainest way). */
   smsOnly?: boolean;
+}
+
+/** A text of the conversation as the send function takes it. */
+export function toSend(m: OutMessage): Pick<TextToSend, 'text' | 'rcsText' | 'suggestions'> {
+  return m.suggestions ? { text: m.text, rcsText: m.body, suggestions: m.suggestions } : { text: m.text };
 }
 
 /**
@@ -121,6 +143,7 @@ export async function sendText(env: Env, deps: Deps, site: Site, args: TextToSen
             from: telnyxNumber,
             to: args.to,
             text: args.text,
+            rcsText: args.rcsText,
             suggestions: args.suggestions,
           })
         : await sendTelnyx(deps, { apiKey: telnyxApiKey, from: telnyxNumber, to: args.to, text: args.text });
@@ -250,7 +273,7 @@ export async function requestCode(
   });
   if (simulate) return { ok: true, delivery: Promise.resolve({ ok: true, channel: null }), code: args.send ? code : undefined };
   // Codes always go as a plain SMS, the plainest way.
-  const delivery: Promise<SmsOutcome> = args.send ? sendText(env, deps, site, { to: args.number, text: codeText(code), now, smsOnly: true }) : Promise.resolve({ ok: true, channel: null });
+  const delivery: Promise<SmsOutcome> = args.send ? sendText(env, deps, site, { to: args.number, text: codeText(code, site.texts), now, smsOnly: true }) : Promise.resolve({ ok: true, channel: null });
   return { ok: true, delivery };
 }
 
@@ -415,11 +438,19 @@ export async function sendDueReminders(env: Env, deps: Deps, site: Site, now: nu
       if (!taken || taken.result.due.length === 0) continue;
       const { demo, due } = taken.result;
       budget -= due.length;
-      const results: Array<{ key: string; to: string; text: string; result: Settlement }> = [];
+      const results: Array<{ key: string; to: string; text: string; chat: ChatState | null; result: Settlement }> = [];
       for (const q of due) {
-        const outcome = await sendHouseholdText(env, deps, site, demo, { to: q.to, text: q.text, now });
+        // In the operator's wording, with its options (DONE on the hefsek reminder, STATUS on the others).
+        const made = q.msg ? messageOut(site.texts ?? NO_TEXTS, q.msg, now) : { out: { text: q.text, body: q.text }, chat: null };
+        const outcome = await sendHouseholdText(env, deps, site, demo, { to: q.to, ...toSend(made.out), now });
         if (outcome.ok) sent++;
-        results.push({ key: q.key, to: q.to, text: q.text, result: outcome.ok ? 'sent' : outcome.reason === 'failed' ? 'failed' : outcome.reason === 'blocked' ? 'blocked' : 'refused' });
+        results.push({
+          key: q.key,
+          to: q.to,
+          text: made.out.text,
+          chat: made.chat,
+          result: outcome.ok ? 'sent' : outcome.reason === 'failed' ? 'failed' : outcome.reason === 'blocked' ? 'blocked' : 'refused',
+        });
       }
       const blocked = results.some(r => r.result === 'blocked');
       await changeHousehold(
@@ -429,6 +460,8 @@ export async function sendDueReminders(env: Env, deps: Deps, site: Site, now: nu
         data => {
           for (const r of results) {
             settle(data, r, r.result, now);
+            // A reminder that went out is the last message to that phone: its options are the ones a reply answers.
+            if (r.result === 'sent' && r.chat) data.chat = { ...(data.chat ?? {}), [r.to]: r.chat };
             // The test account's reminders appear in its messages, as they would arrive on a phone.
             if (demo) addMessage(data, { direction: 'out', phone: lastFour(r.to), body: r.text, at: now, status: 'simulated' });
           }

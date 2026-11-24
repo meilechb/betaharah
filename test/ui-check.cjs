@@ -18,7 +18,7 @@
 //     expired session; Log; Customs with the Hebrew-terms toggle; Settings loosely (test/ui/settings.cjs
 //     has the detail); keyboard use, focus, a dialog, reduced motion, 200% zoom;
 //   - the test account: banner; Today by day and at night (the box agrees with the headline);
-//     "Try a text" walking through MENU, CUSTOMS, REMINDERS, LOCATION with a ZIP, ADD, CALENDAR LINK,
+//     "Try a text" walking through MENU and its options as buttons, CUSTOMS, REMINDERS, LOCATION with a ZIP, ADD, CALENDAR LINK,
 //     WEB (whose link then signs in, and leaves the address), and DELETE ACCOUNT with NO and then YES;
 //   - privacy on the page: the address bar, the page title, what is kept in the browser, what is left
 //     on screen after signing out;
@@ -118,7 +118,7 @@ const problems = [];
   });
 
   for (const [path, title, phrases] of [
-    ['/help', 'Help', ['Recording by text message', 'Using it by text only', 'MENU', 'LOCATION 08701', 'ADD', 'JOIN NRMAAABZ', 'WEB', 'DELETE ACCOUNT', 'does not text a number that has not texted it', 'GeoNames', 'CC BY 4.0', 'It does not give halachic rulings']],
+    ['/help', 'Help', ['Recording by text message', 'Using it by text only', 'Reply: PERIOD, HEFSEK, STATUS, MORE', 'PERIOD', 'HEFSEK', 'STATUS', 'MORE', 'period last night', 'hefsek yesterday', 'ADD', 'texts only numbers that texted it', 'GeoNames', 'CC BY 4.0', 'It does not give halachic rulings']],
     ['/privacy', 'Privacy', ['What encryption does not do', 'Signing up by text', 'texting ADD', 'No mobile information is shared with third parties or affiliates for marketing or promotional purposes.']],
     ['/terms', 'Terms', ['It does not give halachic rulings', 'Message frequency varies', 'Message and data rates may apply', 'STOP', 'START', 'HELP', 'REMINDERS ON']],
   ]) {
@@ -699,12 +699,16 @@ const problems = [];
   };
   const lastReply = async () => (replies.length ? replies[replies.length - 1].text : '');
 
-  await step('Try a text: MENU, then a button under its reply', async () => {
+  await step('Try a text: MENU, then its options as buttons', async () => {
     await sendText('MENU');
-    if (!(await lastReply()).startsWith('Words: STATUS')) throw new Error('MENU reply: ' + (await lastReply()));
+    if ((await lastReply()) !== 'Betaharah.\nReply: PERIOD, HEFSEK, STATUS, MORE') throw new Error('MENU reply: ' + (await lastReply()));
     await page.waitForSelector('.reply-extras .chip');
-    await sendText(null, () => page.click('.reply-extras .chip >> nth=0'));
-    if (!replies.length) throw new Error('no reply to the button');
+    const labels = await page.$$eval('.reply-extras .chip', b => b.map(x => x.textContent.trim()));
+    if (labels.join() !== 'PERIOD,HEFSEK,STATUS,MORE') throw new Error('buttons: ' + labels.join());
+    await sendText(null, () => page.click('.reply-extras button[aria-label="Send STATUS"]'));
+    if (!/^Clean day \d of 7\./.test(await lastReply())) throw new Error('STATUS by its button: ' + (await lastReply()));
+    await sendText(null, () => page.click('.reply-extras button[aria-label="Send MORE"]'));
+    if (!(await lastReply()).startsWith('More:')) throw new Error('MORE: ' + (await lastReply()));
     await shot('32-try-a-text');
   });
 
@@ -745,7 +749,7 @@ const problems = [];
 
   await step('Try a text: DELETE ACCOUNT asks first; NO keeps it; YES deletes it and signs out with a note', async () => {
     await sendText('DELETE ACCOUNT');
-    if (!/Reply YES to delete/.test(await lastReply())) throw new Error('DELETE ACCOUNT: ' + (await lastReply()));
+    if (!/^Delete the account\?.*\nReply: YES, NO$/s.test(await lastReply())) throw new Error('DELETE ACCOUNT: ' + (await lastReply()));
     await sendText('NO');
     await state();
     await sendText('DELETE ACCOUNT');

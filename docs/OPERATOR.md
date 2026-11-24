@@ -53,6 +53,10 @@ on a computer, a menu at the top on a phone):
 - **Test account**: open, reset or delete it.
 - **Calculation test**: a blank calendar on which you add dates and see
   what an account would show, as of any day you choose (below).
+- **Texts**: every text the service sends, grouped, with when it is
+  sent, how it looks by SMS and by RCS, and its length. Change any text,
+  the labels of its options, the general words and the options prefix
+  (below).
 - **Text simulator**: "Try signing up by text" (below), and what people
   can text.
 - **Tools**: a test text to your own number, and links to the public pages
@@ -161,11 +165,12 @@ allows 60 tries in 10 minutes.
 ### Trying sign-up by text before the number is approved
 
 Console → **Text simulator**. You text "from" a made-up
-number (555-0100 to 555-0199) and see every reply, with the RCS buttons as
-buttons you can tap. The text goes through the whole real path (the
-sign-up rules, JOIN, setup, every word, ADD and JOIN with a code, WEB,
-DELETE ACCOUNT), but nothing is sent, nothing is charged, and none of the
-site's counters move. The accounts it makes are test accounts, never
+number (555-0100 to 555-0199) and see every reply with its options as
+buttons; tapping one sends it, so a whole conversation can be walked
+without typing. The text goes through the whole real path (the sign-up
+rules, JOIN, setup, every option and word, ADD and JOIN with a code, the
+sign-in link, DELETE ACCOUNT), but nothing is sent, nothing is charged,
+and none of the site's counters move. The accounts it makes are test accounts, never
 texted. One stays until you text DELETE ACCOUNT and YES from the same
 made-up number, or delete it under Accounts.
 
@@ -229,11 +234,11 @@ either.
 
 ## RCS (when the agent is approved)
 
-RCS shows the same texts with tap-to-reply buttons, from a verified
-sender. Every RCS text carries an SMS fallback with the same words, so a
-phone without RCS still gets an ordinary text, and every text says in
-words what to send, so nothing depends on the buttons. Sign-in codes and
-sign-in links always go as plain SMS.
+RCS shows the same texts with their options as buttons, from a verified
+sender; a tap sends the option's label. Every RCS text carries an SMS
+fallback with the same words and the options on its last line, so a phone
+without RCS still gets an ordinary text and nothing depends on the
+buttons. Sign-in codes and sign-in links always go as plain SMS.
 
 1. In the Telnyx portal, when the RCS agent is approved (or in its testing
    stage, for test devices), link the agent to the **same Messaging
@@ -261,7 +266,7 @@ Things to confirm with Telnyx before switching RCS on (their RCS
 documentation does not say): whether STOP sent by RCS blocks further RCS
 and SMS sends to that phone, as on toll-free SMS (the site itself stops
 texting a phone that sends STOP either way); the most suggested replies
-per message and the longest label (the site uses at most 4, of at most 20
+per message and the longest label (the site uses at most 6, of at most 20
 characters); the error code when an RCS send is refused because the phone
 opted out (the site treats 40300 as that, as for SMS); and whether the
 fallback is used only when the phone has no RCS, or also when an RCS
@@ -276,7 +281,7 @@ proprietor"). Choose the closest option where the form has a list.
 |---|---|
 | Website | `https://betaharah.com` |
 | Use case | Account notifications (with two-factor sign-in codes) |
-| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign in with their mobile number and a one-time code sent by SMS. Users may text single-digit commands to record a calendar date and receive a confirmation reply. Users who turn on reminders in their account settings receive reminders about dates in their own calendar. No marketing or promotional messages are sent. |
+| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign in with their mobile number and a one-time code sent by SMS. Users may reply to a text with one of the options it lists (for example PERIOD or STATUS) to record a calendar date and receive a confirmation reply. Users who turn on reminders in their account settings receive reminders about dates in their own calendar. No marketing or promotional messages are sent. |
 | Monthly volume | The lowest option offered |
 | How users opt in | (1) Sign-in codes: the user enters their own mobile number on https://betaharah.com/app/ and presses "Text me a code"; the page states that a code will be sent by text and that message and data rates may apply. (2) Reminders: off by default. A signed-in user turns on "Send text reminders to this phone" under Settings for a phone whose number was verified by code; the page shows the consent wording (program name, message frequency varies, message and data rates may apply, reply STOP to stop, HELP for help) before saving. A confirmation text is then sent. Consent is not a condition of any purchase; the service is free. |
 | Opt-in screenshots | `https://betaharah.com/sms-opt-in-1.png` (sign-in) and `https://betaharah.com/sms-opt-in-2.png` (reminders) |
@@ -284,30 +289,57 @@ proprietor"). Choose the closest option where the form has a list.
 | Terms | `https://betaharah.com/terms` |
 | Sample message 1 | `Betaharah code: 123456. It expires in 10 minutes. Do not share it.` |
 | Sample message 2 | `Betaharah: you're subscribed to reminder texts. Message frequency varies. Msg&data rates may apply. Reply ? for help, STOP to opt out.` |
-| Sample message 3 | `Mikvah night: Thu Dec 3, after 5:16 PM.` |
+| Sample message 3 | `Mikvah night: Thu Dec 3, after 5:16 PM.`<br>`Reply: STATUS` |
 | Opt-in confirmation message | Sample message 2 |
 | HELP reply | `Betaharah: text ? for commands. Help: admin@betaharah.com. Reply STOP to opt out.` |
 
-The answers above describe opting in on the website, and they are what was
-filed. Sign-up by text (texting `JOIN`) is a second way to opt in and is
+The answers above describe opting in on the website. What was filed
+differs from the live texts in two places: the use case summary said
+"single-digit commands" (there are none now; texts list their options),
+and sample message 3 now ends with the line `Reply: STATUS`. Amend the
+verification with these two answers if Telnyx asks. Sign-up by text (texting `JOIN`) is a second way to opt in and is
 **off** until you turn it on under Settings in the console. Before turning it
 on, amend the verification with Telnyx to add the keyword opt-in and these
 messages (the console's switch points here):
 
 | Field | Addition for sign-up by text |
 | --- | --- |
-| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign up either by texting the keyword JOIN to the number, or on the website with their mobile number and a one-time code sent by SMS. Users text short commands to record calendar dates, set up and manage their account, and receive a reply to each text. Users who turn on reminders (by texting REMINDERS ON, or in their account settings) receive reminders about dates in their own calendar. Nothing is ever sent to a number that has not texted the service or entered itself on the website. No marketing or promotional messages are sent. |
+| Use case summary | Betaharah is a free personal calendar for Jewish family-purity observance, used by the operator's family and friends. Users sign up either by texting the keyword JOIN to the number, or on the website with their mobile number and a one-time code sent by SMS. Each text lists the options it accepts; users reply with an option, or in words, to record calendar dates, set up and manage their account, and receive a reply to each text. Users who turn on reminders (by texting REMINDERS ON, or in their account settings) receive reminders about dates in their own calendar. Nothing is ever sent to a number that has not texted the service or entered itself on the website. No marketing or promotional messages are sent. |
 | How users opt in | (1) By text: the user texts the keyword JOIN to the number (the number and the keyword are published on https://betaharah.com/help). Any first text from a new number gets one reply describing the program, with message frequency, rates, STOP and HELP, and the terms link (sample message 4); JOIN then creates the account and the reply starts setup (sample message 5). A second phone joins an account only by texting JOIN and a code from its own phone. (2) Sign-in codes on the website: the user enters their own mobile number on https://betaharah.com/app/ and presses "Text me a code"; the page states that a code will be sent by text and that message and data rates may apply. (3) Reminders: off by default, also after JOIN. The user texts REMINDERS ON, and the reply confirms the consent with the full wording (sample message 6); or a signed-in user turns on "Send text reminders to this phone" under Settings for a phone whose number was verified, where the page shows the consent wording before saving, and a confirmation text is then sent. Consent is not a condition of any purchase; the service is free. |
-| Sample message 4 (first reply to a new number) | `Betaharah is a mikvah calendar by text message. Reply JOIN to sign up. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help. Terms: betaharah.com/terms` |
-| Sample message 5 (reply to JOIN) | `Welcome to Betaharah. This phone is signed up. Step 1 of 3: reply with your ZIP code (in Canada, your postal code, e.g. H3W 1A1). It sets the times of sunset.` |
-| Sample message 6 (reply to REMINDERS ON) | `Reminders are on for this phone (ending 0101). This phone agrees to receive reminder texts from Betaharah. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help.` |
+| Sample message 4 (first reply to a new number) | `Betaharah: a mikvah calendar by text. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help. Terms: betaharah.com/terms`<br>`Reply: JOIN` |
+| Sample message 5 (reply to JOIN) | `Welcome to Betaharah. Setup step 1 of 3: your ZIP code (or Canadian postal code), for the times of sunset.`<br>`Reply: SKIP` |
+| Sample message 6 (reply to REMINDERS ON) | `Reminders are on for this phone (ending 0101). This phone agrees to receive reminder texts from Betaharah. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help.`<br>`Reply: KINDS, STATUS` |
 | Opt-in keyword | JOIN |
 | Opt-in confirmation message | Sample message 5 for joining by text (sample message 6 when reminders are turned on by text) |
 | STOP | Handled by the carrier on toll-free numbers; the site also records it and sends nothing further to that phone until it texts START. |
 
 If the reviewer asks for changes, the wording that users see is in
 `public/app/app.js` (sign-in page and Settings) and `src/app/pages.ts`
-(Privacy and Terms).
+(Privacy and Terms); every text message is on the console's Texts page.
+
+### Changing the texts
+
+Console → **Texts**. Each text shows when it is sent, how it looks on a
+phone (by SMS with the options on the last line; by RCS with the options
+as buttons) with example values, and its length in characters and SMS
+segments. **Edit** opens the text with its placeholders as buttons that
+insert them, one box per option label, and a live preview and count;
+**Reset to the original** puts back the shipped wording. The search box
+filters by words. Under **Words**: the words people can write at any
+time, one comma-separated list per action, and what comes before the
+options (`Reply:`).
+
+A change is refused, with the reason beside the field, when a required
+placeholder is missing or an unknown one is used, a character is not in
+the basic SMS alphabet (it is named), the text with the example values and
+the options would be longer than two segments (306 characters), or a
+label is empty, longer than 20 characters, not letters, digits and spaces,
+used twice in one text, a word the carrier acts on (STOP, START, HELP,
+INFO, CANCEL, END, QUIT, ...), or a general word of something else. The
+next text sent uses the change. What each option does stays fixed.
+
+The three texts filed with the carrier (the sign-in code and the replies
+to HELP and START) are marked: change them only together with the filing.
 
 ## Google Calendar (optional)
 
