@@ -7,6 +7,7 @@ import { allTerms, capital, fill, hebrewDate } from '../engine/terms';
 import { onahAt } from '../engine/zmanim';
 import type { Session } from './auth';
 import { HELP_TEXT, resolveHefsekDay } from './commands';
+import { buildGrid, type Grid } from './grid';
 import type { Computed, DraftEntry, Where } from './household';
 import { canText, googleReady, MAX_PHONES, smsReady, type HouseholdData, type Site } from './model';
 import { textsThisMonth } from './queue';
@@ -56,6 +57,7 @@ export function dashboardState(args: StateArgs) {
   let upcoming: UpcomingItem[] = [];
   let reminders: Array<{ at: number; when: string; kind: string; text: string }> = [];
   let today: { hebrew: string; civil: string; part: 'night' | 'day' } | null = null;
+  let grid: Grid | null = null;
   if (computed) {
     const t = computed.timeline;
     status = statusLines(t, tz, lang);
@@ -99,6 +101,7 @@ export function dashboardState(args: StateArgs) {
         const l = localDateTime(r.at, tz);
         return { at: r.at, when: `${englishDate(civilToAbs(l))} ${clock12(r.at, tz, 'floor')}`, kind: r.kind, text: r.text };
       });
+    grid = buildGrid(computed, { lang, style: data.app.calendar.style, yomTov: data.halachic.yomTov, now });
   }
 
   const texting = data.phones.some(canText);
@@ -121,6 +124,8 @@ export function dashboardState(args: StateArgs) {
     setup,
     upcoming,
     reminders,
+    /** The month calendar's days and events; null while no location is set. */
+    grid,
     entryCount: data.entries.length,
     // newest first; the page lists the most recent ones
     entries: [...data.entries]

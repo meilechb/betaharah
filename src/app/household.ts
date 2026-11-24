@@ -35,12 +35,32 @@ export interface Computed extends Where {
   reminders: Reminder[];
 }
 
+/**
+ * One location object per place, kept between requests: the engine keeps
+ * the sun times it has worked out per location object, so later requests
+ * for the same place (by any household) reuse them. The objects are never
+ * changed after they are made.
+ */
+const places = new Map<string, GeoPoint>();
+const MAX_PLACES_KEPT = 200;
+
+function placeOf(p: { latitude: number; longitude: number; timeZone: string; elevation?: number }): GeoPoint {
+  const key = `${p.latitude}|${p.longitude}|${p.timeZone}|${p.elevation ?? ''}`;
+  let place = places.get(key);
+  if (!place) {
+    if (places.size >= MAX_PLACES_KEPT) places.clear();
+    place = Object.freeze({ latitude: p.latitude, longitude: p.longitude, timeZone: p.timeZone, elevation: p.elevation });
+    places.set(key, place);
+  }
+  return place;
+}
+
 /** The location and the definitions of the times, or null while no location is set. */
 export function whereOf(data: HouseholdData): Where | null {
   const p = data.app.place;
   if (!p) return null;
   return {
-    place: { latitude: p.latitude, longitude: p.longitude, timeZone: p.timeZone, elevation: p.elevation },
+    place: placeOf(p),
     zopts: { useElevation: data.app.useElevation, tzeit: data.halachic.tzeit },
   };
 }

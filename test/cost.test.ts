@@ -62,18 +62,26 @@ describe('cost of one request', () => {
   it('the whole calculation for three years of history: a few milliseconds', async () => {
     const data = longHistory(now);
     let events = 0;
+    let state: ReturnType<typeof dashboardState> | null = null;
     // What one request does at most: work the picture out once, rebuild the
     // waiting reminders, prepare the events for Google and compare them with
-    // what Google has, and build the dashboard's data.
+    // what Google has, and build the dashboard's data, including the month
+    // calendar's days and events.
     const each = await best(() => {
       const c = compute(data, now)!;
       rebuildQueue(data, c.reminders, now);
       const desired = c.events.map(e => toDesired(e, 'America/New_York'));
       planSync(desired, [], now - 400 * 86_400_000);
-      JSON.stringify(dashboardState({ data, computed: c, site: { config: DEFAULT_SITE_CONFIG, secrets: {} }, session, myNumber: '+17325550101', now, origin: 'https://x.example' }));
+      state = dashboardState({ data, computed: c, site: { config: DEFAULT_SITE_CONFIG, secrets: {} }, session, myNumber: '+17325550101', now, origin: 'https://x.example' });
+      JSON.stringify(state);
       events = c.events.length;
     });
-    console.log(`one request's calculation: ${each.toFixed(2)} ms for ${data.entries.length} entries, ${events} events and ${data.queue.length} waiting reminders`);
+    const grid = (state as ReturnType<typeof dashboardState> | null)?.grid;
+    console.log(
+      `one request's calculation: ${each.toFixed(2)} ms for ${data.entries.length} entries, ${events} events, ${data.queue.length} waiting reminders, and a month calendar of ${grid?.days.length} days and ${grid?.events.length} events`,
+    );
+    expect(grid?.days).toHaveLength(187);
+    expect(grid!.events.length).toBeGreaterThan(10);
     // only the calendar's window (400 days) is worked out in full
     expect(events).toBeGreaterThan(150);
     expect(events).toBeLessThan(260);

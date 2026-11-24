@@ -8,7 +8,7 @@
  * The operator's console has its own sign-in with the DASHBOARD_PASSWORD
  * secret. It never shows any household's data.
  */
-import { constantTimeEqual, sign, verifySigned } from './crypto';
+import { constantTimeEqual, fingerprint, sign, verifySigned } from './crypto';
 import type { Env } from './env';
 import { bump, getPhone, readCounter, type PhoneRow } from './store';
 
@@ -93,19 +93,31 @@ export async function readSession(env: Env, cookieHeader: string | null | undefi
 // ---------- the operator ----------
 
 const ADMIN_FAILURE_WINDOW_MS = 15 * 60_000;
+/** Wrong passwords from one network address in the window. */
 const ADMIN_MAX_FAILURES = 8;
+/** Wrong passwords from all addresses together in the window: a backstop against guessing from many addresses. */
+export const ADMIN_MAX_FAILURES_ALL = 300;
+const ADMIN_FAIL_ALL_KEY = 'admin-fail-all';
 
 export type AdminLogin = { ok: true; cookie: string } | { ok: false; status: 401 | 429 | 503; message: string };
 
-export async function adminLogin(env: Env, password: unknown, now: number, secure: boolean): Promise<AdminLogin> {
+/**
+ * The operator's sign-in. Wrong passwords are counted per network address
+ * (by a keyed fingerprint of it), so that a visitor who guesses locks out
+ * only their own address and not the operator; a much higher count over all
+ * addresses together stops guessing from many addresses.
+ */
+export async function adminLogin(env: Env, password: unknown, address: string, now: number, secure: boolean): Promise<AdminLogin> {
   if (!isConfigured(env)) {
     return { ok: false, status: 503, message: 'The server is not set up yet: DASHBOARD_PASSWORD (10+ characters) and ENCRYPTION_KEY (32+ characters) must be set.' };
   }
-  if ((await readCounter(env.DB, 'admin-fail', now)) >= ADMIN_MAX_FAILURES) {
+  const addressKey = `admin-fail:${(await fingerprint(env.ENCRYPTION_KEY, 'ip', address)).slice(0, 24)}`;
+  if ((await readCounter(env.DB, addressKey, now)) >= ADMIN_MAX_FAILURES || (await readCounter(env.DB, ADMIN_FAIL_ALL_KEY, now)) >= ADMIN_MAX_FAILURES_ALL) {
     return { ok: false, status: 429, message: 'Too many wrong passwords. Try again in 15 minutes.' };
   }
   if (typeof password !== 'string' || !(await constantTimeEqual(password, env.DASHBOARD_PASSWORD))) {
-    await bump(env.DB, 'admin-fail', ADMIN_FAILURE_WINDOW_MS, now);
+    await bump(env.DB, addressKey, ADMIN_FAILURE_WINDOW_MS, now);
+    await bump(env.DB, ADMIN_FAIL_ALL_KEY, ADMIN_FAILURE_WINDOW_MS, now);
     return { ok: false, status: 401, message: 'Wrong password.' };
   }
   const token = await sign(env.ENCRYPTION_KEY, 'admin', JSON.stringify({ x: now + ADMIN_HOURS * 3_600_000 }));

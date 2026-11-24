@@ -141,6 +141,31 @@ export function takeDue(data: HouseholdData, now: number, limit: number, monthly
   return taken;
 }
 
+/**
+ * While the site cannot send texts: puts off each reminder that is due, so
+ * that it is still sent if texting comes back while it is worth sending,
+ * and drops it once its time is over (or its phone no longer receives
+ * texts). A put-off reminder is looked at again `RETRY_MS` later, so that
+ * the household's next wake time moves forward instead of staying in the
+ * past. Nothing is counted against the monthly limit. Returns how many
+ * reminders were put off or dropped.
+ */
+export function postponeDue(data: HouseholdData, now: number): number {
+  let changed = 0;
+  for (const q of data.queue) {
+    if (q.status === 'sending' && (q.doneAt ?? 0) <= now - SENDING_TIMEOUT_MS) {
+      q.status = 'pending';
+      q.doneAt = null;
+    }
+    if (q.status !== 'pending' || q.at > now || q.notBefore > now) continue;
+    changed++;
+    const phone = data.phones.find(p => p.number === q.to);
+    if (now >= q.until || !phone || !canText(phone)) drop(q, now);
+    else q.notBefore = now + RETRY_MS;
+  }
+  return changed;
+}
+
 export type Settlement = 'sent' | 'failed' | 'blocked' | 'refused';
 
 /**
