@@ -273,33 +273,27 @@ details > summary:focus-visible {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 }
+/* On one column the cards keep the page's order: status, calendar, record, then the rest. */
+
+/* On a phone and a tablet the record card is far down: a button that stays on screen jumps to it. */
+.record-jump {
+  display: none;
+}
 @media (max-width: 959px) {
-  /* On one column the record card comes right after the status. */
-  .today-layout {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
+  .record-jump {
+    display: inline-flex;
+    position: fixed;
+    right: var(--gutter);
+    bottom: calc(var(--tabbar-h, 0px) + var(--space-4));
+    z-index: 14;
+    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-pill);
   }
-  .today-layout > .col-main,
-  .today-layout > .col-side {
-    display: contents;
-  }
-  .today-layout .status-card {
-    order: 1;
-  }
-  .today-layout .record-card {
-    order: 2;
-  }
-  .today-layout .demo-card {
-    order: 3;
-  }
-  .today-layout .calendar-card {
-    order: 4;
-  }
-  .today-layout .upcoming-card {
-    order: 5;
+  .record-jump.hidden-by-card {
+    display: none;
   }
 }
+
 .col-main,
 .col-side {
   min-width: 0;
@@ -1614,4 +1608,52 @@ kbd {
 }
 .links {
   margin-top: var(--space-4);
+}
+
+/* the "now" box at night: the Hebrew date has already moved on */
+.today-box.night h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.today-box .night-note {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.rec-done-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-left: var(--space-2);
+}
+
+/* "Try a text": what the last reply offers */
+.reply-extras {
+  margin: 0 0 var(--space-3);
+}
+.quick.chips .chips-title {
+  flex-basis: 100%;
+  margin: 0;
+}
+button.quick-btn.chip {
+  border-radius: var(--radius-pill);
+  border-color: var(--accent);
+}
+button.quick-btn.chip span {
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+.demo-link {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin: var(--space-2) 0 0;
+}
+.demo-link code {
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.date-change {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-2);
 }

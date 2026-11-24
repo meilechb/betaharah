@@ -60,14 +60,14 @@ function choose(place, from) {
 function lookUpZip(e) {
   e.preventDefault();
   const btn = e.submitter || document.getElementById('setup-zip-go');
-  const zip = st.zip.trim();
-  if (!/^\d{5}$/.test(zip)) {
-    st.zipError = 'Enter the 5 digits of the ZIP code.';
+  const zip = st.zip.trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!/^\d{5}(-?\d{4})?$/.test(zip) && !/^[A-Z]\d[A-Z]( ?\d[A-Z]\d)?$/.test(zip)) {
+    st.zipError = 'Enter a 5-digit US ZIP code, such as 08701, or a Canadian postal code, such as H2X 1Y4.';
     flow.focus = 'setup-zip';
     render();
     return;
   }
-  withBusy(btn, () => api('GET', '/api/postal/' + zip)).then(
+  withBusy(btn, () => api('GET', '/api/postal/' + encodeURIComponent(zip))).then(
     r => {
       if (r && r.place) {
         st.zipError = '';
@@ -184,7 +184,7 @@ function save(e) {
       render();
     },
     err => {
-      st.saveError = problem(err);
+      st.saveError = problem(err) + (err.status === 400 ? ' The location was not saved. Choose another place, or a different time of nightfall in the customs.' : '');
       render();
     },
   );
@@ -226,8 +226,7 @@ export function placeView() {
           { class: 'zip-row' },
           textField({
             id: 'setup-zip',
-            label: 'ZIP code',
-            inputmode: 'numeric',
+            label: 'ZIP code (or Canadian postal code)',
             autocomplete: 'postal-code',
             maxlength: 10,
             wide: false,
@@ -235,8 +234,7 @@ export function placeView() {
             value: st.zip,
             error: st.zipError,
             oninput: e => {
-              st.zip = e.target.value.replace(/[^\d]/g, '').slice(0, 5);
-              if (e.target.value !== st.zip) e.target.value = st.zip;
+              st.zip = e.target.value.slice(0, 10);
               if (st.zipError) {
                 st.zipError = '';
                 setFieldError(e.target.closest('.field'), '');

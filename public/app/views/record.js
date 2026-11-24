@@ -6,7 +6,7 @@
  */
 import { alert, api, button, card, checkRow, h, icon, radioRow, textField } from '../lib.js';
 import { S, adopt, go, render, t } from '../store.js';
-import { isDone, mark } from './marks.js';
+import { mark } from './marks.js';
 import { attempt, longDate, refresh, region, today } from './shared.js';
 
 const KINDS = ['flow', 'stain', 'hefsek', 'broken', 'mikvah'];
@@ -14,8 +14,10 @@ const KINDS = ['flow', 'stain', 'hefsek', 'broken', 'mikvah'];
 const blank = () => ({ open: false, kind: null, mode: 'now', date: '', how: '', time: '', veset: true, note: '', error: '', fieldError: '', confirm: false });
 
 let rec = blank();
-/** The server's sentence after the last entry was recorded. */
+/** The server's sentence after the last entry was recorded, and that entry's id (for Undo). */
 let lastMessage = null;
+let lastId = null;
+let undoError = '';
 
 const timed = kind => kind === 'flow' || kind === 'stain' || kind === 'broken';
 
@@ -44,29 +46,17 @@ function kindMark(kind) {
 
 const nowLabel = kind => (kind === 'hefsek' ? 'Today' : kind === 'mikvah' ? 'Tonight' : 'Now');
 
-/** Where the household stands, read from the calendar events. */
-export function cyclePhase() {
-  if (!S.grid) return { phase: 'unknown' };
-  const day = S.grid.today;
-  const events = S.grid.events;
-  const flows = events.filter(e => e.kind === 'flow' && e.startDate <= day);
-  if (flows.length === 0) return { phase: 'tehorah' };
-  const last = flows[flows.length - 1];
-  const after = events.filter(e => e.startDate >= last.startDate);
-  if (after.some(e => e.kind === 'mikvah' && isDone(e))) return { phase: 'tehorah' };
-  const mikvah = after.find(e => e.kind === 'mikvah' && !isDone(e)) || null;
-  const hefsek = after.find(e => e.kind === 'hefsek' && !isDone(e)) || null;
-  if (hefsek) return { phase: hefsek.startDate <= day ? 'hefsek_due' : 'waiting', hefsek, mikvah };
-  if (mikvah && mikvah.startDate <= day) return { phase: 'mikvah_due', mikvah };
-  return { phase: 'counting', mikvah };
-}
-
-/** The step most likely to be recorded next, or null. */
+/** The step most likely to be recorded next, or null. From the server's phase (S.status.phase). */
 function suggestion() {
-  const p = cyclePhase();
-  if (p.phase === 'tehorah') return { kind: 'flow', label: cap(t('A {flow} began')), line: t('Record it when it happens. Choose "Another time" if it began earlier.') };
-  if (p.phase === 'hefsek_due') return { kind: 'hefsek', label: cap(t('{hefsek} done today')), line: t('Record it after the {hefsek} is done, before {sunset}.') };
-  if (p.phase === 'mikvah_due') return { kind: 'mikvah', label: cap(t('{immersion} tonight')), line: t('Record it after she has immersed.') };
+  if (!S.status) return null;
+  const phase = S.status.phase;
+  const day = S.today && S.today.part === 'day';
+  if (phase === 'tehorah') return { kind: 'flow', label: cap(t('A {flow} began')), line: t('Record it when it happens. Choose "Another time" if it began earlier.') };
+  if (phase === 'before_hefsek' && day) {
+    const hefsek = S.upcoming.find(u => u.kind === 'hefsek');
+    if (hefsek && hefsek.date <= S.today.civilDate) return { kind: 'hefsek', label: cap(t('{hefsek} done today')), line: t('Record it after the {hefsek} is done, before {sunset}.') };
+  }
+  if (phase === 'mikvah_tonight') return { kind: 'mikvah', label: cap(t('{immersion} tonight')), line: t('Record it after she has immersed.') };
   return null;
 }
 
@@ -76,9 +66,30 @@ function choose(kind, opts) {
   const keepDate = rec.mode === 'other' && rec.date;
   rec = { ...blank(), open: true, kind, mode: keepDate ? 'other' : (opts && opts.mode) || 'now', date: keepDate ? rec.date : '', confirm: Boolean(opts && opts.confirm) };
   lastMessage = null;
+  lastId = null;
   refresh('record');
   const target = document.getElementById(rec.confirm ? 'rec-submit' : 'rec-kind-' + kind);
   if (target) target.focus();
+}
+
+/** Removes the entry just recorded (DELETE /api/entries/:id). */
+function undo(e) {
+  const id = lastId;
+  undoError = '';
+  attempt(() => api('DELETE', '/api/entries/' + encodeURIComponent(id)), {
+    button: e.currentTarget,
+    done: r => {
+      adopt(r.state);
+      lastId = null;
+      lastMessage = 'Removed. Nothing else was changed.';
+      render();
+      document.getElementById('rec-done')?.focus();
+    },
+    fail: message => {
+      undoError = message + ' The entry can also be removed in the Log.';
+      refresh('record');
+    },
+  });
 }
 
 function close() {
@@ -90,6 +101,7 @@ function close() {
 export function openRecordFor(date) {
   rec = { ...blank(), open: true, mode: 'other', date };
   lastMessage = null;
+  lastId = null;
   refresh('record');
   const el = document.getElementById('record-card');
   if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -140,6 +152,8 @@ function submit(e) {
       adopt(result.state);
       rec = blank();
       lastMessage = result.message || 'Recorded.';
+      lastId = result.entryId || null;
+      undoError = '';
       render();
       document.getElementById('rec-done')?.focus();
     },
@@ -299,8 +313,13 @@ export function recordCard(opts) {
         ? alert(
             { kind: 'ok', className: 'rec-done' },
             h('span', { id: 'rec-done', tabindex: '-1' }, lastMessage),
-            past ? null : ' ',
-            past ? null : button({ label: 'See it in the Log', variant: 'link', attrs: { id: 'rec-see-log' }, onclick: () => go('log') }),
+            h(
+              'span',
+              { class: 'rec-done-actions' },
+              lastId ? button({ label: 'Undo', variant: 'link', attrs: { id: 'rec-undo' }, onclick: undo }) : null,
+              past ? null : button({ label: 'See it in the Log', variant: 'link', attrs: { id: 'rec-see-log' }, onclick: () => go('log') }),
+            ),
+            undoError ? h('span', { class: 'error', role: 'alert' }, icon('alert', { size: 'sm' }), h('span', {}, undoError)) : null,
           )
         : null;
       if (past && !rec.open) {
@@ -315,6 +334,7 @@ export function recordCard(opts) {
             onclick: () => {
               rec = { ...blank(), open: true, mode: 'other', date: today() };
               lastMessage = null;
+              lastId = null;
               refresh('record');
               document.getElementById('rec-kind-flow')?.focus();
             },

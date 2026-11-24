@@ -796,7 +796,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
       if (!recorded.ok) throw new HttpError(400, rejectionText(recorded.reason, recorded.computed));
       return recorded;
     });
-    return finish(c, site, household, result.computed, { message: confirmationText(result, null).replace(' 0 to undo.', '') });
+    return finish(c, site, household, result.computed, { message: confirmationText(result, null).replace(' 0 to undo.', ''), entryId: result.entry.id });
   });
 
   app.delete('/api/entries/:id', async c => {

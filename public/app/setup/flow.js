@@ -133,6 +133,12 @@ export function finish(btn, message) {
       flow.closing = false;
       flow.open = false;
       flow.step = null;
+      // The steps passed over are needed only until the setup is closed.
+      try {
+        localStorage.removeItem(STORE_KEY);
+      } catch (e) {
+        // no storage: nothing to remove
+      }
       adopt(r.state);
       go('today');
       window.scrollTo(0, 0);
@@ -207,6 +213,6 @@ export function screen(o) {
 /** Shows a server refusal next to the thing it is about, by keeping it in the step's state; returns the message. */
 export function problem(err) {
   if (!err) return '';
-  if (err.status === undefined) return 'The site could not be reached. Check the internet connection and try again.';
+  if (err.status === undefined) return err.message || 'The site could not be reached. Check the internet connection and try again.';
   return err.message || 'Something went wrong. Try again.';
 }

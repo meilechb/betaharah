@@ -914,8 +914,8 @@ describe('settings', () => {
     const withPlace = await c.put('/api/app', appSettings());
     expect(withPlace.status).toBe(200);
     const s = withPlace.json.state;
-    expect(s.status).toEqual({ headline: 'Tehorah', detail: '' });
-    expect(s.today).toEqual({ hebrew: 'Monday, 13 Kislev 5787', civil: 'Nov 23, 2026', part: 'day' });
+    expect(s.status).toEqual({ headline: 'Tehorah', detail: '', phase: 'tehorah', day: null });
+    expect(s.today).toEqual({ hebrew: 'Monday, 13 Kislev 5787', civil: 'Nov 23, 2026', part: 'day', date: '2026-11-23', civilDate: '2026-11-23' });
     expect(s.halachic.confirmedAt).toBeNull();
     const customs = await c.put('/api/halachic', BASIC);
     expect(customs.json.state.halachic.confirmedAt).toBe(START);
@@ -1028,6 +1028,46 @@ describe('recording on the website', () => {
     }
     expect((await c.call('POST', '/api/entries', undefined, { raw: 'not json' })).status).toBe(400);
     expect((await c.state()).entries).toHaveLength(1);
+  });
+
+  it('says the phase as a key, dates each coming item, and returns the new entry\'s id', async () => {
+    const tehorah = await c.state();
+    expect(tehorah.status).toMatchObject({ phase: 'tehorah', day: null });
+    expect(tehorah.today).toMatchObject({ date: '2026-11-23', civilDate: '2026-11-23', part: 'day' });
+
+    const flow = await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    expect(flow.json.entryId).toBe(flow.json.state.entries[0].id);
+    expect(flow.json.state.status).toMatchObject({ phase: 'before_hefsek', day: null });
+    const hefsek = flow.json.state.upcoming.find((u: any) => u.kind === 'hefsek');
+    expect(hefsek).toMatchObject({ date: '2026-11-26', endDate: '2026-11-26' });
+
+    world.clock.now = at(11, 26, 16);
+    const h = await c.post('/api/entries', { kind: 'hefsek', when: 'now' });
+    expect(h.json.state.status).toMatchObject({ phase: 'before_first_day', day: null });
+    // After sunset the Hebrew date is the next one: the first clean day has begun, on the same civil date.
+    world.clock.now = at(11, 26, 19);
+    const evening = await c.state();
+    expect(evening.status).toMatchObject({ phase: 'counting', day: 1 });
+    expect(evening.today).toMatchObject({ date: '2026-11-27', civilDate: '2026-11-26', part: 'night' });
+    const clean = evening.upcoming.filter((u: any) => u.kind === 'clean_day').map((u: any) => u.date);
+    expect(clean).toEqual(['2026-11-27', '2026-11-28', '2026-11-29', '2026-11-30', '2026-12-01', '2026-12-02', '2026-12-03']);
+    const mikvah = evening.upcoming.find((u: any) => u.kind === 'mikvah');
+    expect(mikvah).toMatchObject({ date: '2026-12-03', endDate: '2026-12-03', when: 'Thu Dec 3, after 5:16 PM' });
+    const night = evening.upcoming.find((u: any) => u.kind === 'onah' && u.date !== u.endDate);
+    if (night) expect(night.endDate > night.date).toBe(true);
+
+    world.clock.now = at(12, 3, 20);
+    expect((await c.state()).status).toMatchObject({ phase: 'mikvah_tonight', day: null });
+    world.clock.now = at(12, 4, 10);
+    expect((await c.state()).status).toMatchObject({ phase: 'mikvah_not_recorded', day: null });
+  });
+
+  it('lists the text commands as rows, in the words the texts use', async () => {
+    const s = await c.state();
+    expect(s.sms.commandList.map((r: any) => r.text)).toEqual(['1', '2', '3', '4', '5', '9', '0', '?', 'MENU', 'STOP', 'START']);
+    expect(s.sms.commandNote).toContain('After 2 or 4: yesterday.');
+    await c.put('/api/app', { ...s.app, terms: 'he' });
+    expect((await c.state()).sms.commandList[1].meaning).toBe('the hefsek is done');
   });
 
   it('removes an entry, and the picture follows', async () => {

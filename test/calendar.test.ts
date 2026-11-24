@@ -240,7 +240,7 @@ describe('wording for the dashboard', () => {
     });
     // a flow at night is named by the evening it began
     expect(lines([{ id: 'n', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: true }], at(2026, 11, 23, 10)).detail).toMatch(
-      /^Began: the night of Shabbat, Nov 21, 2026 \(12 Kislev 5787\)\. /,
+      /^Began: Saturday evening, Nov 21, 2026 \(the night of 12 Kislev 5787\)\. /,
     );
     // on the afternoon of the hefsek, before sunset; from sunset on it is the first clean day
     expect(lines([flow, hefsek], at(2026, 11, 26, 16))).toEqual({
@@ -260,13 +260,13 @@ describe('wording for the dashboard', () => {
   it('describes each kind of entry', () => {
     expect(entryText(flow, 'en')).toBe('Flow: Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
     expect(entryText({ id: 'x', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: false }, 'en')).toBe(
-      'Flow: the night of Shabbat, Nov 21, 2026 (12 Kislev 5787) (not counted for vesatot)',
+      'Flow: Saturday evening, Nov 21, 2026 (the night of 12 Kislev 5787) (not counted for vesatot)',
     );
     expect(entryText({ id: 'x', kind: 'stain', onah: { abs: SUN, part: 'day' } }, 'he')).toBe('כתם: Sunday, י״ב כסלו תשפ״ז (Nov 22, 2026), by day');
     expect(entryText({ id: 'x', kind: 'broken', onah: { abs: SUN, part: 'day' } }, 'en')).toBe('Count broken: Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
     expect(entryText(hefsek, 'en')).toBe('Hefsek taharah: Thursday, 16 Kislev 5787 (Nov 26, 2026)');
     // an immersion is stored under the Hebrew date of its night, and shown by the evening
-    expect(entryText({ id: 'm', kind: 'mikvah', abs: SUN + 12 }, 'en')).toBe('Immersion: the night of Thursday, Dec 3, 2026 (24 Kislev 5787)');
+    expect(entryText({ id: 'm', kind: 'mikvah', abs: SUN + 12 }, 'en')).toBe('Immersion: Thursday evening, Dec 3, 2026 (the night of 24 Kislev 5787)');
   });
 
   it('has a sentence for every warning, pattern and note, in both forms, with nothing left unfilled', () => {

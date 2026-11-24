@@ -105,6 +105,7 @@ const COMMANDS: Array<[string, string]> = [
   ['9', 'Where things stand'],
   ['0', 'Undo the last entry (within 48 hours)'],
   ['?', 'The list of commands'],
+  ['MENU', 'Every other word: location, customs, reminders, phones, calendar link, sign-in link, deleting the account'],
 ];
 
 export function helpPage(site: Site): string {
@@ -142,6 +143,7 @@ ${rows}
 <ul>
   <li>For <code>1</code>, <code>3</code> and <code>5</code>: <code>1 day</code>, <code>1 night</code>, <code>1 yesterday night</code>, or a clock time such as <code>1 6:40am</code>.</li>
   <li>For <code>2</code> and <code>4</code>: <code>2 yesterday</code>.</li>
+  <li>For an earlier date, add it as month/day: <code>1 11/22 night</code>, <code>2 11/26</code>, <code>4 12/3</code>.</li>
 </ul>
 <p>The short reminder the service sends is: <em>${escapeHtml(HELP_TEXT)}</em></p>
 <p>Every text gets a reply saying what was recorded. If a text arrives shortly after sunrise or sunset, the reply says which side it was counted on and how to correct it.</p>`,
@@ -156,16 +158,18 @@ ${
     : '<p class="number-line">Signing up by text message is not open on this site at the moment. You can sign up on the website.</p>'
 }
 <ul>
-  <li>Texting JOIN counts as your request to create an account and to receive the replies.</li>
-  <li>Text <code>MENU</code> at any time for the list of everything you can do by text.</li>
+  <li>Texting JOIN counts as your request to create an account and to receive the replies. The replies then ask for your ZIP code and your customs, one question at a time, and for the most recent dates.</li>
+  <li>Text <code>MENU</code> at any time for the list of every word you can send. Each word sent alone shows its own options. For example: <code>LOCATION 08701</code> sets the location by ZIP code, <code>CUSTOMS</code> shows and changes the customs, <code>REMINDERS ON</code> turns on reminders for that phone, <code>CALENDAR LINK</code> makes a link for a calendar app, <code>WEB</code> texts a link that signs that phone in on the website once, within 10 minutes, and <code>DELETE ACCOUNT</code> deletes the account after you confirm with YES.</li>
   <li>The digits in the table above work the same way.</li>
+  <li><strong>A second phone</strong>: a phone on the account texts <code>ADD</code> and gets a code of eight letters. The other phone then texts <code>JOIN</code> and that code (for example <code>JOIN NRMAAABZ</code>) to the same number, within 7 days.</li>
   <li>Reply <strong>STOP</strong> to stop all texts to your phone, <strong>START</strong> to turn them back on, and <strong>HELP</strong> for a short description.</li>
+  <li>The site does not text a number that has not texted it, with two exceptions that a person asks for on the website by entering the number: a sign-in code, and a code to add that phone to an account. Reminders go only to a phone for which they were turned on.</li>
 </ul>`,
       },
       {
         id: 'reminders',
         title: 'Reminders',
-        body: `<p>Reminders are off until you turn them on for a phone under Settings. You choose which ones each phone receives and when. Nothing is sent on Shabbat or Yom Tov: what falls on those days is sent beforehand, or held until afterwards, or dropped, depending on what it is.</p>
+        body: `<p>Reminders are off until you turn them on for a phone, under Settings or by texting <code>REMINDERS ON</code> from it. You choose which ones each phone receives and when. Nothing is sent on Shabbat or Yom Tov: what falls on those days is sent beforehand, or held until afterwards, or dropped, depending on what it is.</p>
 <p>To stop all texts to a phone, reply <strong>STOP</strong>. To turn them back on, reply <strong>START</strong>. Reply <strong>HELP</strong> for a short description. Message frequency varies with your settings. Message and data rates may apply.</p>`,
       },
       {
@@ -181,7 +185,7 @@ ${
       {
         id: 'sharing',
         title: 'Sharing an account',
-        body: `<p>Husband and wife can use one account. Under Settings, add the second phone: a code is texted to it, and once it is entered that phone can sign in, record by text and receive its own choice of reminders. An account can have up to ${MAX_PHONES} phones.</p>`,
+        body: `<p>Husband and wife can use one account. Under Settings, add the second phone: a code is texted to it, and once it is entered that phone can sign in, record by text and receive its own choice of reminders. By text, a phone on the account texts <code>ADD</code>, and the other phone texts <code>JOIN</code> and the code it got. An account can have up to ${MAX_PHONES} phones.</p>`,
       },
       {
         id: 'terms',
@@ -196,7 +200,8 @@ ${
       {
         id: 'contact',
         title: 'Contact',
-        body: `<p>This site is run by ${c.who}. ${c.how}</p>`,
+        body: `<p>This site is run by ${c.who}. ${c.how}</p>
+<p class="credit">Places for ZIP and postal codes: postal code data from <a href="https://www.geonames.org/">GeoNames</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, shortened and rounded.</p>`,
       },
     ],
   });
@@ -225,7 +230,7 @@ export function privacyPage(site: Site): string {
       {
         id: 'by-text',
         title: 'Signing up by text',
-        body: `<p>An account can also be created by texting JOIN to the site's number. Texting JOIN counts as the request to create an account and to receive the replies. What is kept, how it is protected and how it can be deleted are the same as for an account made on the website.</p>`,
+        body: `<p>An account can also be created by texting JOIN to the site's number. Texting JOIN counts as the request to create an account and to receive the replies. A phone joins an existing account by texting JOIN and the code that a phone on that account got by texting ADD. The site does not text a number that has not texted it, except a sign-in code or a code to add a phone that a person asked for on the website by entering that number. What is kept, how it is protected and how it can be deleted are the same as for an account made on the website.</p>`,
       },
       {
         id: 'protected',
@@ -304,9 +309,9 @@ export function termsPage(site: Site): string {
         title: 'Text messages',
         body: `<dl class="terms-list">
   <dt>Program</dt>
-  <dd>Betaharah. Sign-in codes when you ask for one; replies to the commands you text; and, only if you turn them on, reminders about the dates in your calendar.</dd>
+  <dd>Betaharah. Sign-in codes when you ask for one; a code to add a phone to an account when someone on that account asks for it on the website; replies to the texts you send; and, only if you turn them on, reminders about the dates in your calendar.</dd>
   <dt>Consent</dt>
-  <dd>You ask for a sign-in code by entering your number on the sign-in page. Or you create an account by texting JOIN to the site's number: texting JOIN counts as your request to create an account and to receive the replies. Reminders are off until you turn them on for a phone. Add only phones whose owners have agreed. Consent to receive texts is not a condition of anything.</dd>
+  <dd>You ask for a sign-in code by entering your number on the sign-in page. Or you create an account by texting JOIN to the site's number: texting JOIN counts as your request to create an account and to receive the replies. A phone texting JOIN and a code joins the account that made the code. Reminders are off until you turn them on for a phone, on the website or by texting REMINDERS ON. Add only phones whose owners have agreed. Consent to receive texts is not a condition of anything.</dd>
   <dt>Frequency</dt>
   <dd>Message frequency varies with your settings and your calendar.</dd>
   <dt>Cost</dt>

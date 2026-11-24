@@ -7,7 +7,7 @@ import { allTerms, capital, fill, hebrewDate } from '../engine/terms';
 import { onahAt } from '../engine/zmanim';
 import type { Session } from './auth';
 import { HELP_TEXT, resolveHefsekDay } from './commands';
-import { buildGrid, type Grid } from './grid';
+import { buildGrid, isoDate, type Grid } from './grid';
 import type { Computed, DraftEntry, Where } from './household';
 import { canText, googleReady, MAX_PHONES, smsReady, type HouseholdData, type Site } from './model';
 import { textsThisMonth } from './queue';
@@ -29,9 +29,39 @@ export interface UpcomingItem {
   title: string;
   description: string;
   when: string;
+  /** The civil date it begins on, 'YYYY-MM-DD' (a night: the evening it begins). */
+  date: string;
+  /** The civil date it ends on, 'YYYY-MM-DD' (the same as `date` for most). */
+  endDate: string;
   projected: boolean;
   light: boolean;
 }
+
+/** Where the household stands, as a key for the page (the timeline's phase); `day` only while counting. */
+export type StatusPhase = 'tehorah' | 'before_hefsek' | 'before_first_day' | 'counting' | 'postponed' | 'mikvah_tonight' | 'mikvah_not_recorded';
+
+/**
+ * The text commands, for the page's tables. They are what is typed and
+ * what the texts say, so they stay in English letters whatever the
+ * household's choice of terms (the texts are always in English letters).
+ */
+export const TEXT_COMMANDS: ReadonlyArray<{ text: string; meaning: string }> = [
+  { text: '1', meaning: 'a flow began' },
+  { text: '2', meaning: 'the hefsek is done' },
+  { text: '3', meaning: 'the count is broken' },
+  { text: '4', meaning: 'she immersed (mikvah)' },
+  { text: '5', meaning: 'a stain' },
+  { text: '9', meaning: 'the status' },
+  { text: '0', meaning: 'undo the last entry' },
+  { text: '?', meaning: 'the list of commands' },
+  { text: 'MENU', meaning: 'every other word: location, customs, reminders, phones, calendar and more' },
+  { text: 'STOP', meaning: 'stop all texts to this phone' },
+  { text: 'START', meaning: 'receive texts again' },
+];
+
+/** What may follow a digit, in the words the texts use. */
+export const TEXT_COMMANDS_NOTE =
+  'After 1, 3 or 5 add: day, night, yesterday day, yesterday night, or a time (9pm). After 2 or 4: yesterday. A past date also works: 1 11/22 night, 2 11/26, 4 12/3.';
 
 export interface StateArgs {
   data: HouseholdData;
@@ -53,14 +83,15 @@ export function dashboardState(args: StateArgs) {
   const alerts: Array<{ level: 'warn' | 'info'; text: string }> = [];
   if (data.sync.lastError) alerts.push({ level: 'warn', text: `Google Calendar: ${data.sync.lastError}` });
 
-  let status: { headline: string; detail: string } | null = null;
+  let status: { headline: string; detail: string; phase: StatusPhase; day: number | null } | null = null;
   let upcoming: UpcomingItem[] = [];
   let reminders: Array<{ at: number; when: string; kind: string; text: string }> = [];
-  let today: { hebrew: string; civil: string; part: 'night' | 'day' } | null = null;
+  let today: { hebrew: string; civil: string; part: 'night' | 'day'; date: string; civilDate: string } | null = null;
   let grid: Grid | null = null;
   if (computed) {
     const t = computed.timeline;
-    status = statusLines(t, tz, lang);
+    const phase = t.status.state === 'tehorah' ? null : t.status.phase;
+    status = { ...statusLines(t, tz, lang), phase: phase ? phase.kind : 'tehorah', day: phase && phase.kind === 'counting' ? phase.day : null };
     for (const w of t.warnings) alerts.push({ level: 'warn', text: warningText(w.code, lang) });
     for (const p of t.patterns) alerts.push({ level: 'warn', text: patternText(p, lang) });
     for (const n of t.vesatotNotes) alerts.push({ level: 'info', text: noteText(n, lang) });
@@ -72,6 +103,9 @@ export function dashboardState(args: StateArgs) {
       hebrew: `${weekday(t.nowOnah.abs)}, ${hebrewDate(t.nowOnah.abs, lang)}`,
       civil: civilDate(civilToday),
       part: t.nowOnah.part,
+      // The daytime of the Hebrew date it is now (after sunset: tomorrow's civil date), and the civil date.
+      date: isoDate(t.nowOnah.abs),
+      civilDate: isoDate(civilToday),
     };
     const endOf = (e: Computed['events'][number]): number =>
       e.timed ? e.timed.end : localToInstant({ ...absToCivil(e.allDay!.endAbsExclusive), hh: 0, mi: 0, ss: 0 }, tz);
@@ -83,16 +117,27 @@ export function dashboardState(args: StateArgs) {
       .slice(0, 60)
       .map(e => {
         let when: string;
+        let a: number;
+        let b: number;
         if (e.timed) {
-          const a = localAbs(e.timed.start, tz);
-          const b = localAbs(e.timed.end, tz);
+          a = localAbs(e.timed.start, tz);
+          // The end is exclusive: an event that ends at midnight ends on the day before.
+          b = e.timed.end > e.timed.start ? localAbs(e.timed.end - 1, tz) : a;
           const from = clock12(e.timed.start, tz, 'floor');
           const to = clock12(e.timed.end, tz, 'ceil');
-          when = a === b ? `${englishDate(a)}, ${from} to ${to}` : `${englishDate(a)} ${from} to ${englishDate(b)} ${to}`;
+          if (e.kind === 'mikvah') {
+            // The calendar event has a length only so that calendar apps show it; immersion is any time after nightfall.
+            b = a;
+            when = `${englishDate(a)}, after ${clock12(e.timed.start, tz, 'ceil')}`;
+          } else {
+            when = a === b ? `${englishDate(a)}, ${from} to ${to}` : `${englishDate(a)} ${from} to ${englishDate(b)} ${to}`;
+          }
         } else {
-          when = englishDate(e.allDay!.startAbs);
+          a = e.allDay!.startAbs;
+          b = e.allDay!.endAbsExclusive - 1;
+          when = englishDate(a);
         }
-        return { key: e.key, kind: e.kind, title: e.title, description: e.description, when, projected: e.projected, light: e.light === true };
+        return { key: e.key, kind: e.kind, title: e.title, description: e.description, when, date: isoDate(a), endDate: isoDate(b), projected: e.projected, light: e.light === true };
       });
     reminders = computed.reminders
       .filter(r => r.at > now)
@@ -196,7 +241,11 @@ export function dashboardState(args: StateArgs) {
       number: data.demo ? (site.secrets.telnyxNumber ?? DEMO_TEXTING_NUMBER) : smsReady(site) ? (site.secrets.telnyxNumber ?? null) : null,
       usedThisMonth: textsThisMonth(data, now),
       monthlyLimit: site.config.householdMonthlyLimit,
+      /** The reply to "?", as one sentence (kept for older pages). */
       commands: HELP_TEXT,
+      /** The same, as rows for a table, with what may follow a digit. */
+      commandList: TEXT_COMMANDS,
+      commandNote: TEXT_COMMANDS_NOTE,
     },
     messages: data.messages,
   };

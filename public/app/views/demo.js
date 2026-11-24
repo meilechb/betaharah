@@ -4,12 +4,14 @@
  * shows the reply the real system would send. Nothing is sent to a phone.
  */
 import { api, button, card, h, icon, pretty } from '../lib.js';
-import { S, adopt, render, t } from '../store.js';
+import { S, adopt, render, signOutLocally, t } from '../store.js';
 import { attempt, clearOnRedraw, refresh, region } from './shared.js';
 
 /** What is typed in the box, and the error of the last try. */
 let draftText = '';
 let error = '';
+/** The replies to the last text sent from the box, as the server returned them ({ text, suggestions? }). */
+let lastReplies = [];
 /** Incoming messages (by time) to which the real system sends no reply. */
 const noReply = new Set();
 
@@ -28,6 +30,7 @@ const QUICK = [
   ['9', 'status'],
   ['0', 'undo'],
   ['?', 'commands'],
+  ['MENU', 'every word'],
   ['STOP', 'stop texts'],
   ['START', 'texts again'],
 ];
@@ -44,20 +47,66 @@ function send(text, btn) {
   attempt(() => api('POST', '/api/demo/text', { text: value }), {
     button: btn,
     done: r => {
+      const replies = Array.isArray(r.replies) ? r.replies : r.reply ? [{ text: r.reply }] : [];
+      if (r.signedOut || !r.state) {
+        // DELETE ACCOUNT and YES, or this phone left the account: nothing is signed in any more.
+        // The page is loaded afresh, so that nothing of the account stays in memory or on screen.
+        signOutLocally();
+        location.replace('/app/?note=' + (replies.some(x => /deleted/i.test(x.text)) ? 'deleted' : 'left'));
+        return;
+      }
       adopt(r.state);
-      if (r.reply === null || r.reply === undefined) {
+      lastReplies = replies;
+      if (replies.length === 0) {
         const inbound = (S.messages || []).find(m => m.direction === 'in');
         if (inbound) noReply.add(inbound.at);
       }
       draftText = '';
       clearOnRedraw('demo-text');
       render();
+      document.getElementById('demo-text')?.focus({ preventScroll: true });
     },
     fail: message => {
       error = message;
       refresh('demo-chat');
+      document.getElementById('demo-text')?.focus({ preventScroll: true });
     },
   });
+}
+
+/** A link in a reply (a sign-in link from WEB, a calendar link): shown so that it can be opened or copied. */
+function linksIn(text) {
+  return (text.match(/https?:\/\/\S+/g) || []).map(u => u.replace(/[.,]$/, ''));
+}
+
+/** What the last reply offers: its tap-to-reply buttons (as an RCS phone shows them) and any link in it. */
+function lastReplyExtras() {
+  const chips = lastReplies.flatMap(r => r.suggestions || []);
+  const links = lastReplies.flatMap(r => linksIn(r.text));
+  if (chips.length === 0 && links.length === 0) return null;
+  return h(
+    'div',
+    { class: 'reply-extras' },
+    chips.length
+      ? h(
+          'div',
+          { class: 'quick chips', role: 'group', 'aria-label': 'Buttons under the last reply' },
+          h('p', { class: 'small muted chips-title' }, 'Buttons under the last reply, as a phone with RCS shows them:'),
+          chips.map((c, k) =>
+            h(
+              'button',
+              { type: 'button', class: 'quick-btn chip', id: 'demo-chip-' + k, 'aria-label': 'Send ' + c.send, onclick: e => send(c.send, e.currentTarget) },
+              h('span', {}, c.label),
+            ),
+          ),
+        )
+      : null,
+    links.map(u =>
+      /\/app\/\?k=/.test(u)
+        ? h('p', { class: 'small demo-link' }, icon('link', { size: 'sm' }), h('span', {}, 'The sign-in link in the reply works once, within 10 minutes. To try it, copy it, sign out, and open it: ', h('code', { class: 'copy' }, u)))
+        : h('p', { class: 'small demo-link' }, icon('link', { size: 'sm' }), h('span', {}, 'The link in the reply: ', h('code', { class: 'copy' }, u))),
+    ),
+  );
 }
 
 /** The conversation, oldest first, as bubbles. opts.limit: how many of the newest messages. */
@@ -121,7 +170,8 @@ export function tryTextCard() {
       return h(
         'div',
         { class: 'chat' },
-        recent.length ? thread(recent, { id: 'demo-thread', label: 'The latest texts' }) : h('p', { class: 'muted chat-empty' }, 'No texts yet. Try 9 for the status.'),
+        recent.length ? thread(recent, { id: 'demo-thread', label: 'The latest texts' }) : h('p', { class: 'muted chat-empty' }, 'No texts yet. Try 9 for the status, or MENU.'),
+        lastReplyExtras(),
         h(
           'form',
           {

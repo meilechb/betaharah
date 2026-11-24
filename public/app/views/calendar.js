@@ -194,13 +194,21 @@ function monthGrid(i) {
 
 function eventTime(e) {
   if (e.allDay) return 'All day';
+  if (e.kind === 'mikvah') return 'After ' + e.start;
   if (e.start === e.end || !e.end) return e.start;
   if (e.startDate !== e.endDate) return e.start + ' to ' + e.end + ' the next morning';
   return e.start + ' to ' + e.end;
 }
 
+/** "the night of 15 Kislev": the Hebrew date a night that begins on this civil date belongs to. */
+function nightOf(date) {
+  const next = index().days.get(addDays(date, 1));
+  return next ? 'The night of ' + next.hebrewDay + ' ' + next.hebrewMonth + ': ' : '';
+}
+
 function eventRow(e, continuing) {
   const n = e.kind === 'clean_day' ? cleanDayNumber(e) : null;
+  const night = !continuing && !e.allDay && isNight(e) && e.kind !== 'flow';
   return h(
     'li',
     { class: 'ev ' + e.kind + (e.projected ? ' projected' : '') },
@@ -209,7 +217,7 @@ function eventRow(e, continuing) {
       'div',
       { class: 'ev-main' },
       h('div', { class: 'ev-title' }, e.title, e.projected && !/projected/.test(e.title) ? ' (projected)' : ''),
-      h('div', { class: 'ev-when' }, continuing ? 'From the evening before, until ' + e.end : eventTime(e)),
+      h('div', { class: 'ev-when' }, continuing ? 'From the evening before, until ' + e.end : (night ? nightOf(e.startDate) : '') + eventTime(e)),
       e.description && !continuing ? h('div', { class: 'ev-desc' }, e.description) : null,
     ),
   );
@@ -231,6 +239,7 @@ function dayDetail(i) {
       h('h3', { id: 'detail-title' }, longDate(date), date === S.grid.today ? h('span', { class: 'tag info' }, 'Today') : null),
       h('p', { class: 'hebrew-date', lang: S.terms === 'he' ? 'he' : null }, day.hebrewDay + ' ' + day.hebrewMonth),
     ),
+    nextDay(i, date, day),
     h(
       'p',
       { class: 'sun-times' },
@@ -252,6 +261,17 @@ function dayDetail(i) {
 }
 
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The Hebrew date changes at sunset: says until when this day's Hebrew date lasts, and which one follows. */
+function nextDay(i, date, day) {
+  const next = i.days.get(addDays(date, 1));
+  if (!next || !day.sunset) return null;
+  return h(
+    'p',
+    { class: 'small muted date-change' },
+    t(day.hebrewDay + ' ' + day.hebrewMonth + ' until {sunset} (' + day.sunset + '). The night after it belongs to ' + next.hebrewDay + ' ' + next.hebrewMonth + '.'),
+  );
+}
 
 /** The calendar card. Call only when S.grid is set. */
 export function calendarCard() {

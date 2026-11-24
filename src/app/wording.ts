@@ -6,14 +6,18 @@ import { civilDate, fullDate, onahLabel, weekday } from '../engine/calendar';
 import type { LogEntry, LogWarningCode } from '../engine/cycle';
 import type { PatternAlert } from '../engine/patterns';
 import { clock12 } from '../engine/present';
-import { capital, dayOfMonth, fill, term, type TermLanguage } from '../engine/terms';
+import { capital, dayOfMonth, fill, hebrewDate, term, type TermLanguage } from '../engine/terms';
 import type { Timeline } from '../engine/timeline';
 import type { VesatotNote } from '../engine/vesatot';
 
 /** An onah after a colon: "the night of Saturday, Nov 21, 2026 (13 Kislev 5787)" or "Sunday, 13 Kislev 5787 (Nov 22, 2026), by day" */
 function onahText(onah: { abs: number; part: 'night' | 'day' }, lang: TermLanguage): string {
-  const label = onahLabel(onah, lang);
-  return onah.part === 'night' ? label.charAt(0).toLowerCase() + label.slice(1) : label;
+  if (onah.part === 'day') return onahLabel(onah, lang);
+  // A night is named by the civil evening it begins on, and the Hebrew date it belongs to. "The night of
+  // Shabbat" would be read as Friday night, so the evening is named with the civil weekday: "Saturday evening".
+  const evening = onah.abs - 1;
+  const day = weekday(evening) === 'Shabbat' ? 'Saturday' : weekday(evening);
+  return `${day} evening, ${civilDate(evening)} (the night of ${hebrewDate(onah.abs, lang)})`;
 }
 
 export function entryText(e: LogEntry, lang: TermLanguage): string {

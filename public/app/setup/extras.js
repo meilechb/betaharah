@@ -7,6 +7,29 @@ import { P, S, adopt, render, t } from '../store.js';
 import { back, finish, flow, goTo, next, onEnter, problem, screen } from './flow.js';
 import { codeField, phoneField, readNumber } from './phone.js';
 
+/**
+ * The text commands as a table, from S.sms.commandList. They are what is
+ * typed and what the replies say, so they stay in English letters whatever
+ * the choice of terms; the last line says so.
+ */
+function commandsTable(sms) {
+  return [
+    h(
+      'table',
+      { class: 'commands' },
+      h('caption', { class: 'visually-hidden' }, 'Text commands'),
+      h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Text'), h('th', { scope: 'col' }, 'What it does'))),
+      h(
+        'tbody',
+        {},
+        (sms.commandList || []).map(r => h('tr', {}, h('td', {}, h('kbd', {}, r.text)), h('td', {}, r.meaning))),
+      ),
+    ),
+    sms.commandNote ? h('p', { class: 'help' }, sms.commandNote) : null,
+    h('p', { class: 'help' }, 'Text messages always write halachic terms in English letters, so this table does too.'),
+  ];
+}
+
 // ===================== the calendar app =====================
 
 let calError = '';
@@ -357,16 +380,6 @@ export function phonesView() {
 
 // ===================== the last screen =====================
 
-/** The text commands ("1 flow began, 2 hefsek done, ...") as rows of digit and meaning; null when the text has another shape. */
-function commandRows(text) {
-  const at = text.indexOf('. ');
-  const first = at < 0 ? text : text.slice(0, at);
-  const rest = at < 0 ? '' : text.slice(at + 2);
-  const rows = first.split(',').map(s => /^\s*(\d)\s+(.+?)\.?\s*$/.exec(s));
-  if (rows.length < 2 || rows.some(r => !r)) return null;
-  return { rows: rows.map(r => [r[1], r[2]]), rest };
-}
-
 export function doneView() {
   const todo = [];
   if (!S.app.place) todo.push({ text: 'Choose the location', step: 'place' });
@@ -376,27 +389,12 @@ export function doneView() {
   const sms = S.sms;
   let texting = null;
   if (sms.ready && sms.number) {
-    const parsed = commandRows(sms.commands || '');
     texting = h(
       'div',
       { class: 'setup-texting' },
       h('h3', {}, icon('message'), 'Recording by text message'),
-      h('p', {}, 'Text one digit to ', h('strong', { class: 'nowrap' }, pretty(sms.number)), ':'),
-      parsed
-        ? [
-            h(
-              'table',
-              { class: 'commands' },
-              h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Text'), h('th', { scope: 'col' }, 'What it does'))),
-              h(
-                'tbody',
-                {},
-                parsed.rows.map(([digit, meaning]) => h('tr', {}, h('td', {}, h('span', { class: 'digit' }, digit)), h('td', {}, meaning))),
-              ),
-            ),
-            parsed.rest ? h('p', { class: 'muted small' }, parsed.rest) : null,
-          ]
-        : h('p', {}, sms.commands),
+      h('p', {}, 'Text one of these to ', h('strong', { class: 'nowrap' }, pretty(sms.number)), ':'),
+      commandsTable(sms),
     );
   }
 
