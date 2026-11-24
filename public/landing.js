@@ -37,7 +37,7 @@ function smsLink(number, label) {
 function texting(info) {
   const number = typeof info.textingNumber === 'string' && info.textingNumber ? info.textingNumber : null;
   if (number) {
-    show('hero-sms', 'Text ', el('code', {}, 'JOIN'), ' to ', smsLink(number), '.');
+    show('hero-sms', 'No app needed. Text ', el('code', {}, 'JOIN'), ' to ', smsLink(number), ' and just tell it what happened, in your own words.');
     show('offline-note');
   } else if (info.sms) {
     show('offline-note', 'Sign up on the website. Then you can text it too.');

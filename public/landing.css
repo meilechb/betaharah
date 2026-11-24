@@ -2833,6 +2833,223 @@ body.lp {
   width: fit-content;
   margin: var(--space-5) auto 0;
 }
+.demo .month-nav {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.demo .month-title {
+  text-align: center;
+}
+.demo .month-title h3 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.demo .hebrew-months {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.demo .cal-btn {
+  width: 44px;
+  height: 44px;
+}
+.demo .day {
+  min-height: 52px;
+  cursor: pointer;
+}
+.demo .day:focus,
+.demo .day:focus-visible,
+.try-sheet .addbtn:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.demo .day.pulse {
+  animation: day-pulse 0.7s ease;
+}
+@keyframes day-pulse {
+  0% { box-shadow: inset 0 0 0 3px var(--accent); }
+  100% { box-shadow: inset 0 0 0 0 var(--accent); }
+}
+.demo-status.changed {
+  animation: line-in 0.45s ease;
+}
+@keyframes line-in {
+  from { opacity: 0.2; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo .day.pulse,
+  .demo-status.changed { animation: none; }
+}
+
+.try-sheet {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 20px;
+  width: min(440px, calc(100% - 32px));
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--lp-shadow-xl, 0 16px 40px rgba(28, 34, 48, 0.18));
+}
+.try-sheet::backdrop {
+  background: rgba(28, 34, 48, 0.45);
+}
+.try-sheet h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-body);
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+.try-sheet p {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+.try-sheet .addgrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+@media (min-width: 480px) {
+  .try-sheet .addgrid { grid-template-columns: 1fr 1fr; }
+}
+.try-sheet .addbtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.try-sheet .addbtn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.try-sheet .day-more {
+  margin: 4px 0 12px;
+}
+.try-sheet .day-more > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.try-sheet .btn {
+  margin-top: 8px;
+}
+@media (max-width: 640px) {
+  .try-sheet {
+    width: 100%;
+    max-width: none;
+    margin: auto 0 0;
+    border-radius: 18px 18px 0 0;
+    max-height: 88vh;
+    overflow: auto;
+  }
+}
+
+.iphone {
+  width: min(100%, 300px);
+  margin: 0 auto;
+  padding: 10px;
+  border-radius: 36px;
+  background: #1c2230;
+  box-shadow: 0 18px 40px rgba(28, 34, 48, 0.18);
+}
+.iphone-screen {
+  border-radius: 28px;
+  background: var(--surface);
+  overflow: hidden;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+.iphone-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 4px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.iphone-island {
+  width: 72px;
+  height: 18px;
+  border-radius: 12px;
+  background: #1c2230;
+}
+.iphone-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 12px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.iphone-head .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #2a3c6e;
+  color: #f1ebe0;
+  font-weight: 700;
+}
+.iphone-head small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.imsg {
+  list-style: none;
+  margin: 0;
+  padding: 16px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.imsg .stamp {
+  align-self: center;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.imsg .out,
+.imsg .in {
+  max-width: 86%;
+  padding: 10px 14px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.imsg .out {
+  align-self: flex-end;
+  background: #2a3c6e;
+  color: #f1ebe0;
+  border-radius: 18px 18px 4px 18px;
+}
+.imsg .in {
+  align-self: flex-start;
+  background: #e4e9f4;
+  color: #1c2230;
+  border-radius: 18px 18px 18px 4px;
+}
+@media (min-width: 720px) {
+  .iphone { margin: 0 0 0 auto; }
+}
 .month .day {
   width: 100%;
   box-sizing: border-box;

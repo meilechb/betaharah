@@ -498,19 +498,21 @@ describe('Try it, on the home page', () => {
     const v = new Client('192.0.2.52');
     expect((await v.post('/api/try', { place: { postal: '08701' }, today, entries: [] })).status).toBe(200);
     expect((await v.post('/api/try', { place: { name: 'Atlantis' }, today })).status).toBe(400);
-    expect((await v.post('/api/try', { place: { latitude: 40, longitude: -74, timeZone: TZ }, today })).status).toBe(400);
+    expect((await v.post('/api/try', { place: { latitude: 0, longitude: 0 }, today })).status).toBe(400);
+    expect((await v.post('/api/try', { place: { latitude: 40.1, longitude: -74.2 }, today })).status).toBe(200);
     const custom = await v.post('/api/try', { place: { name: 'Lakewood, NJ' }, today, customs: { longCycle: 'exempt' } });
     expect(custom.status).toBe(400);
     expect(custom.json.error).toBe('customs: longCycle cannot be changed here');
     const stain = await v.post('/api/try', { place: { name: 'Lakewood, NJ' }, today, entries: [{ kind: 'stain', date: '2026-11-10', part: 'day' }] });
-    expect(stain.json.outcomes).toEqual([{ index: 0, ok: false, error: 'That kind of entry cannot be added here.' }]);
+    expect(stain.status).toBe(200);
+    expect(stain.json.outcomes[0].ok).toBe(true);
     const thirteen = Array.from({ length: 13 }, (_, k) => flow(`2026-0${1 + (k % 9)}-10`));
     const tooMany = await v.post('/api/try', { place: { name: 'Lakewood, NJ' }, today, entries: thirteen });
     expect(tooMany.status).toBe(400);
     expect(tooMany.json.error).toBe('At most 12 dates can be added here.');
     const choices = await v.get('/api/try');
     expect(choices.json.customs.map((c: any) => c.key)).toEqual(['minWaitDays', 'beinonitDays', 'orZarua']);
-    expect(choices.json.kinds).toEqual(['flow', 'hefsek', 'mikvah']);
+    expect(choices.json.kinds).toEqual(['flow', 'hefsek', 'mikvah', 'stain', 'broken']);
     expect(choices.json.maxEntries).toBe(TRY_LIMITS.maxEntries);
   });
 
