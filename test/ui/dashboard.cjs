@@ -8,7 +8,9 @@
 // the right days), recording and removing an entry, a refusal shown next to the
 // form, Customs (edit, discard, the leave guard, save), the Settings tab (its sections: settings.cjs), the
 // test-account banner and "Try a text", both forms of the terms, and no sideways
-// scrolling at 360 px. Exits 0 when every step passed.
+// scrolling at 360 px; Today's "Text this number" and the screen without a location;
+// accounts signed in with Google or with no phone (state rewritten in the browser);
+// the header's Sign out; a failed load. Exits 0 when every step passed.
 const { chromium } = require('playwright');
 const out = process.argv[2] || '.';
 const base = process.argv[3] || 'http://127.0.0.1:8812';
@@ -295,6 +297,171 @@ const H = { 'x-betaharah': '1' };
         await noSideways(name);
         await page.screenshot({ path: `${out}/dash-${name.toLowerCase()}-${w}-${scheme}.png`, fullPage: true });
       }
+    });
+  }
+
+  await page.emulateMedia({ colorScheme: 'light' });
+
+  // ----- Today explains texting; Today without a location; accounts without a phone -----
+  // The state the server sends is rewritten in the browser for the cases the test account is not.
+
+  let shapeOf = null;
+  let routed = false;
+  const reshape = async shape => {
+    shapeOf = shape;
+    if (routed) return;
+    routed = true;
+    await page.route('**/api/state', async route => {
+      const r = await route.fetch();
+      const json = await r.json();
+      if (shapeOf && json && json.state) json.state = shapeOf(JSON.parse(JSON.stringify(json.state)));
+      await route.fulfill({ response: r, json });
+    });
+  };
+  const unshape = async () => {
+    shapeOf = null;
+    if (routed) await page.unroute('**/api/state');
+    routed = false;
+  };
+  /** As an ordinary account where texting works (not the test account, whose "Try a text" shows the number already). */
+  const REAL = s => ({ ...s, demo: false, sms: { ...s.sms, simulated: false } });
+  const GOOGLE_ONLY = s => ({ ...REAL(s), account: { ...s.account, number: null, method: 'google', hasPassword: false, googleEmail: 'ada@example.com' }, phones: [] });
+  const PHONE_AND_GOOGLE = s => ({ ...REAL(s), account: { ...s.account, number: null, method: 'google', hasPassword: false, googleEmail: 'ada@example.com' }, phones: s.phones.slice(0, 1).map(p => ({ ...p, me: false })) });
+  /** A fresh load of Today (not only a change of the hash), so that /api/state is asked again. */
+  const openToday = async () => {
+    await page.goto('about:blank');
+    await page.goto(base + '/app/#today');
+    await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Today")');
+  };
+  const noLeftovers = async label => {
+    const text = await page.textContent('#root');
+    const m = /\b(undefined|null|NaN)\b/.exec(text);
+    if (m) throw new Error((label || 'the page') + ' shows "' + m[1] + '"');
+  };
+  const hashIs = async want => {
+    for (let i = 0; i < 40 && (await page.evaluate(() => location.hash)) !== want; i += 1) await page.waitForTimeout(50);
+    const got = await page.evaluate(() => location.hash);
+    if (got !== want) throw new Error('address is ' + got + ', expected ' + want);
+  };
+
+  await step('today: the test account shows "Try a text", not a second card with the number', async () => {
+    await unshape();
+    await openToday();
+    await page.waitForSelector('#demo-text');
+    if (await page.locator('#text-card').count()) throw new Error('both cards shown');
+  });
+
+  await step('today: "Text this number" with the number, four digits and a link to every command', async () => {
+    await reshape(REAL);
+    await openToday();
+    await page.waitForSelector('#text-card h2:has-text("Text this number"), #text-card :text("Text this number")');
+    const s = await state();
+    const number = s.sms.number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3');
+    if ((await page.textContent('#text-number')).trim() !== number) throw new Error('number: ' + (await page.textContent('#text-number')));
+    if ((await page.getAttribute('#text-number', 'href')) !== 'sms:' + s.sms.number) throw new Error('not a text link');
+    const digits = await page.$$eval('#text-card kbd', k => k.map(x => x.textContent));
+    if (digits.join(' ') !== '1 2 4 9') throw new Error('digits: ' + digits.join(' '));
+    if (!(await page.textContent('#text-card')).includes('Status')) throw new Error('no meaning for 9');
+    await noLeftovers('today');
+    await page.click('#text-all');
+    await hashIs('#settings/texting');
+    await page.waitForSelector('#st-pane-texting');
+  });
+
+  await step('today: no "Text this number" while the account has no phone; nothing breaks for a Google account', async () => {
+    await reshape(GOOGLE_ONLY);
+    await openToday();
+    await page.waitForSelector('.status-card .headline');
+    if (await page.locator('#text-card').count()) throw new Error('shown without a phone');
+    await noLeftovers('today, Google, no phone');
+    await reshape(PHONE_AND_GOOGLE);
+    await openToday();
+    await page.waitForSelector('#text-card');
+    await noLeftovers('today, phone and Google');
+    for (const name of ['Log', 'Customs', 'Settings']) {
+      await tab(name);
+      await noLeftovers(name + ', phone and Google');
+    }
+  });
+
+  await step('today: without a location, the reason and a button to Settings, Location', async () => {
+    await reshape(s => ({ ...REAL(s), status: null, grid: null, upcoming: [] }));
+    await openToday();
+    await page.waitForSelector('#no-location:text-is("Nothing can be calculated until a location is chosen.")');
+    await page.waitForSelector('#text-card');
+    await noSideways('today without a location');
+    await page.click('#choose-location');
+    await hashIs('#settings/location');
+    await page.waitForSelector('#st-title:has-text("Location")');
+    await unshape();
+  });
+
+  // ----- the header's Sign out -----
+
+  await step('header: a quiet "Sign out" that fits at 360 px', async () => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await openToday();
+    const btn = page.locator('header.dash-top #top-sign-out');
+    if ((await btn.textContent()).trim() !== 'Sign out') throw new Error('label: ' + (await btn.textContent()));
+    const b = await btn.boundingBox();
+    const t = await page.locator('header.dash-top h1').boundingBox();
+    if (b.height < 44) throw new Error('only ' + b.height + ' px high');
+    if (Math.abs(b.y + b.height / 2 - (t.y + t.height / 2)) > 12) throw new Error('not on the title’s line');
+    if (b.x + b.width > 360) throw new Error('off the screen');
+    if (b.x < t.x + t.width) throw new Error('overlaps the title');
+    await noSideways('header at 360 px');
+    await page.screenshot({ path: out + '/dash-header-360.png' });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForTimeout(100);
+    const wide = await page.locator('header.dash-top').boundingBox();
+    if (wide.height > 120) throw new Error('header is ' + wide.height + ' px high at 1280 px');
+    await page.setViewportSize({ width: 390, height: 860 });
+  });
+
+  await step('header: leaving with unsaved customs asks first; then Sign out signs out', async () => {
+    await tab('Customs');
+    if (!(await page.isVisible('#cu-orZarua-body label.choice'))) await page.click('#cu-orZarua');
+    await page.locator('#cu-orZarua-body label.choice:has(input:not(:checked))').first().click();
+    await page.waitForSelector('.save-bar.dirty');
+    await page.click('#top-sign-out');
+    await page.waitForSelector('dialog[open]');
+    await page.click('dialog button:has-text("Stay and save")');
+    await page.waitForSelector('dialog', { state: 'detached' });
+    await page.click('#cu-discard');
+    await page.waitForSelector('.save-bar.dirty', { state: 'detached' });
+    await page.click('#top-sign-out');
+    await page.waitForSelector('form.login');
+    const r = await page.request.get(base + '/api/state', { headers: H });
+    if (r.status() !== 401) throw new Error('still signed in: ' + r.status());
+    if (/Kislev|Tevet|Shevat|Adar|Nisan|Iyar|Sivan|Tamuz|Elul|Tishrei|Cheshvan/.test(await page.textContent('body'))) throw new Error('the account is still on screen');
+  });
+
+  // ----- a page that cannot be loaded -----
+
+  for (const [label, fulfil, heading] of [
+    ['the site cannot be loaded', { status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'The site is being updated. Try again in a minute.' }) }, 'The page could not be loaded'],
+    ['the site is not set up', { status: 200, contentType: 'application/json', body: JSON.stringify({ configured: false }) }, 'Not set up yet'],
+  ]) {
+    await step('a failed load (' + label + '): the reason and "Back to the home page"', async () => {
+      const c = await browser.newContext({ viewport: { width: 360, height: 800 } });
+      const p = await c.newPage();
+      const own = [];
+      p.on('pageerror', e => own.push('pageerror: ' + e.message));
+      p.on('console', m => {
+        // The refused /api/public is logged by the browser; anything else is an error.
+        if (m.type() === 'error' && !/status of 503/.test(m.text())) own.push('console: ' + m.text());
+      });
+      await p.route('**/api/public', route => route.fulfill(fulfil));
+      await p.goto(base + '/app/');
+      await p.waitForSelector(`.card.login h2:has-text("${heading}")`);
+      if (fulfil.status === 503) await p.waitForSelector('.alert:has-text("The site is being updated")');
+      const a = p.locator('a:has-text("Back to the home page")');
+      if ((await a.getAttribute('href')) !== '/') throw new Error('link: ' + (await a.getAttribute('href')));
+      const wide = await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      if (wide > 1) throw new Error(wide + ' px wider than the screen');
+      await p.screenshot({ path: out + '/dash-failed-' + (fulfil.status === 503 ? 'load' : 'setup') + '-360.png' });
+      await c.close();
+      if (own.length) throw new Error(own.join(' | '));
     });
   }
 

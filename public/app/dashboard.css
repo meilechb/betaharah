@@ -34,10 +34,41 @@ header.dash-top h1 a:focus-visible {
   align-items: center;
   gap: var(--space-1);
 }
+/* A page that cannot be used: the reason, Try again, and the way back to the home page. */
+.fatal .fatal-home {
+  margin: var(--space-4) 0 0;
+}
+
+/* "Sign out" in the header: quiet, after the date line; on a phone, on the title's line. */
+header.dash-top .date-line {
+  margin-left: auto;
+}
+header.dash-top .top-signout {
+  min-height: var(--tap);
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  font-weight: var(--weight-normal);
+  flex: none;
+}
+header.dash-top .top-signout:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
 @media (max-width: 640px) {
   header.dash-top {
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+  header.dash-top .top-signout {
+    grid-column: 2;
+    grid-row: 1;
+    margin-right: calc(-1 * var(--space-3));
+  }
+  header.dash-top .date-line {
+    grid-column: 1 / -1;
+    margin-left: 0;
   }
   .date-line {
     text-align: left;
@@ -1656,4 +1687,46 @@ button.quick-btn.chip span {
 }
 .date-change {
   margin: calc(-1 * var(--space-1)) 0 var(--space-2);
+}
+
+/* Today: "Text this number" */
+.text-card .text-number {
+  margin: 0 0 var(--space-2);
+}
+.text-card .text-number a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.text-card .help {
+  margin: 0 0 var(--space-2);
+}
+table.text-digits {
+  margin: 0 0 var(--space-3);
+  border-collapse: collapse;
+}
+.text-digits th,
+.text-digits td {
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  vertical-align: baseline;
+  border: 0;
+}
+.text-digits th[scope='row'] {
+  width: 1%;
+  white-space: nowrap;
+  font-weight: var(--weight-normal);
+}
+.text-digits kbd {
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }

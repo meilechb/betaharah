@@ -439,9 +439,10 @@ const problems = [];
     await page.waitForSelector('#terms-en[aria-pressed="true"]');
   });
 
-  await step('settings (loosely): the tab opens and shows the signed-in number', async () => {
+  await step('settings (loosely): the tab opens and shows the signed-in number; the header has Sign out', async () => {
     await tab('Settings');
     await has('.panel', PRETTY);
+    await has('header.dash-top #top-sign-out', 'Sign out');
     await noSideways();
   });
 

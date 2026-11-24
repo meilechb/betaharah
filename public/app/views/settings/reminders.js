@@ -5,7 +5,7 @@
  * "Advanced", and the coming reminders as their own view
  * (#settings/reminders/scheduled).
  */
-import { emptyState, h, icon } from '../../lib.js';
+import { emptyState, h, icon, pretty } from '../../lib.js';
 import { S, t } from '../../store.js';
 import { refresh, region } from '../shared.js';
 import { blockRow, choiceCards, clock, duration, errorText, group, more, navRow, saveApp, switchRow, tn } from './ui.js';
@@ -196,9 +196,11 @@ function mainView() {
     body: [
       !S.sms.ready
         ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'Text messaging is not available on this site yet, so no reminder is sent. What you set here applies once it is.'))
-        : !anyPhone
-          ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'No phone receives text reminders yet. ', h('a', { href: '#settings/phones' }, 'Turn them on for a phone under Phones'), '.'))
-          : null,
+        : S.phones.length === 0
+          ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'No phone is on this account yet, so no reminder is sent. ', h('a', { href: '#settings/phones/add' }, 'Add a phone under Phones'), '.'))
+          : !anyPhone
+            ? h('p', { class: 'st-note' }, icon('info', { size: 'sm' }), h('span', {}, 'No phone receives text reminders yet. ', h('a', { href: '#settings/phones' }, 'Turn them on for a phone under Phones'), '.'))
+            : null,
       group({ title: 'Kinds of reminder', id: 'rem-kinds-group', footer: 'Times are for the place under Location.' }, region('rem-kinds', () => h('div', { class: 'st-rows-inner' }, kinds().map(kindRow)))),
       group(
         { title: tn('{shabbat} and {yom_tov}'), id: 'rem-rest-group' },
@@ -278,7 +280,7 @@ function scheduledView() {
     return h(
       'div',
       {},
-      h('p', { class: 'st-lead-text' }, who.length ? 'Sent to the phones that receive that kind: ' + who.map(p => p.name || p.number).join(', ') + '.' : 'No phone receives reminders now, so these are not sent.'),
+      h('p', { class: 'st-lead-text' }, who.length ? 'Sent to the phones that receive that kind: ' + who.map(p => p.name || pretty(p.number)).join(', ') + '.' : S.phones.length === 0 ? 'No phone is on this account yet, so these are not sent.' : 'No phone receives reminders now, so these are not sent.'),
       h(
         'ol',
         { class: 'st-timeline' },
@@ -319,6 +321,7 @@ export const remindersSection = {
   },
   flag: () => {
     if (!S.sms.ready) return null;
+    if (S.phones.length === 0) return { kind: 'info', text: 'No phone yet' };
     if (!S.phones.some(p => p.texts && !p.optedOut)) return { kind: 'info', text: 'No phone receives them yet' };
     return null;
   },

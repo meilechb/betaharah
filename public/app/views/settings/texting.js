@@ -11,7 +11,7 @@ import { h, icon, pretty } from '../../lib.js';
 import { S, t } from '../../store.js';
 import { blockRow, group, infoRow } from './ui.js';
 
-const DIGITS = [
+export const DIGITS = [
   ['1', '{flow} began'],
   ['2', '{hefsek} done'],
   ['3', 'Count broken'],
@@ -99,6 +99,14 @@ function view() {
     parent: '',
     lead: 'Record and check by text message, from a phone on this account that may record by text.',
     body: [
+      S.phones.length === 0
+        ? h(
+            'p',
+            { class: 'st-note', id: 'txt-no-phone' },
+            icon('info', { size: 'sm' }),
+            h('span', {}, 'No phone is on this account yet, and texts are accepted only from a phone on the account. ', h('a', { href: '#settings/phones/add' }, 'Add a phone under Phones'), '.'),
+          )
+        : null,
       group(
         { title: 'The number to text', id: 'txt-number' },
         infoRow({
