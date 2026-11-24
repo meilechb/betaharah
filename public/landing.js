@@ -1,6 +1,9 @@
-// The public landing page. Asks the server what the site allows (/api/public)
-// and fills in the "By text message only" card and the sign-up note.
-// The page reads correctly without this script; nothing here is required.
+// The public home page. The page is complete without this script; it only:
+//  - asks the server what the site allows (GET /api/public) and shows the
+//    number to text JOIN to when there is one, or why sign-up is limited;
+//  - says "Open my calendar" instead of "Sign in" to someone signed in;
+//  - draws a line under the navigation once the page is scrolled;
+//  - fades sections in as they come into view (not with reduced motion).
 
 /** '+18885550100' -> '(888) 555-0100'; other numbers are shown as they are. */
 function pretty(number) {
@@ -15,52 +18,66 @@ function el(tag, attrs, ...children) {
   return node;
 }
 
-function textOnly(info) {
-  const body = document.getElementById('text-only-body');
-  const more = document.getElementById('text-only-more');
-  if (!body || !more) return;
-  more.replaceChildren();
+const byId = id => document.getElementById(id);
+
+function show(id, ...children) {
+  const node = byId(id);
+  if (!node) return;
+  node.replaceChildren(...children);
+  node.hidden = children.length === 0;
+}
+
+function smsLink(number, label) {
+  return el('a', { href: `sms:${number}?body=JOIN` }, label || pretty(number));
+}
+
+function texting(info) {
   const number = typeof info.textingNumber === 'string' && info.textingNumber ? info.textingNumber : null;
   if (number) {
-    body.textContent = 'No website needed: sign up and keep everything by text message.';
-    more.append(
-      el('p', { class: 'join-number' }, 'Text ', el('code', {}, 'JOIN'), ' to ', el('span', { class: 'nowrap' }, pretty(number))),
+    show('hero-sms', 'Or start by text: text ', el('code', {}, 'JOIN'), ' to ', smsLink(number), '.');
+    show('closing-sms', 'Or text ', el('code', {}, 'JOIN'), ' to ', smsLink(number), ' from any phone.');
+    show(
+      'offline-cta',
       el(
-        'p',
-        { class: 'muted small' },
-        'Texting JOIN is your request to create an account and to receive the replies. Text ',
-        el('code', {}, 'MENU'),
-        ' at any time for the list of everything you can do. Reply STOP to stop all texts.',
+        'a',
+        { class: 'btn btn-light btn-lg sms-btn', href: `sms:${number}?body=JOIN` },
+        `Text JOIN to ${pretty(number)}`,
       ),
-      el('div', { class: 'actions' }, el('a', { class: 'button', href: `sms:${number}?body=JOIN` }, 'Text JOIN from this phone')),
     );
+    show('offline-note');
   } else if (info.sms) {
-    body.textContent = 'Signing up by text message is not open on this site at the moment. Sign up on the website. After that, you can record dates by text from your phone.';
+    show('offline-note', 'Signing up by text is not open on this site at the moment. Sign up on the website; after that, everything else works by text.');
   } else {
-    body.textContent = 'Text messaging is not available on this site yet. Everything can be done on the website.';
+    show('offline-note', 'Text messaging is not available on this site yet. Everything can be done on the website.');
   }
 }
 
 function signupNote(info) {
-  const note = document.getElementById('signup-note');
-  if (!note) return;
   let text = '';
-  if (info.signup === 'invite') text = 'Sign-up is by invitation at the moment. If someone sent you an invitation link, open it to begin.';
+  if (info.signup === 'invite') text = 'Sign-up is by invitation at the moment. If someone sent you an invitation, open it to begin.';
   else if (info.signup === 'closed') text = 'Sign-up is closed at the moment. If you have an account, you can sign in.';
-  note.textContent = text;
-  note.hidden = text === '';
+  if (text) show('signup-note', text);
+}
+
+function prefixes(info) {
+  const list = Array.isArray(info.prefixes) ? info.prefixes.filter(p => typeof p === 'string' && p) : [];
+  if (list.length === 0 || (list.length === 1 && list[0] === '+1')) return;
+  const node = byId('faq-prefixes');
+  if (node) node.textContent = `At the moment, signing up needs a phone number that begins with ${list.join(' or ')}.`;
 }
 
 function signedIn() {
-  for (const id of ['hero-start', 'way-start']) {
-    const a = document.getElementById(id);
-    if (a) a.textContent = 'Open your calendar';
+  for (const id of ['hero-start', 'closing-start']) {
+    const a = byId(id);
+    if (a && a.firstChild) a.firstChild.textContent = 'Open my calendar';
   }
-  const nav = document.getElementById('nav-sign-in');
-  if (nav) nav.textContent = 'Your calendar';
+  const nav = byId('nav-sign-in');
+  if (nav) nav.textContent = 'Open my calendar';
+  const start = byId('nav-start');
+  if (start) start.hidden = true;
 }
 
-async function start() {
+async function fromServer() {
   let info;
   try {
     const res = await fetch('/api/public', { headers: { accept: 'application/json' } });
@@ -70,9 +87,41 @@ async function start() {
     return; // the page keeps its general wording
   }
   if (!info || !info.configured) return;
-  textOnly(info);
+  texting(info);
   signupNote(info);
+  prefixes(info);
   if (info.signedIn) signedIn();
 }
 
-start();
+function navLine() {
+  const nav = document.querySelector('.nav');
+  if (!nav) return;
+  const update = () => nav.classList.toggle('scrolled', window.scrollY > 8);
+  update();
+  window.addEventListener('scroll', update, { passive: true });
+}
+
+function reveal() {
+  if (!('IntersectionObserver' in window)) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const targets = document.querySelectorAll('.section-head, .split > *, .flow-steps > li, .cal-compare > *, .trio, .signup-steps > li, .priv-grid > li, .limits, .start-steps > li, .faq');
+  const below = [...targets].filter(t => t.getBoundingClientRect().top > window.innerHeight);
+  const io = new IntersectionObserver(
+    entries => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        e.target.classList.add('revealed');
+        io.unobserve(e.target);
+      }
+    },
+    { rootMargin: '0px 0px -8% 0px' },
+  );
+  for (const t of below) {
+    t.classList.add('reveal-pending');
+    io.observe(t);
+  }
+}
+
+navLine();
+reveal();
+fromServer();

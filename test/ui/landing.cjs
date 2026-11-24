@@ -1,118 +1,294 @@
-// Drives the public pages (the landing page, Help, Privacy, Terms) in a real
+// Drives the public pages (the home page, Help, Privacy, Terms) in a real
 // browser against a locally running app.
 //
 //   npx wrangler dev --port 8814 --persist-to <a new empty directory>
 //   node test/ui/landing.cjs http://127.0.0.1:8814 [directory for screenshots]
 //
-// For each page, at 360 px and 1280 px, light and dark: the key content is
-// there, no console error or refused request (the Content Security Policy
-// reports to the console), no sideways scrolling at 360 px, every link to
-// the site itself answers and every link to a place on a page finds it.
-// The "By text message only" card is checked against GET /api/public: with
-// a texting number it says to text JOIN to it; without one it names no
-// number. Needs Playwright with Chromium. Exits 0 when every check passed.
+// The home page, at 360, 768, 1280 and 1600 px, light and dark:
+//   - it answers 200, with no console error, page error or refused request
+//     (the Content Security Policy reports to the console), and nothing is
+//     requested from another origin;
+//   - there is exactly one h1, a skip link to #main, and no sideways scrolling;
+//   - every link resolves: links to the site answer 200 (and their #place
+//     exists), links to places on the page find them, and no link leaves the
+//     site except sms: and mailto:;
+//   - what the page says about texting matches GET /api/public.
+// Then, at 1280 px: the texting lines in both states of /api/public (with a
+// texting number and without one, served to the page by the test), the
+// signed-in wording, the questions open and close from the keyboard, the page
+// with JavaScript turned off, the meta tags and the X-Robots-Tag headers.
+// Help, Privacy and Terms still load with their content.
+// Needs Playwright with Chromium. Exits 0 when every check passed.
 const { chromium } = require('playwright');
 const base = (process.argv[2] || 'http://127.0.0.1:8814').replace(/\/$/, '');
 const out = process.argv[3] || null;
-
-const PAGES = [
-  { path: '/', h1: 'mikvah calendar', phrases: ['How it works', 'Two ways to use it', 'By text message only', 'What encryption does not do', 'It does not rule on halachic questions', 'Message and data rates may apply', 'Reply STOP to stop, HELP for help', 'Recorded: flow Sun Nov 22 by day. Hefsek from Thu Nov 26. 0 to undo.'] },
-  { path: '/help', h1: 'Help', phrases: ['On this page', 'Recording by text message', 'Using it by text only', 'MENU', 'JOIN', 'ask your rav'] },
-  { path: '/privacy', h1: 'Privacy', phrases: ['On this page', 'What encryption does not do', 'Signing up by text', 'No mobile information is shared with third parties or affiliates for marketing or promotional purposes.', 'Texting JOIN'] },
-  { path: '/terms', h1: 'Terms', phrases: ['On this page', 'It is not a rav', 'Message frequency varies', 'Message and data rates may apply', 'STOP', 'START', 'HELP', 'texting JOIN'] },
-];
+const origin = new URL(base).origin;
 
 const failures = [];
 const fail = (where, message) => failures.push(`${where}: ${message}`);
 
-(async () => {
-  const pub = await (await fetch(base + '/api/public')).json();
-  const browser = await chromium.launch();
-  const checkedLinks = new Map();
+const HOME_PHRASES = [
+  'The mikvah calendar that does the counting',
+  'Where things stand',
+  'Recorded: flow Tue Dec 1 by day. Hefsek from Sat Dec 5. 0 to undo.',
+  'Calculated by your customs',
+  'Ask a rav',
+  'In the calendar you already use',
+  'Nothing is sent on Shabbat or Yom Tov',
+  'One account, each on your own phone',
+  'Everything works by text message',
+  'What encryption does not do',
+  'Questions people ask',
+  'Is it free?',
+  'Does it replace asking a rav?',
+];
+const FOOTER_PHRASES = ['Message frequency varies', 'Message and data rates may apply', 'Reply STOP to stop, HELP for help', 'It does not rule on halacha'];
+const DOCS = [
+  { path: '/help', h1: 'Help', phrases: ['On this page', 'Recording by text message', 'Using it by text only', 'MENU', 'JOIN', 'ask your rav'] },
+  { path: '/privacy', h1: 'Privacy', phrases: ['On this page', 'What encryption does not do', 'Signing up by text', 'No mobile information is shared with third parties or affiliates for marketing or promotional purposes.'] },
+  { path: '/terms', h1: 'Terms', phrases: ['On this page', 'It is not a rav', 'Message frequency varies', 'Message and data rates may apply', 'STOP', 'START', 'HELP'] },
+];
 
+const statusCache = new Map();
+async function statusOf(path) {
+  if (!statusCache.has(path)) statusCache.set(path, (await fetch(base + path, { redirect: 'manual' })).status);
+  return statusCache.get(path);
+}
+const htmlCache = new Map();
+async function htmlOf(path) {
+  if (!htmlCache.has(path)) htmlCache.set(path, await (await fetch(base + path)).text());
+  return htmlCache.get(path);
+}
+
+/** Watches a page for errors and for requests to other origins. */
+function watch(page) {
+  const w = { errors: [], foreign: [] };
+  page.on('pageerror', e => w.errors.push('pageerror: ' + e.message));
+  page.on('console', m => m.type() === 'error' && w.errors.push('console: ' + m.text()));
+  page.on('requestfailed', r => w.errors.push('request failed: ' + r.url()));
+  page.on('request', r => {
+    const u = r.url();
+    if (/^(data|blob):/.test(u)) return;
+    if (new URL(u).origin !== origin) w.foreign.push(u);
+  });
+  return w;
+}
+
+async function checkLinks(page, where) {
+  const hrefs = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map(a => a.getAttribute('href')));
+  for (const href of hrefs) {
+    if (href.startsWith('#')) {
+      const id = decodeURIComponent(href.slice(1));
+      if (!(await page.evaluate(i => !!document.getElementById(i), id))) fail(where, 'no place for ' + href);
+    } else if (href.startsWith('/')) {
+      const [path, hash] = href.split('#');
+      const status = await statusOf(path);
+      if (status !== 200) fail(where, `${href} answers ${status}`);
+      if (hash && !(await htmlOf(path)).includes(`id="${hash}"`)) fail(where, 'no place for ' + href);
+    } else if (!/^(mailto:|sms:)/.test(href)) {
+      fail(where, 'link to another site: ' + href);
+    }
+  }
+}
+
+/** What the page shows about texting, checked against an /api/public answer. */
+async function checkTexting(page, pub, where) {
+  const hero = page.locator('#hero-sms');
+  const number = pub.configured && typeof pub.textingNumber === 'string' && pub.textingNumber ? pub.textingNumber : null;
+  if (number) {
+    const digits = number.replace(/\D/g, '').slice(-10);
+    if (!(await hero.isVisible())) fail(where, 'the hero has no "text JOIN" line although there is a texting number');
+    else {
+      const text = await hero.innerText();
+      if (!text.includes('JOIN') || !text.replace(/\D/g, '').includes(digits)) fail(where, 'the hero texting line is wrong: ' + text);
+    }
+    for (const sel of ['#hero-sms a[href^="sms:"]', '#offline-cta a[href^="sms:"]', '#closing-sms a[href^="sms:"]']) {
+      const href = await page.locator(sel).first().getAttribute('href').catch(() => null);
+      if (!href || !href.includes(number)) fail(where, `no sms: link to the number in ${sel}`);
+    }
+    if (await page.locator('#offline-note').isVisible()) fail(where, 'the "not available" note shows although there is a texting number');
+  } else {
+    if (await hero.isVisible()) fail(where, 'the hero says to text JOIN while there is no texting number');
+    for (const sel of ['#offline-cta', '#closing-sms']) if (await page.locator(sel).isVisible()) fail(where, sel + ' shows while there is no texting number');
+    const body = await page.locator('main').innerText();
+    if (/\(\d{3}\) \d{3}-\d{4}/.test(body)) fail(where, 'the page names a phone number while there is none');
+    if (pub.configured && !(await page.locator('#offline-note').isVisible())) fail(where, 'no note that sign-up by text is not available');
+  }
+}
+
+async function homeAt(browser, width, scheme, pub) {
+  const where = `/ ${width}px ${scheme}`;
+  const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: scheme });
+  const page = await context.newPage();
+  const w = watch(page);
+  const res = await page.goto(base + '/');
+  if (!res || res.status() !== 200) fail(where, 'status ' + (res && res.status()));
+  await page.waitForLoadState('networkidle');
+
+  if ((await page.locator('h1').count()) !== 1) fail(where, 'not exactly one h1');
+  const h1 = (await page.locator('h1').innerText()).replace(/\s+/g, ' ');
+  if (!h1.includes('mikvah calendar')) fail(where, 'heading: ' + h1);
+  if ((await page.locator('a.skip[href="#main"]').count()) !== 1) fail(where, 'no skip link');
+  const main = (await page.locator('main').textContent()).replace(/\s+/g, ' ');
+  for (const p of HOME_PHRASES) if (!main.includes(p)) fail(where, 'missing: ' + p);
+  const foot = (await page.locator('footer').textContent()).replace(/\s+/g, ' ');
+  for (const p of FOOTER_PHRASES) if (!foot.includes(p)) fail(where, 'footer missing: ' + p);
+  for (const href of ['/help', '/privacy', '/terms', '/app/']) if ((await page.locator(`footer a[href="${href}"]`).count()) === 0) fail(where, 'the footer has no link to ' + href);
+
+  const styled = await page.evaluate(() => getComputedStyle(document.body).backgroundColor !== 'rgba(0, 0, 0, 0)');
+  if (!styled) fail(where, 'the stylesheet did not load');
+  const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (sideways > 0) fail(where, `scrolls sideways by ${sideways}px`);
+
+  await checkLinks(page, where);
+  await checkTexting(page, pub, where);
+
+  if (w.errors.length) fail(where, w.errors.join('; '));
+  if (w.foreign.length) fail(where, 'requested from another origin: ' + w.foreign.join(', '));
+  if (out) {
+    await page.evaluate(() => document.querySelectorAll('.reveal-pending').forEach(e => e.classList.add('revealed')));
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: `${out}/home-${width}-${scheme}.png`, fullPage: true });
+  }
+  await context.close();
+}
+
+/** The page with /api/public answered by the test. */
+async function homeWith(browser, pub, label) {
+  const where = `/ with ${label}`;
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const w = watch(page);
+  await page.route('**/api/public', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pub) }));
+  await page.goto(base + '/');
+  await page.waitForLoadState('networkidle');
+  await checkTexting(page, pub, where);
+  await checkLinks(page, where);
+  if (pub.signedIn) {
+    const nav = await page.locator('#nav-sign-in').innerText();
+    if (!/Open my calendar/.test(nav)) fail(where, 'signed in, but the navigation says ' + nav);
+    if (await page.locator('#nav-start').isVisible()) fail(where, 'signed in, but "Get started" still shows in the navigation');
+  }
+  if (pub.signup === 'closed' && !(await page.locator('#signup-note').isVisible())) fail(where, 'no note that sign-up is closed');
+  if (w.errors.length) fail(where, w.errors.join('; '));
+  await context.close();
+}
+
+async function keyboard(browser) {
+  const where = '/ keyboard';
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.keyboard.press('Tab');
+  const first = await page.evaluate(() => document.activeElement && document.activeElement.className);
+  if (!/skip/.test(first || '')) fail(where, 'the first Tab does not reach the skip link');
+  const summary = page.locator('#questions summary').first();
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  if (!(await page.locator('#questions details').first().evaluate(d => d.open))) fail(where, 'Enter does not open a question');
+  await page.keyboard.press('Enter');
+  if (await page.locator('#questions details').first().evaluate(d => d.open)) fail(where, 'Enter does not close a question');
+  const focusRing = await summary.evaluate(el => {
+    el.focus();
+    const s = getComputedStyle(el);
+    return s.outlineStyle !== 'none' && s.outlineWidth !== '0px';
+  });
+  if (!focusRing) fail(where, 'a question has no visible focus outline');
+  await context.close();
+}
+
+async function withoutScript(browser) {
+  const where = '/ without JavaScript';
+  const context = await browser.newContext({ viewport: { width: 360, height: 800 }, javaScriptEnabled: false });
+  const page = await context.newPage();
+  const w = watch(page);
+  await page.goto(base + '/');
+  if ((await page.locator('h1').count()) !== 1) fail(where, 'not exactly one h1');
+  const main = (await page.locator('main').textContent()).replace(/\s+/g, ' ');
+  for (const p of HOME_PHRASES) if (!main.includes(p)) fail(where, 'missing: ' + p);
+  for (const sel of ['#hero-sms', '#offline-cta', '#offline-note', '#closing-sms', '#signup-note']) if (await page.locator(sel).isVisible()) fail(where, sel + ' shows an empty line');
+  if (!(await page.locator('#hero-start').isVisible())) fail(where, 'no "Get started"');
+  if (!(await page.locator('.month').isVisible())) fail(where, 'the calendar is not shown');
+  await page.locator('#questions summary').nth(1).click();
+  if (!(await page.locator('#questions details').nth(1).evaluate(d => d.open))) fail(where, 'a question does not open');
+  const opacity = await page.locator('#privacy .priv-grid li').first().evaluate(el => getComputedStyle(el).opacity);
+  if (opacity !== '1') fail(where, 'a section is left invisible');
+  const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (sideways > 0) fail(where, `scrolls sideways by ${sideways}px`);
+  if (w.errors.length) fail(where, w.errors.join('; '));
+  await context.close();
+}
+
+async function metaAndHeaders() {
+  const where = '/ meta and headers';
+  const res = await fetch(base + '/');
+  const html = await res.text();
+  if (/<meta[^>]+name="robots"/i.test(html)) fail(where, 'the home page still has a robots meta tag');
+  const robots = res.headers.get('x-robots-tag');
+  if (robots && /noindex/i.test(robots)) fail(where, 'the home page is sent with X-Robots-Tag: ' + robots);
+  for (const needle of ['<title>', 'name="description"', 'rel="canonical"', 'property="og:title"', 'property="og:description"', 'property="og:image"', 'name="twitter:card"']) {
+    if (!html.includes(needle)) fail(where, 'missing ' + needle);
+  }
+  if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(html)) fail(where, 'an inline script');
+  if (/\sstyle="/i.test(html) || /<style/i.test(html)) fail(where, 'an inline style');
+  const image = /property="og:image" content="([^"]+)"/.exec(html);
+  if (image) {
+    const path = new URL(image[1]).pathname;
+    if ((await statusOf(path)) !== 200) fail(where, 'the share image does not load: ' + path);
+  }
+  for (const path of ['/app/', '/admin/', '/help', '/privacy', '/terms', '/site.css']) {
+    const tag = (await fetch(base + path)).headers.get('x-robots-tag') || '';
+    if (!/noindex/i.test(tag)) fail(where, `${path} is no longer sent with X-Robots-Tag: noindex`);
+  }
+}
+
+async function docs(browser) {
   for (const scheme of ['light', 'dark']) {
     for (const width of [360, 1280]) {
       const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: scheme });
       const page = await context.newPage();
-      let errors = [];
-      page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-      page.on('console', m => m.type() === 'error' && errors.push('console: ' + m.text()));
-      page.on('requestfailed', r => errors.push('request failed: ' + r.url()));
-
-      for (const spec of PAGES) {
+      for (const spec of DOCS) {
         const where = `${spec.path} ${width}px ${scheme}`;
-        errors = [];
+        const w = watch(page);
         const res = await page.goto(base + spec.path);
         if (!res || res.status() !== 200) fail(where, 'status ' + (res && res.status()));
         await page.waitForLoadState('networkidle');
-
         const h1 = (await page.locator('h1').first().innerText()).trim();
         if (!h1.includes(spec.h1)) fail(where, 'heading: ' + h1);
         const text = (await page.locator('main').textContent()).replace(/\s+/g, ' ');
         for (const phrase of spec.phrases) if (!text.includes(phrase)) fail(where, 'missing: ' + phrase);
-        for (const href of ['/', '/help', '/privacy', '/terms', '/app/']) {
-          if (spec.path === '/' && href === '/') continue;
-          if ((await page.locator(`a[href="${href}"]`).count()) === 0) fail(where, 'no link to ' + href);
-        }
-
-        // the stylesheets loaded
-        const styled = await page.evaluate(() => getComputedStyle(document.body).backgroundColor !== 'rgba(0, 0, 0, 0)');
-        if (!styled) fail(where, 'the stylesheet did not load');
-        if (spec.path !== '/') {
-          const max = await page.evaluate(() => getComputedStyle(document.querySelector('main')).maxWidth);
-          if (max !== '720px') fail(where, 'main is not the document width: ' + max);
-        }
-
+        const max = await page.evaluate(() => getComputedStyle(document.querySelector('main')).maxWidth);
+        if (max !== '720px') fail(where, 'main is not the document width: ' + max);
         if (width === 360) {
           const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
           if (sideways > 0) fail(where, `scrolls sideways by ${sideways}px`);
         }
-
-        // links: to the site itself, and to places on the page
-        const hrefs = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map(a => a.getAttribute('href')));
-        for (const href of hrefs) {
-          if (href.startsWith('#')) {
-            const id = decodeURIComponent(href.slice(1));
-            if (!(await page.evaluate(i => !!document.getElementById(i), id))) fail(where, 'no place for ' + href);
-          } else if (href.startsWith('/')) {
-            const [path, hash] = href.split('#');
-            if (!checkedLinks.has(path)) checkedLinks.set(path, (await fetch(base + path)).status);
-            if (checkedLinks.get(path) !== 200) fail(where, `${href} answers ${checkedLinks.get(path)}`);
-            if (hash) {
-              const html = await (await fetch(base + path)).text();
-              if (!html.includes(`id="${hash}"`)) fail(where, 'no place for ' + href);
-            }
-          } else if (!/^(mailto:|sms:)/.test(href)) {
-            fail(where, 'link to another site: ' + href);
-          }
-        }
-
-        // nothing from another site
-        const foreign = await page.evaluate(() =>
-          [...document.querySelectorAll('script[src], link[href], img[src]')].map(e => e.src || e.href).filter(u => !u.startsWith(location.origin)),
-        );
-        if (foreign.length) fail(where, 'loads from another site: ' + foreign.join(', '));
-
-        if (spec.path === '/') {
-          const card = await page.locator('#text-only').innerText();
-          if (pub.textingNumber) {
-            const digits = pub.textingNumber.replace(/\D/g, '').slice(-10);
-            const shown = card.replace(/\D/g, '');
-            if (!card.includes('JOIN') || !shown.includes(digits)) fail(where, 'the text-only card does not say to text JOIN to the number: ' + card);
-            const sms = await page.locator('#text-only a[href^="sms:"]').getAttribute('href');
-            if (!sms || !sms.includes(pub.textingNumber)) fail(where, 'no sms: link to the number');
-          } else {
-            if (/\d{3}\D{0,2}\d{3}\D?\d{4}/.test(card)) fail(where, 'the text-only card names a number while there is none');
-            if (card.includes('Text JOIN')) fail(where, 'the text-only card says to text JOIN while sign-up by text is not offered');
-          }
-        }
-
-        if (errors.length) fail(where, errors.join('; '));
-        if (out) await page.screenshot({ path: `${out}/${spec.path === '/' ? 'home' : spec.path.slice(1)}-${width}-${scheme}.png`, fullPage: true });
+        await checkLinks(page, where);
+        if (w.errors.length) fail(where, w.errors.join('; '));
+        if (w.foreign.length) fail(where, 'requested from another origin: ' + w.foreign.join(', '));
+        page.removeAllListeners();
       }
       await context.close();
     }
   }
+}
+
+(async () => {
+  const pub = await (await fetch(base + '/api/public')).json();
+  const browser = await chromium.launch();
+
+  for (const scheme of ['light', 'dark']) for (const width of [360, 768, 1280, 1600]) await homeAt(browser, width, scheme, pub);
+
+  const sample = { configured: true, signedIn: false, signup: 'open', sms: true, prefixes: ['+1'], contactName: '', contactEmail: '', codeMinutes: 10, resendSeconds: 60 };
+  await homeWith(browser, { ...sample, textingNumber: '+18885550100' }, 'a texting number');
+  await homeWith(browser, { ...sample, textingNumber: null }, 'no texting number');
+  await homeWith(browser, { ...sample, sms: false, textingNumber: null }, 'no text messaging');
+  await homeWith(browser, { ...sample, signup: 'closed', textingNumber: null, signedIn: true }, 'sign-up closed, signed in');
+
+  await keyboard(browser);
+  await withoutScript(browser);
+  await metaAndHeaders();
+  await docs(browser);
   await browser.close();
 
   if (failures.length) {
@@ -120,7 +296,7 @@ const fail = (where, message) => failures.push(`${where}: ${message}`);
     for (const f of failures) console.log('  ' + f);
     process.exit(1);
   }
-  console.log(`ok: 4 pages x 2 widths x 2 colour schemes${pub.textingNumber ? ', with a texting number' : ', without a texting number'}`);
+  console.log(`ok: home page at 4 widths x 2 colour schemes${pub.textingNumber ? ', with a texting number' : ', without a texting number'}; both texting states; keyboard; no JavaScript; meta and headers; Help, Privacy, Terms`);
 })().catch(e => {
   console.error(e);
   process.exit(1);

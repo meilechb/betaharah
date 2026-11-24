@@ -11,3 +11,20 @@
 
 /admin/*
   Cache-Control: no-cache
+
+# The home page and its own files may be indexed by search engines; every other
+# path keeps the X-Robots-Tag: noindex set above.
+/
+  ! X-Robots-Tag
+
+/landing.css
+  ! X-Robots-Tag
+
+/landing.js
+  ! X-Robots-Tag
+
+/landing/*
+  ! X-Robots-Tag
+
+/favicon.svg
+  ! X-Robots-Tag
