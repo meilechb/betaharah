@@ -110,11 +110,11 @@ describe('reminders', () => {
   const reminders = (entries: LogEntry[], now: number, opts = DEFAULT_REMINDER_OPTIONS, patch = {}) =>
     buildReminders(timeline(entries, now, patch), opts, CTX);
 
-  it('before the hefsek: one reminder, an hour before sunset on the day it can be done', () => {
+  it('before the hefsek: one reminder, two hours before sunset on the day it can be done', () => {
     const r = reminders([flow], at(2026, 11, 23, 10)).filter(x => x.kind === 'hefsek');
     expect(r).toHaveLength(1);
     expect(r[0]!.key).toBe(`hefsek:f:${SUN + 4}`);
-    expect(r[0]!.at).toBe(dayTimes(SUN + 4, LAKEWOOD, ZOPTS).sunset - 60 * 60_000);
+    expect(r[0]!.at).toBe(dayTimes(SUN + 4, LAKEWOOD, ZOPTS).sunset - 120 * 60_000);
     expect(r[0]!.text).toMatch(/^Hefsek tahara: today, before sunset at 4:3\d PM\.$/);
   });
 
@@ -139,7 +139,7 @@ describe('reminders', () => {
     const mikvah = r.filter(x => x.kind === 'mikvah');
     expect(mikvah).toHaveLength(1);
     expect(mikvah[0]!.text).toMatch(/^Mikvah night: tonight, after 5:\d\d PM\.$/);
-    expect(mikvah[0]!.at).toBe(dayTimes(SUN + 11, LAKEWOOD, ZOPTS).sunset - 60 * 60_000);
+    expect(mikvah[0]!.at).toBe(dayTimes(SUN + 11, LAKEWOOD, ZOPTS).sunset - 180 * 60_000);
     // the morning after the hefsek (recorded on its day): Friday 27 November at 9:00
     const book = r.filter(x => x.kind === 'mikvah_book');
     expect(book).toHaveLength(1);
@@ -241,7 +241,7 @@ describe('reminders', () => {
     expect(r[0]!.text).toMatch(/^Onah: 4:3\d PM tonight until 4:3\d PM Tue\./);
     expect(r[0]!.text).toContain('day 30, day 31, chodesh.');
     expect(r[0]!.text).toContain('Bedikah.');
-    expect(r[0]!.at).toBe(dayTimes(SUN + 28, LAKEWOOD, ZOPTS).sunset - 60 * 60_000);
+    expect(r[0]!.at).toBe(dayTimes(SUN + 28, LAKEWOOD, ZOPTS).sunset - 120 * 60_000);
   });
 
   it('past onot are not announced', () => {
@@ -296,10 +296,10 @@ describe('reminders', () => {
     const monday = r.find(x => x.key === `bedikah_am:f:${SUN + 4}:4`)!; // Monday 30 November, 8:00
     expect(localDateTime(monday.at, TZ)).toMatchObject({ m: 11, d: 30, hh: 8 });
     expect(monday.until).toBe(monday.at + 3 * 3_600_000);
-    // Friday's afternoon reminder is 60 minutes before sunset; candle lighting, 18 minutes before sunset, ends it.
+    // Friday's afternoon reminder is 90 minutes before sunset; candle lighting, 18 minutes before sunset, ends it.
     const friday = r.find(x => x.key === `bedikah_pm:f:${SUN + 4}:1`)!;
     expect(friday.until).toBe(dayTimes(SAT - 1, LAKEWOOD, ZOPTS).sunset - 18 * 60_000);
-    expect(friday.until - friday.at).toBe(42 * 60_000);
+    expect(friday.until - friday.at).toBe(72 * 60_000);
     for (const x of r) {
       expect(x.until).toBeGreaterThan(x.at);
       // nothing can be sent during Shabbat or Yom Tov
@@ -356,12 +356,12 @@ describe('bedikah reminders: which days, morning and before sunset', () => {
     expect(days(run({ on: false }), 'bedikah_morning')).toEqual([]);
   });
 
-  it('the bedikah before sunset is an hour before sunset by default, and keeps a time saved before', () => {
+  it('the bedikah before sunset is 90 minutes before sunset by default, and follows a saved time', () => {
     const r = run({});
     const pm = r.find(x => x.key === `bedikah_pm:f:${SUN + 4}:3`)!;
-    expect(pm.at).toBe(dayTimes(SUN + 7, LAKEWOOD, ZOPTS).sunset - 60 * 60_000);
-    const saved = run({ minutesBeforeSunset: 90 }).find(x => x.key === pm.key)!;
-    expect(saved.at).toBe(dayTimes(SUN + 7, LAKEWOOD, ZOPTS).sunset - 90 * 60_000);
+    expect(pm.at).toBe(dayTimes(SUN + 7, LAKEWOOD, ZOPTS).sunset - 90 * 60_000);
+    const saved = run({ minutesBeforeSunset: 60 }).find(x => x.key === pm.key)!;
+    expect(saved.at).toBe(dayTimes(SUN + 7, LAKEWOOD, ZOPTS).sunset - 60 * 60_000);
   });
 });
 

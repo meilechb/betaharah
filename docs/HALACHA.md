@@ -45,10 +45,10 @@ Source: Yoatzot, "Minimum Wait", "Hefsek Taharah", "Seven Clean Days".
   morning after the hefsek is recorded, a reminder to book the mikvah names
   the mikvah night (none if that morning is already the day of the mikvah
   night).
-- **Reminder times** (when, not what): the hefsek, the bedikah before
-  sunset and the mikvah night are sent 60 minutes before sunset, and the
-  onah 60 minutes before it begins (at sunset or sunrise), unless the
-  account set another time. Accounts keep the times they saved.
+- **Reminder times** (when, not what): unless the account set another
+  time, the hefsek is sent 2 hours before sunset, the bedikah before sunset
+  90 minutes before it, the mikvah night 3 hours before sunset, and the onah
+  2 hours before it begins (at sunset or sunrise).
 - **Shabbat and Yom Tov**: nothing is sent from candle lighting (18 minutes
   before sunset) until nightfall, a run of such days (Yom Tov into Shabbat)
   counting as one. Every reminder whose time falls in it, and a mikvah night

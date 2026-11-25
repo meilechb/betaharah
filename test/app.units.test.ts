@@ -313,9 +313,9 @@ describe('app settings', () => {
     expect(() => parseAppSettings('x')).toThrow(ValidationError);
   });
 
-  it('new accounts: an hour before sunset or sunrise, every bedikah day and part, the text before Shabbat at 9:00 AM', () => {
+  it('new accounts: the reminder times as before, an hour for an entry close to sunrise or sunset, every bedikah day and part, the text before Shabbat at 9:00 AM', () => {
     const r = DEFAULT_APP_SETTINGS.reminders;
-    expect([r.hefsek.minutesBeforeSunset, r.bedikot.minutesBeforeSunset, r.mikvah.minutesBeforeSunset, r.onah.minutesBefore]).toEqual([60, 60, 60, 60]);
+    expect([r.hefsek.minutesBeforeSunset, r.bedikot.minutesBeforeSunset, r.mikvah.minutesBeforeSunset, r.onah.minutesBefore]).toEqual([120, 90, 180, 120]);
     expect(DEFAULT_APP_SETTINGS.boundaryMarginMinutes).toBe(60);
     expect(r.bedikot).toMatchObject({ days: [1, 2, 3, 4, 5, 6, 7], morning: true, beforeSunset: true });
     expect(r.restEve).toEqual({ hour: 9, minute: 0 });

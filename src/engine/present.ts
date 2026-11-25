@@ -204,11 +204,11 @@ export const ALL_CLEAN_DAYS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
 
 export const DEFAULT_REMINDER_OPTIONS: ReminderOptions = {
   style: 'plain',
-  hefsek: { on: true, minutesBeforeSunset: 60 },
-  bedikot: { on: true, morningHour: 8, morningMinute: 0, minutesBeforeSunset: 60, days: [...ALL_CLEAN_DAYS], morning: true, beforeSunset: true },
-  mikvah: { on: true, minutesBeforeSunset: 60 },
+  hefsek: { on: true, minutesBeforeSunset: 120 },
+  bedikot: { on: true, morningHour: 8, morningMinute: 0, minutesBeforeSunset: 90, days: [...ALL_CLEAN_DAYS], morning: true, beforeSunset: true },
+  mikvah: { on: true, minutesBeforeSunset: 180 },
   mikvahBook: { on: true, hour: 9, minute: 0 },
-  onah: { on: true, minutesBefore: 60 },
+  onah: { on: true, minutesBefore: 120 },
   restEve: { hour: 9, minute: 0 },
   hefsekMaxDays: 10,
 };

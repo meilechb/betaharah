@@ -294,7 +294,7 @@ const H = { 'x-betaharah': '1' };
   });
 
   await step('reminders: a timing opens in its row, saves, and refuses a number out of range', async () => {
-    if ((await page.textContent('#rem-when-hefsek')) !== '1 hour before sunset.') throw new Error('timing: ' + (await page.textContent('#rem-when-hefsek')));
+    if ((await page.textContent('#rem-when-hefsek')) !== '2 hours before sunset.') throw new Error('timing: ' + (await page.textContent('#rem-when-hefsek')));
     await page.click('#rem-open-hefsek');
     if ((await page.getAttribute('#rem-open-hefsek', 'aria-expanded')) !== 'true') throw new Error('not expanded');
     await page.fill('#rem-hefsek-min', '100');
@@ -315,7 +315,7 @@ const H = { 'x-betaharah': '1' };
     await savedIn('reminders');
     const b = (await state()).app.reminders.bedikot;
     if (b.morningHour !== 7 || b.morningMinute !== 30) throw new Error('time not saved');
-    await page.waitForSelector('#rem-when-bedikot:has-text("7:30 AM and 1 hour before sunset")');
+    await page.waitForSelector('#rem-when-bedikot:has-text("7:30 AM and 1 hour 30 minutes before sunset")');
   });
 
   await step('reminders: the bedikah days in a few taps, and morning and before sunset each with its switch and time', async () => {
@@ -338,7 +338,7 @@ const H = { 'x-betaharah': '1' };
     await page.click('label[for="rem-bedikot-am"]');
     await savedIn('reminders');
     if ((await state()).app.reminders.bedikot.morning) throw new Error('morning not off');
-    await page.waitForSelector('#rem-when-bedikot:has-text("Days 3 and 7 · 1 hour before sunset")');
+    await page.waitForSelector('#rem-when-bedikot:has-text("Days 3 and 7 · 1 hour 30 minutes before sunset")');
     await page.click('#rem-bedikot-pm');
     await savedIn('reminders');
     if ((await state()).app.reminders.bedikot.beforeSunset) throw new Error('before sunset not off');

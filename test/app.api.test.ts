@@ -1514,10 +1514,10 @@ describe('reminders', () => {
   it('go only to phones that agreed to them, each its own kinds, once', async () => {
     await textsOn(c, WIFE, ['hefsek']);
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
-    world.clock.now = at(11, 26, 15, 30); // before the hefsek reminder (an hour before sunset at 4:33)
+    world.clock.now = at(11, 26, 14, 30); // before the hefsek reminder (two hours before sunset at 4:33)
     await run();
     expect(reminders(WIFE)).toEqual([]);
-    world.clock.now = at(11, 26, 15, 34);
+    world.clock.now = at(11, 26, 14, 34);
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
     expect(reminders(WIFE)[0]).toBe('Hefsek tahara: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
