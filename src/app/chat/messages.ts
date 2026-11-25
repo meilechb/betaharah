@@ -367,7 +367,18 @@ const REMINDER_WHEN: Record<string, string> = {
   'reminder.mikvah_book': 'Reminder: the morning after the hefsek was recorded.',
   'reminder.mikvah': 'Reminder: the day of the mikvah night.',
   'reminder.onah': 'Reminder: before an onah.',
+  'reminder.rest':
+    'Reminder: the morning a Shabbat or Yom Tov begins (at the time set), the first line of one text with every reminder that falls in it, one line each.',
+  'reminder.rest.hefsek': 'A line of the text before Shabbat or Yom Tov: the hefsek tahara on one of its days.',
+  'reminder.rest.bedikot': 'A line of the text before Shabbat or Yom Tov: both bedikot of a clean day on one of its days.',
+  'reminder.rest.bedikah_morning': 'A line of the text before Shabbat or Yom Tov: the morning bedikah alone.',
+  'reminder.rest.bedikah_afternoon': 'A line of the text before Shabbat or Yom Tov: the bedikah before sunset alone.',
+  'reminder.rest.mikvah': 'A line of the text before Shabbat or Yom Tov: a mikvah night on it, or right after it.',
+  'reminder.rest.mikvah_book': 'A line of the text before Shabbat or Yom Tov: booking the mikvah, which would have been sent on it.',
+  'reminder.rest.onah': 'A line of the text before Shabbat or Yom Tov: an onah that begins on it.',
 };
+/** The examples of the lines of the text before Shabbat or Yom Tov: days that are near. */
+const REST_EXAMPLES: Record<string, string> = { rest: 'Shabbat', day: 'Shabbat', required: ' (required)', from: '6:52 AM Shabbat', to: '4:30 PM Shabbat' };
 const REMINDER_EXAMPLES: Record<string, string> = {
   day: DATE,
   sunset: '4:31 PM',
@@ -389,7 +400,14 @@ for (const [key, body] of Object.entries(REMINDER_TEXTS)) {
   const when = (REMINDER_WHEN[base] ?? 'Reminder.') + (key.endsWith('.discreet') ? ' Discreet wording.' : '');
   const options: Opt[] = base === 'reminder.hefsek' ? [['done', 'DONE'], ['status', 'STATUS']] : [['status', 'STATUS']];
   // The mikvah night and the reminder to book it name a night.
-  const examples = base === 'reminder.mikvah' || base === 'reminder.mikvah_book' ? { ...REMINDER_EXAMPLES, day: EX.mikvahNight } : REMINDER_EXAMPLES;
+  const examples =
+    base === 'reminder.mikvah' || base === 'reminder.mikvah_book'
+      ? { ...REMINDER_EXAMPLES, day: EX.mikvahNight }
+      : base === 'reminder.rest.mikvah' || base === 'reminder.rest.mikvah_book'
+        ? { ...REMINDER_EXAMPLES, ...REST_EXAMPLES, day: 'Sat night' }
+        : base.startsWith('reminder.rest')
+          ? { ...REMINDER_EXAMPLES, ...REST_EXAMPLES }
+          : REMINDER_EXAMPLES;
   const vars = Object.fromEntries([...body.matchAll(/\{(\w+)\}/g)].map(m => [`${m[1]}${OPTIONAL_REMINDER_VARS.has(m[1] as string) ? '?' : ''}`, examples[m[1] as string] ?? '']));
   add(key, 'Reminders', when, body, options, vars);
 }
@@ -398,7 +416,13 @@ const ON_OFF: Opt[] = [
   ['on', 'TURN ON'],
   ['off', 'TURN OFF'],
 ];
-add('reminders.show', 'Reminders', 'REMINDERS. TURN ON or TURN OFF is offered, whichever applies.', 'Reminders for this phone are {state}. Kinds on: {kinds} of 6. Wording: {style}.', [...ON_OFF, ['kinds', 'KINDS'], ['wording', 'WORDING']], {
+add('reminders.show', 'Reminders', 'REMINDERS. TURN ON or TURN OFF is offered, whichever applies.', 'Reminders for this phone are {state}. Kinds on: {kinds} of 6. Wording: {style}.', [
+  ...ON_OFF,
+  ['kinds', 'KINDS'],
+  ['wording', 'WORDING'],
+  ['bedikot', 'BEDIKOT'],
+  ['rest_eve', 'SHABBAT'],
+], {
   state: 'off',
   kinds: '6',
   style: 'plain',
@@ -434,6 +458,36 @@ add('reminders.wording', 'Reminders', 'WORDING: plain or discreet, for every pho
 ], { style: 'plain' });
 add('reminders.wording_changed', 'Reminders', 'The wording was changed.', 'Changed: reminder wording is {style} for every phone.', MAIN, { style: 'discreet' });
 add('reminders.wording_same', 'Reminders', 'The wording chosen is the one already set.', 'Reminder wording is already {style}. Nothing was changed.', MAIN, { style: 'plain' });
+/** BEDIKOT: which clean days, and the morning and before-sunset reminders, each offered in its other state. */
+const BEDIKOT: Opt[] = [
+  ['days_all', 'ALL DAYS'],
+  ['days_1_7', '1 AND 7'],
+  ['days_choose', 'CHOOSE DAYS'],
+  ['morning_on', 'MORNING ON'],
+  ['morning_off', 'MORNING OFF'],
+  ['sunset_on', 'BEFORE SUNSET ON'],
+  ['sunset_off', 'BEFORE SUNSET OFF'],
+];
+const BEDIKOT_EXAMPLE = { state: 'on', days: 'all 7', morning: 'on', sunset: 'on' };
+const BEDIKOT_BODY = 'Bedikah reminders are {state}: clean days {days}; morning {morning}; before sunset {sunset}.';
+add('reminders.bedikot', 'Reminders', 'BEDIKOT: the bedikah reminders of the account. MORNING and BEFORE SUNSET offer whichever applies.', BEDIKOT_BODY, BEDIKOT, BEDIKOT_EXAMPLE);
+add('reminders.bedikot_changed', 'Reminders', 'The bedikah days, or the morning or before-sunset reminder, were changed.', `Changed. ${BEDIKOT_BODY}`, BEDIKOT, {
+  ...BEDIKOT_EXAMPLE,
+  days: '1 and 7',
+});
+add('reminders.bedikot_same', 'Reminders', 'A bedikah choice that is already set.', `Nothing was changed. ${BEDIKOT_BODY}`, BEDIKOT, BEDIKOT_EXAMPLE);
+add('reminders.days_ask', 'Reminders', 'CHOOSE DAYS: the clean days are written in reply.', 'Which clean days? Their numbers, such as 1 2 7.', [['days_all', 'ALL DAYS'], ['days_1_7', '1 AND 7'], MENU]);
+add('reminders.days_bad', 'Reminders', 'Numbers after CHOOSE DAYS that are not clean days from 1 to 7.', 'Not understood: clean days are 1 to 7, such as 1 2 7. Nothing was changed.', [['days_all', 'ALL DAYS'], ['days_1_7', '1 AND 7'], MENU]);
+add(
+  'reminders.rest_eve',
+  'Reminders',
+  'SHABBAT: the time of the one text the morning before Shabbat or Yom Tov; a time written in reply changes it.',
+  'Before Shabbat and Yom Tov: one text that morning at {time}, with what falls on those days. A time such as 8:30 AM changes it.',
+  [['bedikot', 'BEDIKOT'], MENU],
+  { time: '9:00 AM' },
+);
+add('reminders.rest_eve_changed', 'Reminders', 'A time was written after SHABBAT.', 'The text before Shabbat and Yom Tov comes at {time} that morning.', MAIN, { time: '8:30 AM' });
+add('reminders.rest_eve_bad', 'Reminders', 'Numbers after SHABBAT that are not a time.', 'Not understood: a time such as 8:30 AM. Nothing was changed.', [MENU]);
 
 // ---------- settings: location ----------
 

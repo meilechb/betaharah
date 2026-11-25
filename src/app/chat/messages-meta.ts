@@ -36,6 +36,7 @@ export type CategoryId = (typeof CATEGORIES)[number]['id'];
 export const TEXT_SETS: Record<string, { name: string; sent: string }> = {
   'customs.questions': { name: 'Customs questions', sent: 'CUSTOMS, setup, or going through all 12.' },
   'customs.pages': { name: 'List of customs', sent: 'CUSTOMS: the customs in three short pages.' },
+  'reminder.rest.lines': { name: 'Lines before Shabbat', sent: 'The lines of the text before Shabbat or Yom Tov, after its first line.' },
 };
 
 export interface TextMeta {
@@ -69,6 +70,14 @@ const BY_CATEGORY: Record<CategoryId, Record<string, Entry>> = {
     'reminder.mikvah_book': ['Book the mikvah', 'The morning after the hefsek was recorded.', IMPORTANT],
     'reminder.mikvah': ['Mikvah night', 'The day of the mikvah night.', IMPORTANT],
     'reminder.onah': ['Onah coming', 'Before an onah of separation begins.', IMPORTANT],
+    'reminder.rest': ['Before Shabbat or Yom Tov', 'The morning it begins: one text with what falls on it, a line each.', IMPORTANT],
+    'reminder.rest.hefsek': ['Line: hefsek day', 'In the text before Shabbat or Yom Tov.', { set: 'reminder.rest.lines' }],
+    'reminder.rest.bedikot': ['Line: both bedikot', 'In the text before Shabbat or Yom Tov: morning and before sunset.', { set: 'reminder.rest.lines' }],
+    'reminder.rest.bedikah_morning': ['Line: morning bedikah', 'In the text before Shabbat or Yom Tov: the morning one alone.', { set: 'reminder.rest.lines' }],
+    'reminder.rest.bedikah_afternoon': ['Line: bedikah before sunset', 'In the text before Shabbat or Yom Tov: the one before sunset alone.', { set: 'reminder.rest.lines' }],
+    'reminder.rest.mikvah': ['Line: mikvah night', 'In the text before Shabbat or Yom Tov: a mikvah night on it or right after.', { set: 'reminder.rest.lines' }],
+    'reminder.rest.mikvah_book': ['Line: book the mikvah', 'In the text before Shabbat or Yom Tov.', { set: 'reminder.rest.lines' }],
+    'reminder.rest.onah': ['Line: onah', 'In the text before Shabbat or Yom Tov: an onah that begins on it.', { set: 'reminder.rest.lines' }],
   },
   recording: {
     'record.when_flow': ['When did the period begin', 'PERIOD with no time given.', IMPORTANT],
@@ -146,7 +155,7 @@ const BY_CATEGORY: Record<CategoryId, Record<string, Entry>> = {
     'website.only': ['On the website only', 'PASSWORD, DOWNLOAD, GOOGLE or TIMES.'],
   },
   settings: {
-    'reminders.show': ['Reminders: this phone', 'REMINDERS: on or off, kinds and wording.', { sub: 'Reminders' }],
+    'reminders.show': ['Reminders: this phone', 'REMINDERS: on or off, kinds, wording, bedikot, Shabbat.', { sub: 'Reminders' }],
     'reminders.on': ['Reminders turned on', 'TURN ON: the consent to reminder texts.', { sub: 'Reminders', important: true }],
     'reminders.already_on': ['Already on', 'TURN ON when reminders are already on.', { sub: 'Reminders' }],
     'reminders.off': ['Reminders turned off', 'TURN OFF.', { sub: 'Reminders' }],
@@ -157,6 +166,14 @@ const BY_CATEGORY: Record<CategoryId, Record<string, Entry>> = {
     'reminders.wording': ['Plain or discreet', 'WORDING: plain or discreet, for every phone.', { sub: 'Reminders' }],
     'reminders.wording_changed': ['Wording changed', 'The wording was changed.', { sub: 'Reminders' }],
     'reminders.wording_same': ['Wording unchanged', 'The wording chosen is already set.', { sub: 'Reminders' }],
+    'reminders.bedikot': ['Bedikah reminders', 'BEDIKOT: which clean days, morning and before sunset.', { sub: 'Reminders' }],
+    'reminders.bedikot_changed': ['Bedikah reminders changed', 'The days, or the morning or before-sunset reminder, were changed.', { sub: 'Reminders' }],
+    'reminders.bedikot_same': ['Bedikah reminders unchanged', 'A bedikah choice that is already set.', { sub: 'Reminders' }],
+    'reminders.days_ask': ['Which clean days', 'CHOOSE DAYS: she writes the day numbers.', { sub: 'Reminders' }],
+    'reminders.days_bad': ['Clean days not understood', 'Numbers that are not clean days 1 to 7.', { sub: 'Reminders' }],
+    'reminders.rest_eve': ['Text before Shabbat: time', 'SHABBAT: its time; a time written in reply changes it.', { sub: 'Reminders' }],
+    'reminders.rest_eve_changed': ['Time before Shabbat set', 'A time was written after SHABBAT.', { sub: 'Reminders' }],
+    'reminders.rest_eve_bad': ['Time not understood', 'Numbers after SHABBAT that are not a time.', { sub: 'Reminders' }],
     'location.show': ['Location now', 'LOCATION when one is set.', { sub: 'Location' }],
     'location.ask': ['Ask for a ZIP code', 'LOCATION when none is set.', { sub: 'Location' }],
     'location.set': ['Location set', 'A ZIP code was set.', { sub: 'Location' }],

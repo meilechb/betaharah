@@ -42,6 +42,9 @@ export type ConfirmAction =
 /** What is recorded by text. */
 export type RecordKind = 'flow' | 'stain' | 'broken' | 'hefsek' | 'mikvah';
 
+/** Free text a message can ask for. */
+export type ChatExpect = 'zip' | 'date' | 'days' | 'time';
+
 /** What the options of the last message need to know to act. */
 export interface ChatContext {
   /** In the setup conversation: after this step, the next one follows. */
@@ -74,8 +77,8 @@ export interface ChatState {
   key: string;
   /** The options as they were shown: [id, label]. */
   opts: Array<[string, string]>;
-  /** Free text the message asked for: a ZIP code, or a date. */
-  expect?: 'zip' | 'date';
+  /** Free text the message asked for: a ZIP code, a date, the numbers of clean days, or a clock time. */
+  expect?: ChatExpect;
   ctx: ChatContext;
 }
 

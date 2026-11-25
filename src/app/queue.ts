@@ -9,7 +9,7 @@
  * Everything here works on the household's data alone, with no access to
  * the database or the network.
  */
-import type { Reminder } from '../engine/present';
+import { restText, type Reminder, type RestText } from '../engine/present';
 import { canText, type HouseholdData, type QueuedReminder } from './model';
 
 const MINUTE = 60_000;
@@ -27,10 +27,38 @@ export const RETRY_MS = 10 * MINUTE;
 const idOf = (q: { key: string; to: string }): string => `${q.key}|${q.to}`;
 
 /**
+ * The text of a Shabbat or Yom Tov that a queued key belongs to ("rest:<first
+ * day>"), or null. Its texts to one phone are "rest:<day>" (the morning it
+ * begins), "rest:<day>:more:<n>" (what became known after that text went
+ * out, before it begins) and "rest:<day>:after" (after it ends).
+ */
+export function restBase(key: string): string | null {
+  const m = /^rest:-?\d+/.exec(key);
+  return m ? m[0] : null;
+}
+
+const carried = (q: QueuedReminder): boolean => q.status === 'sent' || q.status === 'sending';
+
+/** The reminders that texts of the same Shabbat or Yom Tov as `q` have brought, or are bringing, to its phone. */
+function restCovered(queue: readonly QueuedReminder[], q: QueuedReminder): Set<string> {
+  const base = restBase(q.key);
+  const covered = new Set<string>();
+  for (const x of queue) if (x !== q && x.to === q.to && carried(x) && restBase(x.key) === base) for (const k of x.covered ?? []) covered.add(k);
+  return covered;
+}
+
+/**
  * Replaces the waiting reminders with a new list worked out from the
  * current picture. Whatever was already sent, dropped, or is being sent
  * keeps its record, so nothing is sent a second time; a reminder waiting
  * for another attempt keeps its waiting time.
+ *
+ * The text of a Shabbat or Yom Tov goes to each phone with the lines of the
+ * kinds that phone gets. Once it has gone out, what becomes known before
+ * the days begin goes at once in a further text, and nothing it carried is
+ * sent again, alone or in another text. After the days end, a text brings
+ * what is still of use that no text before them brought (takeDue leaves out
+ * what was).
  */
 export function rebuildQueue(data: HouseholdData, reminders: readonly Reminder[] | null, now: number): void {
   const numbers = new Set(data.phones.map(p => p.number));
@@ -45,15 +73,37 @@ export function rebuildQueue(data: HouseholdData, reminders: readonly Reminder[]
     }
   }
   const next = [...done.values()];
+  /** What texts of a Shabbat or Yom Tov brought to each phone. */
+  const brought = new Map<string, Set<string>>();
+  for (const q of next) if (restBase(q.key) && carried(q)) for (const k of q.covered ?? []) brought.set(q.to, (brought.get(q.to) ?? new Set()).add(k));
   if (reminders) {
     const phones = data.phones.filter(canText);
+    const add = (key: string, to: string, at: number, until: number, fields: Pick<QueuedReminder, 'text'> & Partial<QueuedReminder>): void => {
+      const id = `${key}|${to}`;
+      if (done.has(id) || until <= now || at > now + HORIZON_MS) return;
+      next.push({ key, to, at, until, ...fields, status: 'pending', notBefore: notBefore.get(id) ?? 0, doneAt: null });
+    };
     for (const r of reminders) {
-      if (r.until <= now || r.at > now + HORIZON_MS) continue;
       for (const p of phones) {
-        if (!p.reminders.includes(r.kind)) continue;
-        const id = `${r.key}|${p.number}`;
-        if (done.has(id)) continue;
-        next.push({ key: r.key, to: p.number, at: r.at, until: r.until, text: r.text, msg: r.msg, status: 'pending', notBefore: notBefore.get(id) ?? 0, doneAt: null });
+        if (r.rest) {
+          const mine = (t: RestText): RestText => ({ ...t, items: t.items.filter(i => p.reminders.includes(i.kind)) });
+          const eve = mine(r.rest.eve);
+          if (eve.items.length > 0) {
+            const group = next.filter(q => q.to === p.number && restBase(q.key) === r.key);
+            const covered = new Set(group.filter(carried).flatMap(q => q.covered ?? []));
+            const late = eve.items.filter(i => !covered.has(i.key));
+            if (!done.has(`${r.key}|${p.number}`)) add(r.key, p.number, r.at, r.until, { text: restText(eve), rest: eve });
+            else if (covered.size > 0 && late.length > 0) {
+              const more = { ...eve, items: late };
+              add(`${r.key}:more:${group.length}`, p.number, Math.max(now, r.at), r.until, { text: restText(more), rest: more });
+            }
+          }
+          const after = mine(r.rest.after.text);
+          if (after.items.length > 0) add(`${r.key}:after`, p.number, r.rest.after.at, r.rest.after.until, { text: restText(after), rest: after });
+          continue;
+        }
+        if (r.kind === 'rest' || !p.reminders.includes(r.kind) || brought.get(p.number)?.has(r.key)) continue;
+        add(r.key, p.number, r.at, r.until, { text: r.text, msg: r.msg });
       }
     }
   }
@@ -81,6 +131,7 @@ function drop(q: QueuedReminder, now: number): void {
   q.doneAt = now;
   q.text = '';
   delete q.msg;
+  delete q.rest;
 }
 
 const monthOf = (now: number): string => new Date(now).toISOString().slice(0, 7);
@@ -131,6 +182,18 @@ export function takeDue(data: HouseholdData, now: number, limit: number, monthly
       continue;
     }
     if (taken.length >= limit) continue;
+    if (q.rest) {
+      // A text of a Shabbat or Yom Tov carries only what no text of the same days has brought to this phone.
+      const covered = restCovered(data.queue, q);
+      const rest: RestText = { ...q.rest, items: q.rest.items.filter(i => !covered.has(i.key)) };
+      if (rest.items.length === 0) {
+        drop(q, now);
+        continue;
+      }
+      q.rest = rest;
+      q.text = restText(rest);
+      q.covered = rest.items.map(i => i.key);
+    }
     if (!allowText(data, monthlyLimit, now)) {
       drop(q, now);
       continue;
@@ -176,8 +239,10 @@ export type Settlement = 'sent' | 'failed' | 'blocked' | 'refused';
  *   blocked  the carrier says the phone opted out: noted on the phone
  *   refused  the site's own limit was reached, or texting is off
  */
-export function settle(data: HouseholdData, taken: Pick<QueuedReminder, 'key' | 'to'>, result: Settlement, now: number): void {
+export function settle(data: HouseholdData, taken: Pick<QueuedReminder, 'key' | 'to'>, result: Settlement, now: number, texts = 1): void {
   if (result !== 'sent') refundText(data, now);
+  // A text of a Shabbat or Yom Tov that went as two texts counts as two (takeDue counted one).
+  else if (texts > 1 && data.usage.month === new Date(now).toISOString().slice(0, 7)) data.usage.texts += texts - 1;
   if (result === 'blocked') {
     const phone = data.phones.find(p => p.number === taken.to);
     if (phone) phone.optedOut = true;
@@ -189,6 +254,7 @@ export function settle(data: HouseholdData, taken: Pick<QueuedReminder, 'key' | 
     q.doneAt = now;
     q.text = '';
     delete q.msg;
+    delete q.rest;
   } else if (result === 'failed' && now + RETRY_MS < q.until) {
     q.status = 'pending';
     q.doneAt = null;

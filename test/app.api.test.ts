@@ -1514,10 +1514,10 @@ describe('reminders', () => {
   it('go only to phones that agreed to them, each its own kinds, once', async () => {
     await textsOn(c, WIFE, ['hefsek']);
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
-    world.clock.now = at(11, 26, 14, 30); // before the hefsek reminder (two hours before sunset at 4:33)
+    world.clock.now = at(11, 26, 15, 30); // before the hefsek reminder (an hour before sunset at 4:33)
     await run();
     expect(reminders(WIFE)).toEqual([]);
-    world.clock.now = at(11, 26, 14, 34);
+    world.clock.now = at(11, 26, 15, 34);
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
     expect(reminders(WIFE)[0]).toBe('Hefsek tahara: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
@@ -1533,7 +1533,7 @@ describe('reminders', () => {
   it('the hefsek reminder offers DONE, which records the hefsek on that day; the others offer STATUS', async () => {
     await textsOn(c, WIFE);
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
-    world.clock.now = at(11, 26, 14, 34);
+    world.clock.now = at(11, 26, 15, 34);
     await run();
     expect(reminders(WIFE).at(-1)).toBe('Hefsek tahara: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
     // DONE, written in words, an hour later
@@ -1557,7 +1557,7 @@ describe('reminders', () => {
     await textsOn(c, WIFE, ['hefsek']);
     await c.put('/api/app', { ...(await c.state()).app, reminders: { ...(await c.state()).app.reminders, style: 'discreet' } });
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
-    world.clock.now = at(11, 26, 14, 34);
+    world.clock.now = at(11, 26, 15, 34);
     await run();
     expect(reminders(WIFE).at(-1)).toBe('H today before 4:33 PM.\nReply: DONE, STATUS');
     await text(WIFE, 'done', 'ev-done');
@@ -1636,7 +1636,7 @@ describe('reminders', () => {
   it('a change to the entries replaces what waits, and never repeats what was sent', async () => {
     await textsOn(c, WIFE);
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
-    world.clock.now = at(11, 26, 14, 34);
+    world.clock.now = at(11, 26, 15, 34);
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
     // the hefsek is recorded: the hefsek reminders go, the reminders of the seven days come
@@ -1646,7 +1646,9 @@ describe('reminders', () => {
     expect(keys.filter(k => k.status === 'sent').map(k => k.key)).toEqual([expect.stringMatching(/^hefsek:/)]);
     expect(keys.find(k => k.status === 'sent')!.text).toBe(''); // the words are not kept once sent
     expect(keys.filter(k => k.status === 'pending' && k.key.startsWith('hefsek:'))).toEqual([]);
-    expect(keys.filter(k => k.status === 'pending' && k.key.startsWith('bedikah_am:')).length).toBe(7);
+    // the seventh, Shabbat's, is a line of the one text on Friday morning
+    expect(keys.filter(k => k.status === 'pending' && k.key.startsWith('bedikah_am:')).length).toBe(6);
+    expect(keys.filter(k => k.status === 'pending' && k.key.startsWith('rest:'))).toHaveLength(1);
     // she removes it again: the same day's hefsek reminder is not sent a second time
     await text(WIFE, 'undo', 'ev-undo');
     await run();
@@ -1658,10 +1660,10 @@ describe('reminders', () => {
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     world.clock.now = at(11, 26, 16);
     await c.post('/api/entries', { kind: 'hefsek', when: 'now' });
-    // Friday 27 November: the afternoon reminder is at 3:03 PM; candle lighting is 4:15 PM.
+    // Friday 27 November: the afternoon reminder is at 3:33 PM; candle lighting is 4:15 PM.
     world.telnyx.failNext = 100; // the provider is down all Friday afternoon
-    for (let m = 0; m <= 80; m += 10) {
-      world.clock.now = at(11, 27, 15, 4) + m * MINUTE;
+    for (let m = 0; m <= 50; m += 10) {
+      world.clock.now = at(11, 27, 15, 34) + m * MINUTE;
       await run();
     }
     world.telnyx.failNext = 0;
@@ -1673,7 +1675,7 @@ describe('reminders', () => {
     const friday = (await queue()).find(q => /^bedikah_pm:.*:1$/.test(q.key))!;
     expect(friday.status).toBe('dropped');
     // Sunday's goes out as usual
-    world.clock.now = at(11, 29, 15, 5);
+    world.clock.now = at(11, 29, 15, 34);
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
     expect(reminders(WIFE)[0]).toContain('Clean day 3 of 7');
@@ -1682,7 +1684,7 @@ describe('reminders', () => {
   it('a failed send is tried again ten minutes later, while the reminder is still worth sending', async () => {
     await textsOn(c, WIFE, ['hefsek']);
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
-    world.clock.now = at(11, 26, 14, 34);
+    world.clock.now = at(11, 26, 15, 34);
     world.telnyx.failNext = 1;
     await run();
     expect(reminders(WIFE)).toEqual([]);
@@ -1699,7 +1701,7 @@ describe('reminders', () => {
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     const op = await operator();
     expect((await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, smsEnabled: false })).status).toBe(200);
-    world.clock.now = at(11, 26, 14, 34);
+    world.clock.now = at(11, 26, 15, 34);
     await run();
     expect(reminders(WIFE)).toEqual([]);
     const hefsek = (await queue()).find(q => q.key.startsWith('hefsek:'))!;
@@ -1721,14 +1723,14 @@ describe('reminders', () => {
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     const op = await operator();
     expect((await op.put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, smsEnabled: false })).status).toBe(200);
-    for (let t = at(11, 26, 14, 34); t <= at(11, 26, 18); t += 10 * MINUTE) {
+    for (let t = at(11, 26, 15, 34); t <= at(11, 26, 18, 40); t += 10 * MINUTE) {
       world.clock.now = t;
       await run();
     }
     const hefsek = (await queue()).find(q => q.key.startsWith('hefsek:'))!;
     expect(hefsek).toMatchObject({ status: 'dropped', text: '' });
     expect((await (await operator()).put('/api/admin/config', { ...DEFAULT_SITE_CONFIG, smsEnabled: true })).status).toBe(200);
-    world.clock.now = at(11, 26, 18, 10);
+    world.clock.now = at(11, 26, 18, 50);
     await run();
     expect(reminders(WIFE)).toEqual([]);
     expect(await count('households', `wake_at IS NOT NULL AND wake_at <= ${world.clock.now}`)).toBe(0);
