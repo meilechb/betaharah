@@ -35,13 +35,14 @@ const failures = [];
 const fail = (where, message) => failures.push(`${where}: ${message}`);
 
 const HOME_PHRASES = [
-  'Your mikvah calendar, worked out for you',
-  'Tap any day to try it.',
-  'Prefer texting?',
-  'period now',
-  'Hefsek from Sat Nov 28',
+  'Your mikvah calendar, by text',
+  'Three steps, all by text',
+  'What you can text',
+  'period last night',
+  'Hefsek from Thu',
   'Text reminders, your way',
-  'Signing in with Google',
+  'Tap any day to try it.',
+  'Sign in with your phone or with Google',
 ];
 // The home page says what it does for a person; how it is built is on /privacy.
 const TECHNICAL = [/AES/, /decrypt/i, /encrypt/i, /Telnyx/, /cookie/i, /\bserver\b/i, /night of Shabbat/, /night of Shabbos/];
