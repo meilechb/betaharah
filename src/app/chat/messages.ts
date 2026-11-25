@@ -458,16 +458,16 @@ add('reminders.wording', 'Reminders', 'WORDING: plain or discreet, for every pho
 ], { style: 'plain' });
 add('reminders.wording_changed', 'Reminders', 'The wording was changed.', 'Changed: reminder wording is {style} for every phone.', MAIN, { style: 'discreet' });
 add('reminders.wording_same', 'Reminders', 'The wording chosen is the one already set.', 'Reminder wording is already {style}. Nothing was changed.', MAIN, { style: 'plain' });
-/** BEDIKOT: which clean days, and the morning and before-sunset reminders, each offered in its other state. */
+/** BEDIKOT: which clean days (DAYS), and the morning and before-sunset reminders, each offered in its other state. */
 const BEDIKOT: Opt[] = [
-  ['days_all', 'ALL DAYS'],
-  ['days_1_7', '1 AND 7'],
-  ['days_choose', 'CHOOSE DAYS'],
+  ['days', 'DAYS'],
   ['morning_on', 'MORNING ON'],
   ['morning_off', 'MORNING OFF'],
   ['sunset_on', 'BEFORE SUNSET ON'],
   ['sunset_off', 'BEFORE SUNSET OFF'],
+  MENU,
 ];
+const DAYS: Opt[] = [['days_all', 'ALL DAYS'], ['days_1_7', '1 AND 7'], MENU];
 const BEDIKOT_EXAMPLE = { state: 'on', days: 'all 7', morning: 'on', sunset: 'on' };
 const BEDIKOT_BODY = 'Bedikah reminders are {state}: clean days {days}; morning {morning}; before sunset {sunset}.';
 add('reminders.bedikot', 'Reminders', 'BEDIKOT: the bedikah reminders of the account. MORNING and BEFORE SUNSET offer whichever applies.', BEDIKOT_BODY, BEDIKOT, BEDIKOT_EXAMPLE);
@@ -476,8 +476,15 @@ add('reminders.bedikot_changed', 'Reminders', 'The bedikah days, or the morning 
   days: '1 and 7',
 });
 add('reminders.bedikot_same', 'Reminders', 'A bedikah choice that is already set.', `Nothing was changed. ${BEDIKOT_BODY}`, BEDIKOT, BEDIKOT_EXAMPLE);
-add('reminders.days_ask', 'Reminders', 'CHOOSE DAYS: the clean days are written in reply.', 'Which clean days? Their numbers, such as 1 2 7.', [['days_all', 'ALL DAYS'], ['days_1_7', '1 AND 7'], MENU]);
-add('reminders.days_bad', 'Reminders', 'Numbers after CHOOSE DAYS that are not clean days from 1 to 7.', 'Not understood: clean days are 1 to 7, such as 1 2 7. Nothing was changed.', [['days_all', 'ALL DAYS'], ['days_1_7', '1 AND 7'], MENU]);
+add(
+  'reminders.days_ask',
+  'Reminders',
+  'DAYS: all seven, 1 and 7, or other clean days written in reply by their numbers.',
+  'Bedikah reminders on clean days {days}. Other days: their numbers, such as 1 2 7.',
+  DAYS,
+  { days: 'all 7' },
+);
+add('reminders.days_bad', 'Reminders', 'Numbers after DAYS that are not clean days from 1 to 7.', 'Not understood: clean days are 1 to 7, such as 1 2 7. Nothing was changed.', DAYS);
 add(
   'reminders.rest_eve',
   'Reminders',

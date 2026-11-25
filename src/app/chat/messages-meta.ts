@@ -169,7 +169,7 @@ const BY_CATEGORY: Record<CategoryId, Record<string, Entry>> = {
     'reminders.bedikot': ['Bedikah reminders', 'BEDIKOT: which clean days, morning and before sunset.', { sub: 'Reminders' }],
     'reminders.bedikot_changed': ['Bedikah reminders changed', 'The days, or the morning or before-sunset reminder, were changed.', { sub: 'Reminders' }],
     'reminders.bedikot_same': ['Bedikah reminders unchanged', 'A bedikah choice that is already set.', { sub: 'Reminders' }],
-    'reminders.days_ask': ['Which clean days', 'CHOOSE DAYS: she writes the day numbers.', { sub: 'Reminders' }],
+    'reminders.days_ask': ['Which clean days', 'DAYS: all, 1 and 7, or the day numbers written in reply.', { sub: 'Reminders' }],
     'reminders.days_bad': ['Clean days not understood', 'Numbers that are not clean days 1 to 7.', { sub: 'Reminders' }],
     'reminders.rest_eve': ['Text before Shabbat: time', 'SHABBAT: its time; a time written in reply changes it.', { sub: 'Reminders' }],
     'reminders.rest_eve_changed': ['Time before Shabbat set', 'A time was written after SHABBAT.', { sub: 'Reminders' }],

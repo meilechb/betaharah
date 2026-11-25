@@ -1744,6 +1744,58 @@ describe('reminders', () => {
     expect(reminders(WIFE)).toEqual([]);
   });
 
+  it('Shabbat: one text on Friday morning; a refresh sends nothing twice; a kind turned on later goes at once, alone', async () => {
+    await textsOn(c, WIFE, ['bedikah_morning', 'mikvah']);
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    world.clock.now = at(11, 26, 16);
+    await c.post('/api/entries', { kind: 'hefsek', when: 'now' });
+    world.clock.now = at(11, 27, 8, 59);
+    await run();
+    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual([]);
+    world.clock.now = at(11, 27, 9, 1);
+    await run();
+    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual(['Over Shabbat. Tomorrow: clean day 2, bedikah in the morning.\nReply: STATUS']);
+    // the six-hourly refresh, and more runs: nothing again
+    await testDb.db.prepare('UPDATE households SET refresh_at = 0').run();
+    world.clock.now = at(11, 27, 11);
+    await run();
+    await run();
+    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toHaveLength(1);
+    // at noon the afternoon bedikah is turned on for this phone: only it, at once
+    world.clock.now = at(11, 27, 12);
+    await textsOn(c, WIFE, ['bedikah_morning', 'bedikah_afternoon', 'mikvah']);
+    await run();
+    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual([
+      'Over Shabbat. Tomorrow: clean day 2, bedikah in the morning.\nReply: STATUS',
+      expect.stringMatching(/^Over Shabbat\. Tomorrow: clean day 2, bedikah before 4:3\d PM\.\nReply: STATUS$/),
+    ]);
+    // nothing during Shabbat, nothing after it (all of it was brought), and Sunday as usual
+    for (const t of [at(11, 27, 17), at(11, 28, 9), at(11, 28, 18), at(11, 28, 20)]) {
+      world.clock.now = t;
+      await run();
+    }
+    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toHaveLength(2);
+    expect(reminders(WIFE).filter(t => !t.startsWith('Over') && !t.startsWith('Clean day 1'))).toEqual([]);
+    world.clock.now = at(11, 29, 8, 1);
+    await run();
+    expect(reminders(WIFE).at(-1)).toMatch(/^Clean day 3 of 7 is today:/);
+  });
+
+  it('Shabbat: a hefsek recorded on Friday after the morning text: what falls on Shabbat goes at once, as one text', async () => {
+    await textsOn(c, WIFE);
+    await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
+    world.clock.now = at(11, 27, 9, 1);
+    await run();
+    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual([]); // nothing fell on Shabbat yet
+    world.clock.now = at(11, 27, 13);
+    await text(WIFE, 'hefsek today', 'ev-h');
+    world.clock.now = at(11, 27, 13, 1);
+    await run();
+    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual([
+      expect.stringMatching(/^Over Shabbat\. Tomorrow: clean day 1, bedikah morning and before 4:3\d PM \(required\)\. Book the mikvah for Fri night, eve of 25 Kislev, after 5:1\d PM\.\nReply: STATUS$/),
+    ]);
+  });
+
   it('the periodic job keeps every account current, one at a time, and tidies up', async () => {
     await textsOn(c, WIFE);
     const other = await account(OTHER, new Client('203.0.113.2'));

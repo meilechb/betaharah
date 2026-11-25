@@ -368,7 +368,7 @@ describe('settings by text', () => {
     const data = household();
     const p = new Phone(data);
     expect(p.say('reminders')).toBe('Reminders for this phone are off. Kinds on: 6 of 6. Wording: plain.');
-    expect(p.options()).toEqual(['TURN ON', 'KINDS', 'WORDING']);
+    expect(p.options()).toEqual(['TURN ON', 'KINDS', 'WORDING', 'BEDIKOT', 'SHABBAT']);
     expect(p.say('turn on')).toBe(
       'Reminders are on for this phone (ending 0101). This phone agrees to receive reminder texts from Betaharah. Msg frequency varies. Msg&data rates may apply. Reply STOP to stop, HELP for help.',
     );
@@ -396,6 +396,55 @@ describe('settings by text', () => {
     expect(p.say('discreet')).toBe('Changed: reminder wording is discreet for every phone.');
     expect(data.app.reminders.style).toBe('discreet');
     expect(p.say('wording discreet')).toBe('Reminder wording is already discreet. Nothing was changed.');
+  });
+  it('BEDIKOT: which clean days (all, 1 and 7, or written), and the morning and before-sunset reminders', () => {
+    const data = household();
+    const p = new Phone(data);
+    p.send('reminders');
+    expect(p.say('bedikot')).toBe('Bedikah reminders are on: clean days all 7; morning on; before sunset on.');
+    expect(p.options()).toEqual(['DAYS', 'MORNING OFF', 'BEFORE SUNSET OFF', 'MENU']);
+    expect(p.say('days')).toBe('Bedikah reminders on clean days all 7. Other days: their numbers, such as 1 2 7.');
+    expect(p.options()).toEqual(['ALL DAYS', '1 AND 7', 'MENU']);
+    expect(p.say('1 and 7')).toBe('Changed. Bedikah reminders are on: clean days 1 and 7; morning on; before sunset on.');
+    expect(data.app.reminders.bedikot.days).toEqual([1, 7]);
+    expect(p.say('morning off')).toBe('Changed. Bedikah reminders are on: clean days 1 and 7; morning off; before sunset on.');
+    expect(p.options()).toEqual(['DAYS', 'MORNING ON', 'BEFORE SUNSET OFF', 'MENU']);
+    expect(data.app.reminders.bedikot.morning).toBe(false);
+    expect(p.say('sunset')).toBe('Changed. Bedikah reminders are on: clean days 1 and 7; morning off; before sunset off.');
+    expect(p.say('morning')).toBe('Changed. Bedikah reminders are on: clean days 1 and 7; morning on; before sunset off.');
+    p.send('days');
+    expect(p.say('1 and 7')).toBe('Nothing was changed. Bedikah reminders are on: clean days 1 and 7; morning on; before sunset off.');
+    // the day numbers, written as she likes; a single digit is data here, not a command
+    p.send('days');
+    expect(p.say('1, 2 and 7')).toBe('Changed. Bedikah reminders are on: clean days 1, 2 and 7; morning on; before sunset off.');
+    p.send('days');
+    expect(p.say('7')).toBe('Changed. Bedikah reminders are on: clean days 7 only; morning on; before sunset off.');
+    p.send('days');
+    expect(p.say('1-3 7')).toBe('Changed. Bedikah reminders are on: clean days 1, 2, 3 and 7; morning on; before sunset off.');
+    p.send('days');
+    expect(p.say('8 9')).toBe('Not understood: clean days are 1 to 7, such as 1 2 7. Nothing was changed.');
+    expect(p.say('all days')).toBe('Changed. Bedikah reminders are on: clean days all 7; morning on; before sunset off.');
+    expect(data.app.reminders.bedikot).toMatchObject({ days: [1, 2, 3, 4, 5, 6, 7], morning: true, beforeSunset: false });
+    // outside the options, a digit is still never a command
+    p.send('menu');
+    expect(p.say('7')).toBe('Not understood; nothing was changed.');
+    // "reminders bedikot" at any time
+    expect(p.say('reminders bedikot')).toMatch(/^Bedikah reminders are on:/);
+  });
+  it('SHABBAT: the time of the one text before Shabbat and Yom Tov, changed by writing a time', () => {
+    const data = household();
+    const p = new Phone(data);
+    p.send('reminders');
+    expect(p.say('shabbat')).toBe('Before Shabbat and Yom Tov: one text that morning at 9:00 AM, with what falls on those days. A time such as 8:30 AM changes it.');
+    expect(p.options()).toEqual(['BEDIKOT', 'MENU']);
+    expect(p.say('8:30 am')).toBe('The text before Shabbat and Yom Tov comes at 8:30 AM that morning.');
+    expect(data.app.reminders.restEve).toEqual({ hour: 8, minute: 30 });
+    p.send('reminders shabbos');
+    expect(p.say('10')).toBe('The text before Shabbat and Yom Tov comes at 10:00 AM that morning.');
+    p.send('reminders shabbat');
+    expect(p.say('25:00')).toBe('Not understood: a time such as 8:30 AM. Nothing was changed.');
+    expect(p.say('7am')).toBe('The text before Shabbat and Yom Tov comes at 7:00 AM that morning.');
+    expect(data.app.reminders.restEve).toEqual({ hour: 7, minute: 0 });
   });
   it('CALENDAR: create, show, replace (YES), remove (YES)', () => {
     const data = household();

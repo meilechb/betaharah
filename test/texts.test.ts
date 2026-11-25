@@ -9,7 +9,8 @@ import { isGsmBasic, MAX_TEXT_CHARS, SEGMENT_CHARS } from '../src/app/chat/gsm';
 import { dateExamples, DEFAULT_WORDS, GENERAL_ACTIONS, MESSAGES, MESSAGE_BY_KEY } from '../src/app/chat/messages';
 import { DATE_STYLES } from '../src/engine/dates';
 import { checkMessage, checkWords, compose, exampleLength, exampleVars, NO_TEXTS, optionsOf, parseSiteTexts, renderBody, TextsError } from '../src/app/chat/site-texts';
-import { REMINDER_TEXTS, STATUS_TEXTS } from '../src/engine/present';
+import { REMINDER_TEXTS, STATUS_TEXTS, type RestItem } from '../src/engine/present';
+import { restOut } from '../src/app/chat';
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap(name => {
@@ -213,5 +214,64 @@ describe("checking the operator's changes", () => {
     expect(renderBody(t, 'record.flow', { entry: 'x', details: '' })).toBe('Recorded: x.');
     expect(parseSiteTexts('garbage')).toEqual(NO_TEXTS);
     expect(GENERAL_ACTIONS.slice(0, 5).map(a => a.action)).toEqual(['period', 'hefsek', 'status', 'undo', 'menu']);
+  });
+});
+
+describe('the one text before Shabbat or Yom Tov', () => {
+  const NOW = Date.UTC(2027, 3, 21, 13);
+  const item = (key: string, kind: RestItem['kind'], at: number, vars: Record<string, string>): RestItem => ({ key, kind, at, end: at + 3_600_000, vars });
+  const H = 3_600_000;
+  // The longest realistic stretch: a two-day Yom Tov and Shabbat, with the hefsek on its first day, the bedikot of the
+  // two clean days after it, the booking, a mikvah night with every note, and an onah with four reasons and more.
+  const WORST: RestItem[] = [
+    item('hefsek:p:1', 'hefsek', 1 * H, { day: 'Tomorrow', sunset: '7:42 PM' }),
+    item('bedikah_am:p:1:1', 'bedikah_morning', 20 * H, { day: 'Fri', n: '1', sunset: '7:43 PM', required: ' (required)' }),
+    item('bedikah_pm:p:1:1', 'bedikah_afternoon', 30 * H, { day: 'Fri', n: '1', sunset: '7:43 PM', required: ' (required)' }),
+    item('bedikah_am:p:1:2', 'bedikah_morning', 44 * H, { day: 'Shabbat', n: '2', sunset: '7:44 PM', required: '' }),
+    item('bedikah_pm:p:1:2', 'bedikah_afternoon', 54 * H, { day: 'Shabbat', n: '2', sunset: '7:44 PM', required: '' }),
+    item('mikvah_book:p:1', 'mikvah_book', 45 * H, { day: 'Thu night, eve of 28 Nisan', time: '8:31 PM' }),
+    item('mikvah:p:1:2', 'mikvah', 55 * H, { day: 'Shabbat night', time: '8:31 PM', notes: ' (moved past the fast; after Shabbat or Yom Tov; also an onah)' }),
+  ];
+  const ONAH = item('onah:1:2', 'onah', 56 * H, {
+    from: '8:05 PM Shabbat night',
+    to: '7:46 AM Sun',
+    why: 'Or Zarua of day 30, chodesh, haflagah 28d, haflagah 29 onot +2 more',
+    bedikah: ' Bedikah.',
+    mark: 'OZ',
+  });
+  const send = (style: 'plain' | 'discreet', items: RestItem[]) => restOut(NO_TEXTS, { rest: 'Yom Tov and Shabbat', style, items }, NOW);
+
+  it('reads as one short list: its days in order, both bedikot of a day on one line, in both wordings', () => {
+    const plain = send('plain', WORST.slice(0, 5));
+    expect(plain.outs.map(o => o.text)).toEqual([
+      'Over Yom Tov and Shabbat. Tomorrow: hefsek tahara before 7:42 PM. Fri: clean day 1, bedikah morning and before 7:43 PM (required). Shabbat: clean day 2, bedikah morning and before 7:44 PM.\nReply: STATUS',
+    ]);
+    expect(plain.chat).toMatchObject({ key: 'reminder.rest.bedikot', opts: [['status', 'STATUS']] });
+    const discreet = send('discreet', WORST.slice(0, 5));
+    expect(discreet.outs.map(o => o.text)).toEqual(['Over Yom Tov and Shabbat. Tomorrow: H before 7:42 PM. Fri: day 1/7, AM and before 7:43 PM. Shabbat: day 2/7, AM and before 7:44 PM.\nReply: STATUS']);
+    // one part of a day alone
+    expect(send('plain', [WORST[2]!]).outs[0]!.body).toBe('Over Yom Tov and Shabbat. Fri: clean day 1, bedikah before 7:43 PM (required).');
+    expect(send('plain', [WORST[1]!]).outs[0]!.body).toBe('Over Yom Tov and Shabbat. Fri: clean day 1, bedikah in the morning (required).');
+  });
+
+  it('the worst case is at most two texts of two segments each, split between lines, each with its options', () => {
+    for (const style of ['plain', 'discreet'] as const) {
+      for (const items of [WORST, [...WORST, ONAH]]) {
+        const { outs } = send(style, items);
+        expect(outs.length, style).toBeLessThanOrEqual(2);
+        for (const o of outs) {
+          expect(o.text.length, o.text).toBeLessThanOrEqual(MAX_TEXT_CHARS);
+          expect(isGsmBasic(o.text), o.text).toBe(true);
+          expect(o.text).toMatch(/\.\nReply: STATUS$/); // whole lines only, nothing cut short
+        }
+        expect(outs[0]!.text.startsWith('Over Yom Tov and Shabbat. Tomorrow: ')).toBe(true);
+      }
+    }
+    expect(send('plain', WORST).outs).toHaveLength(2);
+  });
+
+  it('is in the operator wording, line by line', () => {
+    const t = parseSiteTexts({ messages: { 'reminder.rest': { body: 'For {rest}:' }, 'reminder.rest.hefsek': { body: '{day} hefsek by {sunset}.' } } });
+    expect(restOut(t, { rest: 'Shabbat', style: 'plain', items: [WORST[0]!] }, NOW).outs[0]!.body).toBe('For Shabbat: Tomorrow hefsek by 7:42 PM.');
   });
 });

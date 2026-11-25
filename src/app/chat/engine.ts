@@ -837,11 +837,11 @@ function setWording(r: Reply, style: 'plain' | 'discreet'): void {
   r.say('reminders.wording_changed', { style });
 }
 
-/** "all 7", "1 and 7", "1, 2 and 7", "none": the clean days that get bedikah reminders. */
+/** "all 7", "1 and 7", "1, 2 and 7", "7 only", "none": the clean days that get bedikah reminders. */
 export function cleanDaysWords(days: readonly number[]): string {
   if (days.length === 7) return 'all 7';
   if (days.length === 0) return 'none';
-  if (days.length === 1) return String(days[0]);
+  if (days.length === 1) return `${days[0]} only`;
   return `${days.slice(0, -1).join(', ')} and ${days[days.length - 1]}`;
 }
 
@@ -849,7 +849,7 @@ export function cleanDaysWords(days: readonly number[]): string {
 function bedikotSay(r: Reply, key: string): void {
   const b = r.input.data.app.reminders.bedikot;
   const vars = { state: b.on ? 'on' : 'off', days: cleanDaysWords(b.days), morning: b.morning ? 'on' : 'off', sunset: b.beforeSunset ? 'on' : 'off' };
-  r.say(key, vars, ['days_all', 'days_1_7', 'days_choose', b.morning ? 'morning_off' : 'morning_on', b.beforeSunset ? 'sunset_off' : 'sunset_on']);
+  r.say(key, vars, ['days', b.morning ? 'morning_off' : 'morning_on', b.beforeSunset ? 'sunset_off' : 'sunset_on', 'menu']);
 }
 
 function bedikot(r: Reply): void {
@@ -871,8 +871,9 @@ function setBedikot(r: Reply, change: BedikotChange): void {
   bedikotSay(r, 'reminders.bedikot_changed');
 }
 
+/** DAYS: all seven, 1 and 7, or the numbers written in reply (asked again when they are not clean days). */
 function askDays(r: Reply, key: 'reminders.days_ask' | 'reminders.days_bad'): void {
-  r.say(key).ask({}, 'days');
+  r.say(key, { days: cleanDaysWords(r.input.data.app.reminders.bedikot.days) }).ask({}, 'days');
 }
 
 /**
@@ -1318,7 +1319,7 @@ function choose(r: Reply, chat: ChatState, id: string, rest: readonly string[]):
       return setBedikot(r, { days: [1, 2, 3, 4, 5, 6, 7] });
     case 'days_1_7':
       return setBedikot(r, { days: [1, 7] });
-    case 'days_choose':
+    case 'days':
       return askDays(r, 'reminders.days_ask');
     case 'morning_on':
     case 'morning_off':
