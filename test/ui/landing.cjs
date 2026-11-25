@@ -358,7 +358,7 @@ async function metaAndHeaders() {
     const tw = /name="twitter:image" content="([^"]+)"/.exec(html);
     if (!tw || tw[1] !== image[1]) fail(where, 'twitter:image differs from og:image');
   }
-  for (const path of ['/app/', '/admin/', '/help', '/site.css']) {
+  for (const path of ['/app/', '/admin/', '/help', '/sms-opt-in-1.png', '/no-such-page']) {
     const tag = (await fetch(base + path)).headers.get('x-robots-tag') || '';
     if (!/noindex/i.test(tag)) fail(where, `${path} is no longer sent with X-Robots-Tag: noindex`);
   }

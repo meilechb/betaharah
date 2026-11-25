@@ -445,4 +445,41 @@ not the addresses requested and not any account's data.
   are down, they have to wait for texts; there is no back door into an
   account.
 - **Restore the database:** Cloudflare keeps 7 days of point-in-time
-  recovery (`wrangler d1 time-travel`). There is no other backup.
+  recovery on the free plan (30 on Workers Paid), always on, nothing to set
+  up: `npx wrangler d1 time-travel info betaharah` shows where it stands,
+  and `npx wrangler d1 time-travel restore betaharah --timestamp=<unix time>`
+  puts the whole database back to that moment (it overwrites the database
+  in place). See
+  [Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/).
+- **A copy older than 7 days:** export the database to a file now and then,
+  and keep it somewhere other than Cloudflare:
+
+  ```sh
+  npx wrangler d1 export betaharah --remote --output=./betaharah-backup.sql
+  ```
+
+  Other requests to the database wait while the export runs, so do it at a
+  quiet hour. The file holds each account as an encrypted document, so it
+  is useless without the Worker's `ENCRYPTION_KEY`; keep a copy of that key
+  too, in a separate place (a password manager), or the backup cannot be
+  read. See
+  [Import and export data](https://developers.cloudflare.com/d1/best-practices/import-export-data/).
+
+## Cloudflare settings outside this repository
+
+These are set in the Cloudflare dashboard for the betaharah.com zone, not in
+`wrangler.jsonc`, so a deploy does not change them.
+
+- **Always Use HTTPS: on.** SSL/TLS → Edge Certificates → Always Use HTTPS.
+  Without it, `http://betaharah.com/` is served over plain HTTP instead of
+  being redirected. See
+  [Always Use HTTPS](https://developers.cloudflare.com/ssl/edge-certificates/additional-options/always-use-https/).
+- **Web Analytics: disabled.** Web Analytics → Web Analytics Sites →
+  Manage site on betaharah.com's card → Disable. When it is on, Cloudflare
+  adds a script from `static.cloudflareinsights.com` to every page; the
+  Content Security Policy blocks it (a console error on every page), and the
+  Privacy page says there is no analytics. See
+  [Web Analytics](https://developers.cloudflare.com/web-analytics/get-started/).
+- **Managed robots.txt** may stay on. Cloudflare puts its content-signal
+  lines in front of `public/robots.txt`; the site's own lines and the
+  sitemap address follow unchanged.

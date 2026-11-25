@@ -2,42 +2,24 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   X-Frame-Options: DENY
-  X-Robots-Tag: noindex
   Strict-Transport-Security: max-age=31536000
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
+# Search engines may index the home page and its files. The dashboard, the
+# console and the texting-consent screenshots are kept out with noindex here
+# (and the dashboard and console pages also carry <meta name="robots">). This
+# names the paths to keep out instead of removing a site-wide noindex from "/",
+# which production did not do.
 /app/*
   Cache-Control: no-cache
+  X-Robots-Tag: noindex
 
 /admin/*
   Cache-Control: no-cache
+  X-Robots-Tag: noindex
 
-# The home page and its own files may be indexed by search engines; every other
-# path keeps the X-Robots-Tag: noindex set above.
-/
-  ! X-Robots-Tag
-
-/landing.css
-  ! X-Robots-Tag
-
-/landing.js
-  ! X-Robots-Tag
-
-/landing/*
-  ! X-Robots-Tag
-
-/favicon.svg
-  ! X-Robots-Tag
-
-# The share image named on the home page, and the mark's other files.
-/brand/*
-  ! X-Robots-Tag
-
-/favicon.ico
-  ! X-Robots-Tag
-
-/apple-touch-icon.png
-  ! X-Robots-Tag
+/sms-opt-in-*
+  X-Robots-Tag: noindex
 
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable

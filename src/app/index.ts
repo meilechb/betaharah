@@ -38,7 +38,7 @@ import { authorizationUrl, exchangeCode, fetchGoogleIdentity, GoogleCalendar, Go
 import { compute, confirmationText, publishedEvents, recordEntry, rejectionText, removeEntry, whereOf, type Computed } from './household';
 import { toICalendar } from './ics';
 import { addMessage, DEFAULT_SITE_CONFIG, donateReady, googleReady, lastFour, MAX_PHONES, smsReady, type Site } from './model';
-import { donatePage, helpPage, privacyPage, termsPage } from './pages';
+import { donatePage, helpPage, notFoundPage, privacyPage, termsPage } from './pages';
 import { allowText, refundText } from './queue';
 import { ensureSchema } from './schema';
 import {
@@ -171,7 +171,10 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     return c.json({ error: 'Something went wrong on the server.' }, 500);
   });
 
-  app.notFound(c => (c.req.path.startsWith('/api/') ? c.json({ error: 'Not found.' }, 404) : c.text('Not found.', 404)));
+  app.notFound(async c => {
+    if (c.req.path.startsWith('/api/') || c.req.method !== 'GET') return c.json({ error: 'Not found.' }, 404);
+    return c.html(notFoundPage(await siteForPage(c.env)), 404);
+  });
 
   app.use('*', async (c, next) => {
     await ensureSchema(c.env.DB);

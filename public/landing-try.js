@@ -441,7 +441,7 @@ function draw() {
       'div',
       { class: 'month-nav' },
       el('button', { type: 'button', class: 'cal-btn', id: 'try-prev', 'aria-label': 'Previous month', disabled: !prev, onclick: () => prev && go(prev) }, svgIcon('i-left')),
-      el('div', { class: 'month-title' }, el('h3', { id: 'try-month' }, fmt(month + '-01', { month: 'long', year: 'numeric' })), hebrew ? el('p', { class: 'hebrew-months' }, hebrew) : null),
+      el('div', { class: 'month-title' }, el('h2', { id: 'try-month' }, fmt(month + '-01', { month: 'long', year: 'numeric' })), hebrew ? el('p', { class: 'hebrew-months' }, hebrew) : null),
       el('button', { type: 'button', class: 'cal-btn', id: 'try-next', 'aria-label': 'Next month', disabled: !next, onclick: () => next && go(next) }, svgIcon('i-right')),
     ),
     monthTable(i, grid),

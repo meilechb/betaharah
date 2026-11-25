@@ -1,0 +1,6 @@
+# Every page may be crawled. The pages that should not appear in search results
+# (the dashboard, the console, Help) say so themselves with noindex.
+User-agent: *
+Allow: /
+
+Sitemap: https://betaharah.com/sitemap.xml

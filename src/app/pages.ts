@@ -24,6 +24,8 @@ interface Doc {
   title: string;
   /** Shown under the heading: the page's purpose, in a sentence or two (HTML). */
   intro: string;
+  /** The search-result and share summary: plain text, under about 160 characters. */
+  description: string;
   updated?: boolean;
   /** Whether search engines may list the page. Privacy and Terms may: Google's review of the sign-in looks for them. */
   indexable?: boolean;
@@ -34,14 +36,26 @@ interface Doc {
   sections: Section[];
 }
 
-const SHARE = 'A free mikvah calendar that works by text message and shows up in your own calendar. Calculated by your customs.';
 const SHARE_IMAGE = 'https://betaharah.com/brand/og-1200x630.png';
+
+const donateLink = (donate: boolean): string => (donate ? '<a href="/donate">Donate</a>' : '');
+
+function siteHeader(donate: boolean): string {
+  return `<a class="skip" href="#main">Skip to the content</a>
+<header class="site">
+  <a class="brand" href="/"><img class="mark" src="/favicon.svg" alt="" width="28" height="28">Betaharah</a>
+  <nav aria-label="Site"><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>${donateLink(donate)}<a class="button" href="/app/">Sign in</a></nav>
+</header>`;
+}
+
+function siteFooter(donate: boolean): string {
+  return `<footer class="site"><a href="/">Home</a><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>${donateLink(donate)}</footer>`;
+}
 
 function layout(doc: Doc): string {
   const full = `${doc.title} · Betaharah`;
   const toc = doc.sections.map(s => `<li><a href="#${s.id}">${s.title}</a></li>`).join('');
   const sections = doc.sections.map(s => `<section id="${s.id}" aria-labelledby="${s.id}-h">\n<h2 id="${s.id}-h">${s.title}</h2>\n${s.body}\n</section>`).join('\n\n');
-  const donate = doc.donate ? '<a href="/donate">Donate</a>' : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -49,6 +63,7 @@ function layout(doc: Doc): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="${doc.indexable ? 'index,follow' : 'noindex'}">
 <title>${escapeHtml(full)}</title>
+<meta name="description" content="${escapeHtml(doc.description)}">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -57,14 +72,14 @@ function layout(doc: Doc): string {
 <meta property="og:site_name" content="Betaharah">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${escapeHtml(full)}">
-<meta property="og:description" content="${escapeHtml(SHARE)}">
+<meta property="og:description" content="${escapeHtml(doc.description)}">
 <meta property="og:url" content="https://betaharah.com${doc.path}">
 <meta property="og:image" content="${SHARE_IMAGE}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(full)}">
-<meta name="twitter:description" content="${escapeHtml(SHARE)}">
+<meta name="twitter:description" content="${escapeHtml(doc.description)}">
 <meta name="twitter:image" content="${SHARE_IMAGE}">
 <link rel="preload" href="/fonts/heebo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/bellefair-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -72,11 +87,7 @@ function layout(doc: Doc): string {
 <link rel="stylesheet" href="/pages.css">
 </head>
 <body class="doc-page">
-<a class="skip" href="#main">Skip to the content</a>
-<header class="site">
-  <a class="brand" href="/"><img class="mark" src="/favicon.svg" alt="" width="28" height="28">Betaharah</a>
-  <nav aria-label="Site"><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>${donate}<a class="button" href="/app/">Sign in</a></nav>
-</header>
+${siteHeader(doc.donate)}
 <main class="doc" id="main">
 <header class="doc-head">
 <h1>${escapeHtml(doc.title)}</h1>
@@ -90,7 +101,7 @@ ${doc.updated ? `<p class="updated">Last updated ${LAST_UPDATED}</p>` : ''}
 ${sections}
 <p class="to-top"><a href="#main">Back to the top</a></p>
 </main>
-<footer class="site"><a href="/">Home</a><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>${donate}</footer>
+${siteFooter(doc.donate)}
 </body>
 </html>
 `;
@@ -142,6 +153,7 @@ export function helpPage(site: Site): string {
   return layout({
     title: 'Help',
     path: '/help',
+    description: 'How to start with Betaharah, record dates by text message, set reminders, and see your mikvah calendar in Google Calendar or any calendar app.',
     donate: donateReady(site),
     intro: 'How to start, how to record by text message, and how to see the dates in your calendar.',
     sections: [
@@ -233,6 +245,7 @@ export function privacyPage(site: Site): string {
   return layout({
     title: 'Privacy',
     path: '/privacy',
+    description: 'What Betaharah keeps, how it is encrypted, who can see it, and how to download or delete your data. No advertising, no analytics, no tracking.',
     donate: donateReady(site),
     updated: true,
     indexable: true,
@@ -338,6 +351,7 @@ ${links.map(l => `  <li><a class="button give-link" href="${escapeHtml(l.url)}" 
   return layout({
     title: 'Donate',
     path: '/donate',
+    description: 'Betaharah is free. Ways to give toward what it costs to run, for anyone who wants to.',
     donate: true,
     intro: 'Betaharah is free. This page lists ways to give toward what it costs to run, for anyone who wants to.',
     sections: [
@@ -371,6 +385,7 @@ export function termsPage(site: Site): string {
   return layout({
     title: 'Terms',
     path: '/terms',
+    description: 'The terms for using Betaharah, a free mikvah calendar by text message: what it calculates, text messages, your account, and no warranty.',
     donate: donateReady(site),
     updated: true,
     indexable: true,
@@ -429,4 +444,35 @@ export function termsPage(site: Site): string {
       },
     ],
   });
+}
+
+/** The answer to any address that is not a page: a 404 with the way back. */
+export function notFoundPage(site: Site): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Page not found · Betaharah</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#2a3c6e">
+<link rel="stylesheet" href="/site.css">
+<link rel="stylesheet" href="/pages.css">
+</head>
+<body class="doc-page">
+${siteHeader(donateReady(site))}
+<main class="doc" id="main">
+<header class="doc-head">
+<h1>Page not found</h1>
+<p class="intro">There is no page at this address. It may have been typed wrongly, or a link may be out of date.</p>
+</header>
+<p class="not-found-links"><a class="button primary" href="/">Go to the home page</a> <a href="/app/">Sign in</a> <a href="/help">Help</a></p>
+</main>
+${siteFooter(donateReady(site))}
+</body>
+</html>
+`;
 }
