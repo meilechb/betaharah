@@ -1,5 +1,5 @@
 /*
- * The operator's test account (S.demo): a banner, and "Try a text", a small
+ * The operator's test account (S.demo; the header says "Test account"): "Try a text", a small
  * chat that sends a text as if from this phone (POST /api/demo/text) and
  * shows the reply the real system would send. Nothing is sent to a phone.
  */
@@ -14,12 +14,6 @@ let error = '';
 let lastReplies = [];
 /** Incoming messages (by time) to which the real system sends no reply. */
 const noReply = new Set();
-
-/** The quiet banner shown on every tab of the test account. */
-export function demoBanner() {
-  if (!S.demo) return null;
-  return h('div', { class: 'demo-banner', role: 'note' }, icon('info', { size: 'sm' }), h('span', {}, 'This is the test account. Nothing here is sent to a real phone.'));
-}
 
 /** Texts that work at any time (the options of each reply are buttons under it). */
 const QUICK = [

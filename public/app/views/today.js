@@ -1,49 +1,53 @@
 /*
- * The Today tab. On a phone, top to bottom: where things stand with the one
- * thing to do next, the full form when a link opened it, the month calendar
- * (with its legend and the chosen day, where what happened on it is recorded
- * with one click), "Coming up", and texting. On a wide screen the calendar is
- * on the left and the rest on the right.
+ * The home screen and the pages that used to stand beside it on Today.
+ *
+ *   viewHome()     the calendar and nothing else: one status line (the
+ *                  server's headline and detail) and the month (calendar.js).
+ *                  Without a location: the one sentence and a button to
+ *                  Settings, Location.
+ *   viewComing()   "Coming up": the server's alerts, the "Getting started"
+ *                  checklist while it is not done, and what the calendar works
+ *                  out from now on.
+ *   viewTexting()  "Text this number" (or a short note and a link to the settings).
+ *   viewTry()      "Try a text", on the test account.
  *
  * Every sentence that says where things stand or why a day is marked comes
  * from the server; this file writes only button labels, headings and labels.
  */
-import { alert, button, card, emptyState, h, icon, linkButton, pretty } from '../lib.js';
+import { button, card, emptyState, h, linkButton, pretty } from '../lib.js';
 import { S, t } from '../store.js';
 import { mainRows } from './settings/texting.js';
 import { onboardingCard } from '../onboarding.js';
-import { calendarCard, showDate } from './calendar.js';
+import { homeCalendar, showDate } from './calendar.js';
 import { tryTextCard } from './demo.js';
-import { assumption, cleanDayNumber, describe, isDone, isNight, mark, plainTitle, stateTag, wasRecorded } from './marks.js';
-import { notice, openRecord, recordNow, recordPanel } from './record.js';
-import { addDays, alertsBlock, refresh, region, shortDate, today } from './shared.js';
-
-export function viewToday() {
-  if (!S.status) {
-    return h(
-      'div',
-      { class: 'narrow' },
-      onboardingCard(),
-      card(
-        { title: 'No location', icon: 'map', className: 'status-card empty-status' },
-        h('p', { id: 'no-location' }, 'Nothing can be calculated until a location is chosen.'),
-        linkButton({ href: '#settings/location', label: 'Choose location', variant: 'primary', icon: 'map', attrs: { id: 'choose-location' } }),
-      ),
-      alertsBlock(),
-      textCard(),
-    );
-  }
-  // The order in the page is the order on a phone and for the keyboard. On a wide screen the
-  // calendar is placed in the left column (dashboard.css), and the rest stays in this order on the right.
-  return h(
-    'div',
-    {},
-    onboardingCard(),
-    h('div', { class: 'today-layout' }, statusCard(), recordPanel(), S.grid ? calendarCard() : null, upcomingCard(), textCard(), tryTextCard()),
-  );
-}
+import { assumption, cleanDayNumber, describe, mark, plainTitle, stateTag, wasRecorded } from './marks.js';
+import { alertsBlock, refresh, region } from './shared.js';
 
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+// ---------- the home screen ----------
+
+export function viewHome() {
+  if (!S.status || !S.grid) {
+    return h(
+      'div',
+      { class: 'home home-empty' },
+      h('p', { class: 'no-location', id: 'no-location' }, 'Nothing can be calculated until a location is chosen.'),
+      linkButton({ href: '#settings/location', label: 'Choose location', variant: 'primary', icon: 'map', attrs: { id: 'choose-location' } }),
+    );
+  }
+  return h(
+    'div',
+    { class: 'home' },
+    h(
+      'p',
+      { class: 'status-line', id: 'status-line' },
+      h('span', { class: 'headline', id: 'status-headline' }, S.status.headline),
+      S.status.detail ? h('span', { class: 'detail', id: 'status-detail' }, S.status.detail) : null,
+    ),
+    homeCalendar(),
+  );
+}
 
 // ---------- texting ----------
 
@@ -81,138 +85,27 @@ function textCard() {
   );
 }
 
-// ---------- where things stand ----------
-
-/**
- * The events that belong to now. By day: those of today's date (without a
- * night that ended at sunrise). At night: the Hebrew date has already moved
- * on, so the night's events (from this evening) and the all-day events of
- * the new Hebrew date; they then agree with the headline above.
- */
-function nowEvents() {
-  const g = S.grid;
-  const civil = S.today.civilDate;
-  if (S.today.part === 'day') {
-    return g.events.filter(e => e.startDate <= civil && e.endDate >= civil && !(e.kind === 'flow' && e.startDate < civil) && !(!e.allDay && e.startDate < civil && e.endDate === civil));
-  }
-  const hebrew = S.today.date;
-  const evening = addDays(hebrew, -1);
-  return g.events.filter(e => (e.allDay ? e.startDate <= hebrew && e.endDate >= hebrew : e.startDate === evening && isNight(e)));
-}
-
-function eventWhen(e) {
-  if (e.allDay) return null;
-  if (e.kind === 'mikvah') return 'After ' + e.start;
-  if (e.start === e.end) return e.start;
-  return e.start + ' to ' + e.end + (e.startDate !== e.endDate ? ' the next morning' : '');
-}
-
-/** A title with its label ("recorded", "not recorded", "expected"). */
-function titled(e, cls) {
-  const state = stateTag(e);
-  return h('div', { class: cls }, plainTitle(e), state ? ' ' : null, state);
-}
-
-function nowBox() {
-  if (!S.grid || !S.today) return null;
-  const night = S.today.part === 'night';
-  const items = nowEvents();
-  if (!night && items.length === 0) return null;
+/** The Texting page: "Text this number", or where texting is set up. */
+export function viewTexting() {
+  const c = textCard();
   return h(
     'div',
-    { class: 'today-box' + (night ? ' night' : '') },
-    h(
-      'h3',
-      {},
-      night ? icon('moon', { size: 'sm' }) : null,
-      night ? 'Tonight, ' + S.today.hebrew.replace(/ \d{4}$/, '') : 'Today, ' + shortDate(S.today.civilDate),
-    ),
-    items.length
-      ? h(
-          'ul',
-          { class: 'today-items' },
-          items.map(e =>
-            h(
-              'li',
-              {},
-              mark(e),
-              h(
-                'div',
-                {},
-                titled(e, 'ti-title'),
-                eventWhen(e) ? h('div', { class: 'ti-when' }, eventWhen(e)) : null,
-              ),
-            ),
-          ),
-        )
-      : h('p', { class: 'muted small' }, 'Nothing tonight.'),
+    { class: 'narrow' },
+    c ||
+      card(
+        { title: 'Texting', icon: 'message', attrs: { id: 'texting-none' } },
+        h('p', {}, S.demo ? 'This is the test account: try a text from the menu.' : S.sms && S.sms.ready ? 'Add a phone to text from.' : 'Texting is not available yet.'),
+        linkButton({ href: '#settings/texting', label: 'Texting settings', attrs: { id: 'texting-settings' } }),
+      ),
   );
 }
 
-/** The latest period's projected hefsek taharah: its date is the first day it can still be done. */
-function hefsekDay() {
-  const list = S.grid ? S.grid.events.filter(e => e.kind === 'hefsek' && e.projected && !isDone(e)) : [];
-  return list.length ? list[list.length - 1] : null;
+/** The test account's "Try a text" page. */
+export function viewTry() {
+  return h('div', { class: 'narrow' }, tryTextCard());
 }
 
-/**
- * The one thing to record next, as one button, for the phase the server gives
- * (a period began; the hefsek taharah); links to the full form for anything
- * else. Nothing asks about the immersion: once the mikvah night is over, she
- * is taken to have immersed. A refusal is shown beside the button, the
- * server's confirmation (with Undo) above it.
- */
-function nextStep() {
-  const phase = S.status.phase;
-  const civil = S.today.civilDate;
-  const primary = (label, body) =>
-    button({ label, variant: 'primary', size: 'lg', block: true, className: 'next-button', attrs: { id: 'next-step' }, onclick: e => recordNow(body, e.currentTarget, 'status') });
-  const link = (label, id, preset) => button({ label, variant: 'link', attrs: { id }, onclick: () => openRecord(preset, id) });
-  let main = null;
-  const links = [];
-  if (phase === 'tehorah') {
-    main = primary('A period began', { kind: 'flow', when: 'now' });
-    links.push(link('It began earlier', 'next-earlier', { kind: 'flow', mode: 'other', date: today() }));
-  } else if (phase === 'before_hefsek') {
-    const hefsek = hefsekDay();
-    if (S.today.part === 'day' && hefsek && hefsek.startDate <= civil) main = primary(cap(t('{hefsek} done')), { kind: 'hefsek', when: 'now' });
-  }
-  links.push(link('Record something else', 'next-else', {}));
-  return h('div', { class: 'next' + (main ? ' has-main' : '') }, notice('status'), main, h('div', { class: 'next-links' }, links));
-}
-
-/** The server's alerts. */
-function alertsPart() {
-  if (!S.alerts.length) return null;
-  return h(
-    'div',
-    { class: 'alerts', id: 'status-alerts' },
-    S.alerts.map(a => alert({ kind: a.level === 'info' ? 'info' : 'warn' }, h('span', {}, a.text))),
-  );
-}
-
-function statusCard() {
-  // The next onat perishah is shown here only while she is tehorah; during a niddah period it is
-  // in "Coming up", so that it does not stand next to the task of the day.
-  const nextOnah = S.status.phase === 'tehorah' ? S.upcoming.find(x => x.kind === 'onah') : null;
-  return h(
-    'section',
-    { class: 'card status status-card', 'aria-labelledby': 'status-headline' },
-    h('p', { class: 'headline', id: 'status-headline' }, S.status.headline),
-    S.status.detail ? h('p', { class: 'detail', id: 'status-detail' }, S.status.detail) : null,
-    nextStep(),
-    nowBox(),
-    nextOnah
-      ? h(
-          'p',
-          { class: 'next-line' },
-          mark(withGrid(nextOnah)),
-          h('span', {}, h('strong', {}, cap(t('Next {onat_perishah}: '))), plainTitle(nextOnah) + ', ' + nextOnah.when + '.'),
-        )
-      : null,
-    alertsPart(),
-  );
-}
+// ---------- coming up ----------
 
 /** An upcoming item with its calendar event, for the mark (night or day, clean day number). */
 function withGrid(u) {
@@ -220,7 +113,11 @@ function withGrid(u) {
   return g || { kind: u.kind, light: u.light, projected: u.projected, title: u.title, key: u.key, startDate: u.date, endDate: u.endDate };
 }
 
-// ---------- coming up ----------
+/** A title with its label ("recorded", "not recorded", "expected"). */
+function titled(e, cls) {
+  const state = stateTag(e);
+  return h('div', { class: cls }, plainTitle(e), state ? ' ' : null, state);
+}
 
 /** How many onot are listed before "Show more". */
 const ONOT_SHOWN = 6;
@@ -273,10 +170,10 @@ function cleanRow(items) {
 
 function upcomingCard() {
   return card(
-    { title: 'Coming up', icon: 'clock', className: 'upcoming-card' },
+    { title: 'Coming up', icon: 'clock', className: 'upcoming-card', attrs: { id: 'upcoming-card' } },
     region('upcoming', () => {
       // What the calendar works out, from now on; not what she recorded.
-      const items = S.upcoming.filter(u => !wasRecorded(u));
+      const items = (S.upcoming || []).filter(u => !wasRecorded(u));
       const hefsek = items.filter(u => u.kind === 'hefsek');
       const clean = items.filter(u => u.kind === 'clean_day');
       const mikvah = items.filter(u => u.kind === 'mikvah');
@@ -319,4 +216,10 @@ function upcomingCard() {
       );
     }),
   );
+}
+
+/** The "Coming up" page: the alerts first, then the checklist while it is not done, then the list. */
+export function viewComing() {
+  const alerts = alertsBlock();
+  return h('div', { class: 'narrow coming' }, alerts ? h('div', { id: 'coming-alerts' }, alerts) : null, onboardingCard(), S.status ? upcomingCard() : null);
 }

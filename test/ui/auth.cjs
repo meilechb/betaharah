@@ -455,7 +455,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     await expectText('.setup-texting', '(732) 999-0000');
     await shot('36-setup-done');
     await page.click('#setup-finish');
-    await page.waitForSelector('[role=tablist]');
+    await page.waitForSelector('main.page-today');
     const st = (await api('GET', '/api/state')).state;
     if (!st.account.welcomed) throw new Error('not marked welcomed');
     await shot('37-dashboard');
@@ -468,7 +468,7 @@ async function variant(browser, name, width, scheme, offset, shots) {
     if (done < 4) throw new Error('steps marked done: ' + done);
     await page.click('#setup-leave');
     await page.click('dialog button[type=submit]');
-    await page.waitForSelector('[role=tablist]');
+    await page.waitForSelector('main.page');
     await signOut();
   });
 
