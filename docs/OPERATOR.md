@@ -117,7 +117,7 @@ How to use it:
    "Other things to add" has stain, count broken, immersion that evening
    (optional: once the seven clean days are over the calendar takes it that
    she immersed on the mikvah night), a flow at a clock time, and the switch
-   for a flow that does not count for the vesatot. The date is added at once. A date an account would refuse is
+   for a flow that does not count for the vestos. The date is added at once. A date an account would refuse is
    not kept, and the reason is shown where you added it.
 3. **Read the result**: the calendar marks the two months shown; "Where
    things stand" gives the status, warnings and pattern alerts; "What the
@@ -155,7 +155,7 @@ lists label them "not entered" and "expected".
 
 The home page has a smaller version for visitors ("Try it",
 `POST /api/try`): a place from the list or a ZIP code, three customs
-(days before the hefsek, which day of onah beinonit, Or Zarua), up to 12
+(days before the hefsek, which day of onah beinonis, Or Zarua), up to 12
 dates (a flow, then its hefsek taharah; the walk then shows the clean days
 and the mikvah night and ends with the sign-up button), and a chosen
 "today". It saves nothing about the dates; the only thing stored is a

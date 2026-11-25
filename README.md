@@ -3,7 +3,7 @@
 A free tool for family and friends, at **https://betaharah.com**.
 
 A couple signs up with a phone number. They record dates by text, answering
-the options each text lists, or on the website. The site works out the onot perishah, the hefsek
+the options each text lists, or on the website. The site works out the onos perishah, the hefsek
 taharah, the seven clean days and mikvah night by the Hebrew calendar, the
 sun at their location and their own customs, shows them in their own
 calendar (Google Calendar, or any calendar app through a subscription link),
@@ -23,8 +23,8 @@ If you run the site, read [docs/OPERATOR.md](docs/OPERATOR.md). The Google Cloud
 | Location and customs | Sunrise, sunset and nightfall are calculated for the place chosen. Every point on which customs differ is a setting; until they are saved the stricter option of each is used. |
 | Recording | On the website, or by text: every text ends with its options (`Reply: PERIOD, HEFSEK, STATUS, MORE`), answered by word: `period last night`, `hefsek yesterday`, `period Nov 22 night`. No digit commands. By SMS, or by RCS with the options as buttons once the RCS agent is approved. Every text and its options are on the console's Texts page, where the operator can change them. |
 | Husband and wife | A second phone is added on the website with a code texted to it, or by text: a phone on the account texts `ADD` and gets a code, and the other phone texts `JOIN` and that code. Up to four phones share one account; each chooses its own reminders. |
-| Calendar (optional) | Connect Google Calendar (the site creates one calendar and can see only that one), or create a subscription link for any calendar app. By default it shows the onot, the start of each period and the hefsek taharah; the niddah days, the seven clean days and the mikvah night can be switched on under Settings. Titles in words, or as symbols only. |
-| Reminders (optional) | Off until turned on for a phone. Nothing is sent on Shabbat or Yom Tov. STOP stops them. |
+| Calendar (optional) | Connect Google Calendar (the site creates one calendar and can see only that one), or create a subscription link for any calendar app. By default it shows the onos, the start of each period and the hefsek taharah; the niddah days, the seven clean days and the mikvah night can be switched on under Settings. Titles in words, or as symbols only. |
+| Reminders (optional) | Off until turned on for a phone. Nothing is sent on Shabbos or Yom Tov. STOP stops them. |
 | English or Hebrew terms | The site is in English. A setting chooses whether halachic terms are written in English letters (hefsek taharah) or in Hebrew (הפסק טהרה), on the site and in the calendar. Text messages are always in English letters. |
 | Leaving | Settings has "Download my data" and "Delete my account". |
 
@@ -43,7 +43,7 @@ number from 555-0100 to 555-0199.
 
 | Part | Where |
 |---|---|
-| The rules: dates, sun times, vesatot, the count | `src/engine/` |
+| The rules: dates, sun times, vestos, the count | `src/engine/` |
 | The two forms of each halachic term | `src/engine/terms.ts` |
 | Wording of calendar events; wording of text messages | `src/engine/calendar.ts`, `src/engine/present.ts` |
 | Accounts, sign-in, storage, texts and replies, reminders, Google Calendar | `src/app/` |

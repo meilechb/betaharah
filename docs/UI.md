@@ -71,7 +71,7 @@ so in your report; do not edit the frozen files.
   confirmations, calendar events, texts) comes from one set of helpers,
   `src/engine/dates.ts`, and follows `S.app.dates`: `'hebrew'` (the default,
   also for accounts saved before the choice), `'civil'` or `'both'`. A time is
-  named first in plain words: a weekday for a daytime ("Tuesday", "Shabbat"),
+  named first in plain words: a weekday for a daytime ("Tuesday", "Shabbos"),
   the evening's weekday for a night ("Monday night"); with "now" known,
   "today", "tonight", "tomorrow", "tomorrow night", "yesterday", "last night",
   and the weekday alone within the coming six days. Otherwise the date follows:
@@ -184,13 +184,13 @@ The signed-in home is the calendar and nothing else.
      `#log`, `#customs`, `#settings/...`, `#texting`, `#try`, `#record`. Each
      page is a step in the browser's history.
    - **Coming up** (`viewComing`): the alerts first, then "Getting started"
-     while it is not done, then "Until mikvah night" and "Onot of separation"
+     while it is not done, then "Until mikvah night" and "Onos of separation"
      (the calendar button on a row opens that day's popup on the calendar).
    - **Texting** (`viewTexting`): "Text this number" when texting works and
      the account has a phone, otherwise a short note and a link to Settings,
      Texting. **Try a text** (`viewTry`): the test account's chat.
    - **The full form** (`recordPage` in `record.js`): any kind, any date, a
-     clock time, a note and the vesatot switch; Cancel goes back to the
+     clock time, a note and the vestos switch; Cancel goes back to the
      calendar.
 
 Titles never show the server's " (projected)": the page says "not recorded"
@@ -200,25 +200,25 @@ Titles never show the server's " (projected)": the page says "not recorded"
 ## Settings → Reminders
 
 `settings/reminders.js`: a row per kind (switch, timing in a few words,
-"Change" opens it). The Bedikot row opens to seven day buttons `1` to `7`
+"Change" opens it). The Bedikos row opens to seven day buttons `1` to `7`
 (`aria-pressed`, with `All` and `1 and 7`), then two parts, Morning and
 Before sunset, each a switch with its time beside it
 (`app.reminders.bedikot.days`, `.morning`, `.beforeSunset`). One row,
-"Before Shabbat and Yom Tov", holds the time of the one text sent the
+"Before Shabbos and Yom Tov", holds the time of the one text sent the
 morning before (`app.reminders.restEve`, default 9:00 AM); there is no switch
-for Shabbat: nothing is ever sent on it. No explanations of halacha.
+for Shabbos: nothing is ever sent on it. No explanations of halacha.
 
 ## Settings → Calendar
 
 `settings/calendar.js`, top to bottom: Google Calendar, the subscription link,
 "Shown in your calendar app", event titles and the calendar's name, then
 "More". "Shown in your calendar app" has six switches, saved in
-`app.calendar.show` (`PUT /api/app`): Onot (`onot`), Period start (`period`),
+`app.calendar.show` (`PUT /api/app`): Onos (`onot`), Period start (`period`),
 Hefsek taharah (`hefsek`), Niddah days (`niddah`: one all-day event per
 period, from its first day through the evening of its mikvah night), Seven
 clean days (`cleanDays`) and Mikvah night (`mikvah`). By default a calendar
-app shows only the onot, the start of each period and the hefsek taharah;
-the other three are off. The niddah days and the onot are separate switches:
+app shows only the onos, the start of each period and the hefsek taharah;
+the other three are off. The niddah days and the onos are separate switches:
 the niddah days are known without a calendar. In a calendar app the
 start of a period is an all-day event on its date ("Period began (by day)"),
 and with Hebrew terms every title and description is wholly Hebrew, each
