@@ -118,7 +118,7 @@ async function console_(browser) {
   await step('a period, with one click: recorded; the hefsek taharah is shown as not entered; the next month is marked', async () => {
     await add('2026-11-10', 'flow-day');
     const msg = await page.textContent('.calc-recorded');
-    if (!/^Recorded: flow today by day\. Hefsek from Shabbat\./.test(msg)) throw new Error('message: ' + msg);
+    if (!/^Recorded: flow today by day\. Hefsek from Shabbos\./.test(msg)) throw new Error('message: ' + msg);
     await waitHeadline('Niddah, before the hefsek taharah');
     if ((await todayWords()) !== 'Tuesday, November 10, 2026, by day') throw new Error('today: ' + (await todayWords()));
     if (!(await page.textContent('#calc-today-why')).includes('the latest date you entered')) throw new Error('today is not explained');
@@ -135,9 +135,9 @@ async function console_(browser) {
     // onah beinonit, day 30 and 31 from Nov 10, in the month below
     if ((await page.locator('#calc-day-2026-12-09 .mk.onah').count()) < 1) throw new Error('no onah on Dec 9');
     if ((await page.locator('#calc-day-2026-12-10 .mk.onah').count()) < 1) throw new Error('no onah on Dec 10');
-    if (!/Onah beinonit \(day 30\)/.test(await page.textContent('#calc-onot'))) throw new Error('the onot do not say why they are kept');
+    if (!/Onah beinonis \(day 30\)/.test(await page.textContent('#calc-onot'))) throw new Error('the onot do not say why they are kept');
     await page.click('#calc-day-2026-12-09');
-    await page.waitForSelector('#calc-day-events:has-text("Onah beinonit")');
+    await page.waitForSelector('#calc-day-events:has-text("Onah beinonis")');
     if ((await logCount()) !== 1) throw new Error('the date is not listed');
   });
 
@@ -195,7 +195,7 @@ async function console_(browser) {
     await add('2027-01-05', 'flow-day');
     await add('2027-02-02', 'flow-day');
     await waitToday('Tuesday, February 2, 2027, by day');
-    await page.waitForSelector('#calc-alerts .alert:has-text("Three intervals in a row of 29 days, by day. A veset kavua for the interval may have been established.")');
+    await page.waitForSelector('#calc-alerts .alert:has-text("Three intervals in a row of 29 days, by day. A vest kavua for the interval may have been established.")');
     if ((await logCount()) !== 6) throw new Error('not six dates listed');
   });
 

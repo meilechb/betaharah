@@ -1,6 +1,8 @@
 /*
  * Settings: Reminders. Each kind is a row with a switch and its timing in
- * a few words; "Change" opens the row to edit the timing. Shabbat and Yom
+ * a few words; "Change" opens the row to edit the timing (the bedikot: the
+ * clean days as seven buttons, and the morning and before-sunset parts, each
+ * a switch with its time). The time of the one text before Shabbat and Yom
  * Tov, the wording (with an example of each), the rare options under
  * "Advanced", and the coming reminders as their own view
  * (#settings/reminders/scheduled).
@@ -8,7 +10,7 @@
 import { emptyState, h, icon, pretty } from '../../lib.js';
 import { S, t } from '../../store.js';
 import { refresh, region } from '../shared.js';
-import { blockRow, choiceCards, clock, duration, errorText, group, more, navRow, saveApp, switchRow, tn } from './ui.js';
+import { blockRow, choiceCards, clock, duration, errorText, group, more, navRow, saveApp, tn } from './ui.js';
 
 /** The row whose timing is open for editing. */
 let editing = null;
@@ -56,30 +58,154 @@ function numberField(id, label, value, min, max, unit, apply, regionId) {
   );
 }
 
+/** A time box; `labelledBy` names it by another element instead of a label of its own. */
+function timeInput(id, hh, mm, apply, regionId, labelledBy) {
+  return h('input', {
+    id,
+    type: 'time',
+    value: String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0'),
+    'aria-labelledby': labelledBy || null,
+    'aria-invalid': errors[id] ? 'true' : null,
+    'aria-describedby': errors[id] ? id + '-error' : null,
+    onchange: e => {
+      const [x, y] = e.target.value.split(':').map(Number);
+      if (!e.target.value || !Number.isFinite(x) || !Number.isFinite(y)) {
+        errors[id] = 'Enter a time.';
+        refresh(regionId || 'rem-kinds');
+        return;
+      }
+      delete errors[id];
+      saveApp('reminders', a => apply(a, x, y));
+    },
+  });
+}
+
 function timeField(id, label, hh, mm, apply) {
+  return h('div', { class: 'field st-num' }, h('label', { for: id }, label), timeInput(id, hh, mm, apply), errorText(id + '-error', errors[id]));
+}
+
+/** A small number box with its unit, named by another element; its range is said only when a number is refused. */
+function minutesInput(id, value, min, max, apply, labelledBy) {
   return h(
-    'div',
-    { class: 'field st-num' },
-    h('label', { for: id }, label),
+    'span',
+    { class: 'st-inline' },
     h('input', {
       id,
-      type: 'time',
-      value: String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0'),
+      type: 'number',
+      min,
+      max,
+      step: 1,
+      inputmode: 'numeric',
+      value: errors[id] && typed[id] !== undefined ? typed[id] : value,
+      'aria-labelledby': labelledBy + ' ' + id + '-unit',
       'aria-invalid': errors[id] ? 'true' : null,
       'aria-describedby': errors[id] ? id + '-error' : null,
       onchange: e => {
-        const [x, y] = e.target.value.split(':').map(Number);
-        if (!e.target.value || !Number.isFinite(x) || !Number.isFinite(y)) {
-          errors[id] = 'Enter a time.';
+        const v = Number(e.target.value);
+        if (e.target.value === '' || !Number.isInteger(v) || v < min || v > max) {
+          errors[id] = 'A whole number from ' + min + ' to ' + max + '.';
+          typed[id] = e.target.value;
           refresh('rem-kinds');
           return;
         }
         delete errors[id];
-        saveApp('reminders', a => apply(a, x, y));
+        delete typed[id];
+        saveApp('reminders', a => apply(a, v));
       },
     }),
-    errorText(id + '-error', errors[id]),
+    h('span', { class: 'st-unit', id: id + '-unit' }, 'min'),
   );
+}
+
+const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7];
+const sameDays = (a, b) => a.length === b.length && a.every((d, i) => d === b[i]);
+
+/** The clean days that get bedikah reminders, in a few words: '' for all seven. */
+function daysWords(days) {
+  if (sameDays(days, ALL_DAYS)) return '';
+  if (days.length === 0) return 'No days';
+  return (days.length === 1 ? 'Day ' : 'Days ') + (days.length === 2 ? days.join(' and ') : days.join(', '));
+}
+
+/** Seven day buttons that toggle, with "All" and "1 and 7". */
+function dayPicker(b) {
+  const setDays = days => saveApp('reminders', a => (a.reminders.bedikot = { ...a.reminders.bedikot, days }));
+  const quick = (id, label, days) =>
+    h('button', { type: 'button', class: 'st-day-quick', id, 'aria-pressed': String(sameDays(b.days, days)), onclick: () => setDays(days) }, label);
+  return h(
+    'div',
+    { class: 'st-days', role: 'group', 'aria-labelledby': 'rem-days-label' },
+    h('span', { class: 'st-part-name', id: 'rem-days-label' }, 'Days'),
+    h(
+      'div',
+      { class: 'st-days-row' },
+      ALL_DAYS.map(d =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'st-day',
+            id: 'rem-day-' + d,
+            'aria-pressed': String(b.days.includes(d)),
+            'aria-label': 'Day ' + d,
+            onclick: () => setDays(b.days.includes(d) ? b.days.filter(x => x !== d) : ALL_DAYS.filter(x => x === d || b.days.includes(x))),
+          },
+          String(d),
+        ),
+      ),
+      h('span', { class: 'st-days-quick' }, quick('rem-days-all', 'All', ALL_DAYS), quick('rem-days-17', '1 and 7', [1, 7])),
+    ),
+  );
+}
+
+/** One part of the bedikot (morning, before sunset): a switch, its name, and its time beside it. */
+function partRow(id, name, on, set, control, errorId) {
+  return h(
+    'div',
+    { class: 'st-part' + (on ? '' : ' off') },
+    h(
+      'span',
+      { class: 'st-switch' },
+      h('input', { type: 'checkbox', role: 'switch', id, checked: on, 'aria-labelledby': id + '-name', onchange: e => saveApp('reminders', a => set(a, e.target.checked)) }),
+      h('span', { class: 'st-track', 'aria-hidden': 'true' }, h('span', { class: 'st-thumb' })),
+    ),
+    h('label', { class: 'st-part-name', id: id + '-name', for: id }, name),
+    control,
+    errorText(errorId + '-error', errors[errorId]),
+  );
+}
+
+function bedikotEdit(r) {
+  const b = r.bedikot;
+  return [
+    dayPicker(b),
+    partRow(
+      'rem-bedikot-am',
+      'Morning',
+      b.morning,
+      (a, on) => (a.reminders.bedikot = { ...a.reminders.bedikot, morning: on }),
+      timeInput('rem-bedikot-morning', b.morningHour, b.morningMinute, (a, x, y) => (a.reminders.bedikot = { ...a.reminders.bedikot, morningHour: x, morningMinute: y }), 'rem-kinds', 'rem-bedikot-am-name'),
+      'rem-bedikot-morning',
+    ),
+    partRow(
+      'rem-bedikot-pm',
+      tn('Before {sunset}', true),
+      b.beforeSunset,
+      (a, on) => (a.reminders.bedikot = { ...a.reminders.bedikot, beforeSunset: on }),
+      minutesInput('rem-bedikot-min', b.minutesBeforeSunset, 20, 600, (a, v) => (a.reminders.bedikot = { ...a.reminders.bedikot, minutesBeforeSunset: v }), 'rem-bedikot-pm-name'),
+      'rem-bedikot-min',
+    ),
+  ];
+}
+
+/** The bedikot row's summary: the days (when not all seven), then the times of the parts that are on. */
+function bedikotWhen(b) {
+  const parts = [];
+  if (b.morning) parts.push(clock(b.morningHour, b.morningMinute));
+  if (b.beforeSunset) parts.push(duration(b.minutesBeforeSunset) + ' before {sunset}');
+  const times = parts.length ? parts.join(' and ') : 'No times';
+  const days = daysWords(b.days);
+  return days ? days + ' · ' + times : times;
 }
 
 /** The five kinds of reminder the account sets the time of. */
@@ -98,12 +224,9 @@ function kinds() {
       id: 'bedikot',
       on: r.bedikot.on,
       title: '{bedikot}',
-      when: clock(r.bedikot.morningHour, r.bedikot.morningMinute) + ' and ' + duration(r.bedikot.minutesBeforeSunset) + ' before {sunset}',
+      when: bedikotWhen(r.bedikot),
       set: (a, on) => (a.reminders.bedikot.on = on),
-      edit: () => [
-        timeField('rem-bedikot-morning', 'Morning at', r.bedikot.morningHour, r.bedikot.morningMinute, (a, x, y) => Object.assign(a.reminders.bedikot, { morningHour: x, morningMinute: y })),
-        numberField('rem-bedikot-min', t('Minutes before {sunset}'), r.bedikot.minutesBeforeSunset, 20, 600, 'minutes', (a, v) => (a.reminders.bedikot.minutesBeforeSunset = v)),
-      ],
+      edit: () => bedikotEdit(r),
     },
     {
       id: 'mikvah',
@@ -202,17 +325,16 @@ function mainView() {
             : null,
       group({ title: 'Kinds', id: 'rem-kinds-group' }, region('rem-kinds', () => h('div', { class: 'st-rows-inner' }, kinds().map(kindRow)))),
       group(
-        { title: tn('{shabbat} and {yom_tov}'), id: 'rem-rest-group' },
-        switchRow({
-          id: 'rem-rest',
-          label: tn('Send nothing on {shabbat} or {yom_tov}'),
-          help: r.beforeRestDays ? 'Sent before or after.' : null,
-          checked: r.beforeRestDays,
-          onchange: e => {
-            const on = e.target.checked;
-            saveApp('reminders', a => (a.reminders.beforeRestDays = on));
-          },
-        }),
+        { id: 'rem-rest-group' },
+        region('rem-rest', () =>
+          h(
+            'div',
+            { class: 'st-row st-rest' },
+            h('label', { class: 'st-title', for: 'rem-rest-eve' }, tn('Before {shabbat} and {yom_tov}')),
+            timeInput('rem-rest-eve', r.restEve.hour, r.restEve.minute, (a, x, y) => (a.reminders.restEve = { hour: x, minute: y }), 'rem-rest'),
+            errorText('rem-rest-eve-error', errors['rem-rest-eve']),
+          ),
+        ),
       ),
       group(
         { title: 'Wording', id: 'rem-style-group', footer: 'For every phone.' },
@@ -313,8 +435,7 @@ export const remindersSection = {
   icon: 'bell',
   summary: () => {
     const on = kinds().filter(k => k.on).length;
-    const r = S.app.reminders;
-    return [on === 0 ? 'All off' : on + ' of 5 kinds on', ' · ', tn(r.beforeRestDays ? 'nothing sent on {shabbat} or {yom_tov}' : 'also sent on {shabbat} and {yom_tov}')];
+    return on === 0 ? 'All off' : on + ' of 5 kinds on';
   },
   flag: () => {
     if (!S.sms.ready) return null;

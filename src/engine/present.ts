@@ -55,7 +55,7 @@ function baseReasonEnglish(r: BaseReason): string {
     case 'chodesh':
       return 'chodesh';
     case 'haflagah':
-      return `haflagah ${r.length}${r.unit === 'days' ? 'd' : ' onot'}`;
+      return `haflagah ${r.length}${r.unit === 'days' ? 'd' : ' onos'}`;
   }
 }
 
@@ -93,7 +93,7 @@ export function fillText(template: string, vars: Record<string, string>): string
  * its defaults); `text` below is always this default.
  */
 export const REMINDER_TEXTS: Record<string, string> = {
-  'reminder.hefsek': 'Hefsek tahara: {day}, before sunset at {sunset}.{eve}',
+  'reminder.hefsek': 'Hefsek taharah: {day}, before sunset at {sunset}.{eve}',
   'reminder.hefsek.discreet': 'H {day} before {sunset}.',
   'reminder.bedikah_morning': 'Clean day {n} of 7 is {day}: bedikah in the morning and again before sunset at {sunset}.{required}',
   'reminder.bedikah_morning.discreet': 'Day {n}/7 {day}: AM, and before {sunset}.',
@@ -105,12 +105,63 @@ export const REMINDER_TEXTS: Record<string, string> = {
   'reminder.mikvah.discreet': 'M night: {day} after {time}{notes}.',
   'reminder.onah': 'Onah: {from} until {to}. {why}.{bedikah}{clash}',
   'reminder.onah.discreet': '{mark} {from} - {to}.',
+  // The one text sent the morning a Shabbat or Yom Tov begins: its first line, then one line per reminder
+  // that falls in it, in time order (restPieces below). After it ends, what she did not get is sent as the lines alone.
+  'reminder.rest': 'Over {rest}.',
+  'reminder.rest.discreet': 'Over {rest}.',
+  'reminder.rest.hefsek': '{day}: hefsek taharah before {sunset}.',
+  'reminder.rest.hefsek.discreet': '{day}: H before {sunset}.',
+  'reminder.rest.bedikot': '{day}: clean day {n}, bedikah morning and before {sunset}{required}.',
+  'reminder.rest.bedikot.discreet': '{day}: day {n}/7, AM and before {sunset}.',
+  'reminder.rest.bedikah_morning': '{day}: clean day {n}, bedikah in the morning{required}.',
+  'reminder.rest.bedikah_morning.discreet': '{day}: day {n}/7, AM.',
+  'reminder.rest.bedikah_afternoon': '{day}: clean day {n}, bedikah before {sunset}{required}.',
+  'reminder.rest.bedikah_afternoon.discreet': '{day}: day {n}/7, before {sunset}.',
+  'reminder.rest.mikvah': '{day}: mikvah night, after {time}{notes}.',
+  'reminder.rest.mikvah.discreet': '{day}: M night after {time}{notes}.',
+  'reminder.rest.mikvah_book': 'Book the mikvah for {day}, after {time}.',
+  'reminder.rest.mikvah_book.discreet': 'Book M: {day} after {time}.',
+  'reminder.rest.onah': 'Onah {from} until {to} ({why}).{bedikah}',
+  'reminder.rest.onah.discreet': '{mark} {from} - {to}.',
 };
+
+/**
+ * One reminder carried by the text of a Shabbat or Yom Tov: the reminder it
+ * replaces (its key and kind), its own time (for the order), until when it
+ * is still of use, and the values of its line.
+ */
+export interface RestItem {
+  key: string;
+  kind: ReminderKind;
+  at: number;
+  end: number;
+  vars: Record<string, string>;
+}
+
+/**
+ * The words of a text of a Shabbat or Yom Tov: `rest` names it ("Shabbos",
+ * "Yom Tov and Shabbos") on the first line; null for the text after it ends,
+ * which is its lines alone.
+ */
+export interface RestText {
+  rest: string | null;
+  style: 'plain' | 'discreet';
+  items: RestItem[];
+}
+
+/** The two texts of one Shabbat or Yom Tov: the morning it begins, and (for what she did not get) after it ends. */
+export interface RestGroup {
+  eve: RestText;
+  after: { at: number; until: number; text: RestText };
+}
 
 export interface Reminder {
   /** Stable identity: a reminder is sent once per key. */
   key: string;
-  kind: ReminderKind;
+  /** 'rest': the one text, the morning a Shabbat or Yom Tov begins, of every reminder that falls in it. */
+  kind: ReminderKind | 'rest';
+  /** For kind 'rest': its items, sent to each phone as far as that phone gets their kinds. */
+  rest?: RestGroup;
   /** When to send it, epoch ms. */
   at: number;
   /**
@@ -130,25 +181,35 @@ export const REMINDER_WINDOW_MS = 3 * 3_600_000;
 export interface ReminderOptions {
   style: 'plain' | 'discreet';
   hefsek: { on: boolean; minutesBeforeSunset: number };
-  bedikot: { on: boolean; morningHour: number; morningMinute: number; minutesBeforeSunset: number };
+  /**
+   * `days`: which of the seven clean days (1 to 7) get bedikah reminders;
+   * `morning` and `beforeSunset`: which of the two each of those days gets.
+   */
+  bedikot: { on: boolean; morningHour: number; morningMinute: number; minutesBeforeSunset: number; days: number[]; morning: boolean; beforeSunset: boolean };
   mikvah: { on: boolean; minutesBeforeSunset: number };
   /** To book the mikvah: the morning after the day the hefsek taharah was recorded. */
   mikvahBook: { on: boolean; hour: number; minute: number };
   onah: { on: boolean; minutesBefore: number };
-  /** Send before Shabbat or Yom Tov what would otherwise be sent during it. */
-  beforeRestDays: boolean;
+  /**
+   * Nothing is sent during Shabbat or Yom Tov. What falls in one goes out as
+   * one text the morning it begins, at this time (or 90 minutes before
+   * candle lighting, if that is earlier).
+   */
+  restEve: { hour: number; minute: number };
   /** Stop reminding about the hefsek this many days after the first possible day. */
   hefsekMaxDays: number;
 }
 
+export const ALL_CLEAN_DAYS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
+
 export const DEFAULT_REMINDER_OPTIONS: ReminderOptions = {
   style: 'plain',
   hefsek: { on: true, minutesBeforeSunset: 120 },
-  bedikot: { on: true, morningHour: 8, morningMinute: 0, minutesBeforeSunset: 90 },
+  bedikot: { on: true, morningHour: 8, morningMinute: 0, minutesBeforeSunset: 90, days: [...ALL_CLEAN_DAYS], morning: true, beforeSunset: true },
   mikvah: { on: true, minutesBeforeSunset: 180 },
   mikvahBook: { on: true, hour: 9, minute: 0 },
   onah: { on: true, minutesBefore: 120 },
-  beforeRestDays: true,
+  restEve: { hour: 9, minute: 0 },
   hefsekMaxDays: 10,
 };
 
@@ -170,8 +231,11 @@ const CANDLE_LIGHTING_MINUTES = 18;
 /** How long before candle lighting a moved reminder is sent. */
 const BEFORE_REST_DAY_MINUTES = 90;
 
-/** How long after nightfall a reminder held over Shabbat or Yom Tov is sent. */
+/** How long after nightfall what is still of use is sent, to a phone that did not get the text before Shabbat or Yom Tov. */
 const AFTER_REST_DAY_MINUTES = 45;
+
+/** A mikvah night is of use in a text this long after its nightfall. */
+const MIKVAH_NIGHT_MS = 6 * 3_600_000;
 
 /**
  * Candle lighting of the next Shabbat or Yom Tov that begins after `at`
@@ -261,34 +325,108 @@ function onahBlocks(onot: readonly OnahView[]): OnahBlock[] {
   return blocks;
 }
 
+/** "Shabbos", "Yom Tov", "Yom Tov and Shabbos": the days of a stretch, as its text names them. */
+export function restName(first: number, last: number): string {
+  const names = new Set<string>();
+  for (let d = first; d <= last; d++) names.add(dayOfWeek(d) === 6 ? 'Shabbos' : 'Yom Tov');
+  return [...names].join(' and ');
+}
+
+const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * The values of a reminder's line in the text of a Shabbat or Yom Tov, from
+ * those of its own text: the day first, with a capital; "(required)" for
+ * the bedikah of days 1 and 7.
+ */
+function lineVars(kind: ReminderKind, vars: Record<string, string>): Record<string, string> {
+  const v = { ...vars };
+  if (kind === 'hefsek' || kind === 'bedikah_morning' || kind === 'bedikah_afternoon' || kind === 'mikvah') v.day = capital(v.day ?? '');
+  if (kind === 'bedikah_morning' || kind === 'bedikah_afternoon') v.required = v.required ? ' (required)' : '';
+  delete v.eve;
+  return v;
+}
+
+/**
+ * A text of a Shabbat or Yom Tov as messages of the registry: its first line
+ * (unless `rest` is null), then one line per item in time order; the morning
+ * and afternoon bedikah of one day are one line.
+ */
+export function restPieces(t: RestText): TextMessage[] {
+  const sfx = t.style === 'discreet' ? '.discreet' : '';
+  const out: TextMessage[] = t.rest === null ? [] : [{ key: `reminder.rest${sfx}`, vars: { rest: t.rest } }];
+  const items = [...t.items].sort((a, b) => a.at - b.at || a.key.localeCompare(b.key));
+  const used = new Set<RestItem>();
+  for (const i of items) {
+    if (used.has(i)) continue;
+    used.add(i);
+    let base: string = i.kind;
+    if (i.kind === 'bedikah_morning') {
+      const same = i.key.replace(/^bedikah_am:/, '');
+      const pm = items.find(x => !used.has(x) && x.kind === 'bedikah_afternoon' && x.key.replace(/^bedikah_pm:/, '') === same);
+      if (pm) {
+        used.add(pm);
+        base = 'bedikot';
+      }
+    }
+    out.push({ key: `reminder.rest.${base}${sfx}`, vars: i.vars });
+  }
+  return out;
+}
+
+/** The text of a Shabbat or Yom Tov in the default wording. */
+export function restText(t: RestText): string {
+  return restPieces(t)
+    .map(m => fillText(REMINDER_TEXTS[m.key] as string, m.vars))
+    .join(' ');
+}
+
 /**
  * Reminders that are still ahead of `t.now` (or due within the last few
  * minutes), for the open period and for coming onot.
+ *
+ * Nothing is sent during Shabbat or Yom Tov (candle lighting to nightfall,
+ * a run of such days being one stretch). Every reminder whose time falls in
+ * one, and a mikvah night that is the night of one, is a line of one text
+ * sent the morning the stretch begins (kind 'rest'); a reminder after it
+ * ends is sent as usual.
  */
 export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: ReminderContext): Reminder[] {
   const tz = ctx.place.timeZone;
   const discreet = opts.style === 'discreet';
   const out: Reminder[] = [];
+  /** The reminders that fall in each stretch, by its first day. */
+  const stretches = new Map<number, Array<{ key: string; kind: ReminderKind; at: number; end: number; varsFor: (w: DateWords) => Record<string, string> }>>();
   /**
-   * `onRestDay` says what to do with a reminder whose time falls on Shabbat
-   * or Yom Tov: send it beforehand, hold it until afterwards, or leave it out.
-   * The texts name their day, so they read correctly whenever they are sent:
-   * "today" or "tomorrow" only when the whole time it may be sent falls on
-   * one civil date.
+   * A reminder at `at`, of use until `end`. The texts name their day, so they
+   * read correctly whenever they are sent: "today" or "tomorrow" only when
+   * the whole time it may be sent falls on one civil date. `restNight`: the
+   * Shabbat or Yom Tov whose text it belongs to although its time is before.
    */
-  const push = (key: string, kind: ReminderKind, at: number, base: string, varsFor: (w: DateWords) => Record<string, string>, onRestDay: 'before' | 'after' | 'drop', day?: number): void => {
-    let when = at;
-    if (opts.beforeRestDays && restDayAt(at, ctx) !== null) {
-      if (onRestDay === 'drop') return;
-      when = onRestDay === 'before' ? moveBeforeRestDay(at, ctx) : moveAfterRestDay(at, ctx);
+  const push = (
+    key: string,
+    kind: ReminderKind,
+    at: number,
+    base: string,
+    varsFor: (w: DateWords) => Record<string, string>,
+    end: number,
+    extra: { day?: number; restNight?: number | null } = {},
+  ): void => {
+    const restDay = restDayAt(at, ctx) ?? extra.restNight ?? null;
+    if (restDay !== null) {
+      let first = restDay;
+      while (isRestDay(first - 1, ctx.yomTov)) first--;
+      const list = stretches.get(first) ?? [];
+      list.push({ key, kind, at, end, varsFor });
+      stretches.set(first, list);
+      return;
     }
-    let until = when + REMINDER_WINDOW_MS;
-    if (opts.beforeRestDays) until = Math.min(until, nextRestStart(when, ctx));
-    const sentOn = localAbs(when, tz);
+    const until = Math.min(at + REMINDER_WINDOW_MS, nextRestStart(at, ctx));
+    const sentOn = localAbs(at, tz);
     const vars = varsFor({ dates: ctx.dates, lang: 'en', today: sentOn, relative: localAbs(until - 1, tz) === sentOn });
     const msgKey = discreet ? `${base}.discreet` : base;
-    const msg: TextMessage = day === undefined ? { key: msgKey, vars } : { key: msgKey, vars, day };
-    out.push({ key, kind, at: when, until, text: fillText(REMINDER_TEXTS[msgKey] as string, vars), msg });
+    const msg: TextMessage = extra.day === undefined ? { key: msgKey, vars } : { key: msgKey, vars, day: extra.day };
+    out.push({ key, kind, at, until, text: fillText(REMINDER_TEXTS[msgKey] as string, vars), msg });
   };
   const localTime = (abs: number, hh: number, mi: number): number => {
     const c = absToCivil(abs);
@@ -307,31 +445,35 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
           open.hefsekSunset - opts.hefsek.minutesBeforeSunset * MINUTE,
           'reminder.hefsek',
           w => ({ day: dayWords(open.planHefsekAbs, w), sunset: deadline, eve }),
-          'before',
-          open.planHefsekAbs,
+          open.hefsekSunset,
+          { day: open.planHefsekAbs },
         );
       }
     } else {
+      const chosen = new Set(opts.bedikot.days);
       for (const day of open.planCleanDays) {
+        if (!opts.bedikot.on || !chosen.has(day.n)) continue;
         const sunset = clock12(day.sunset, tz, 'floor');
         const required = day.n === 1 || day.n === 7 ? ' Required on this day.' : '';
         const vars = (w: DateWords) => ({ n: String(day.n), day: dayWords(day.abs, w), sunset, required });
-        if (opts.bedikot.on) {
+        if (opts.bedikot.morning) {
           push(
             `bedikah_am:${open.startId}:${open.hefsekAbs}:${day.n}`,
             'bedikah_morning',
             localTime(day.abs, opts.bedikot.morningHour, opts.bedikot.morningMinute),
             'reminder.bedikah_morning',
             vars,
-            'before',
+            day.sunset,
           );
+        }
+        if (opts.bedikot.beforeSunset) {
           push(
             `bedikah_pm:${open.startId}:${open.hefsekAbs}:${day.n}`,
             'bedikah_afternoon',
             day.sunset - opts.bedikot.minutesBeforeSunset * MINUTE,
             'reminder.bedikah_afternoon',
             vars,
-            'drop', // the morning reminder, sent beforehand, already names the afternoon bedikah
+            day.sunset,
           );
         }
       }
@@ -349,15 +491,15 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
             localTime(day, opts.mikvahBook.hour, opts.mikvahBook.minute),
             'reminder.mikvah_book',
             w => ({ day: nightWords(m.nightAbs, w), time: after }),
-            'after',
+            m.tzeit,
           );
         }
       }
       if (opts.mikvah.on) {
         const notes: string[] = [];
         if (m.postponedOver.length > 0) notes.push('moved past the fast');
-        if (m.restNight) notes.push('Shabbat or Yom Tov night');
-        else if (m.afterRestDay) notes.push('after Shabbat or Yom Tov');
+        if (m.restNight) notes.push('Shabbos or Yom Tov night');
+        else if (m.afterRestDay) notes.push('after Shabbos or Yom Tov');
         const clash = t.onot.some(o => o.onMikvahNight && o.onah.abs === m.nightAbs);
         if (clash) notes.push('also an onah');
         const tail = notes.length ? ` (${notes.join('; ')})` : '';
@@ -367,7 +509,9 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
           m.sunset - opts.mikvah.minutesBeforeSunset * MINUTE,
           'reminder.mikvah',
           w => ({ day: nightWords(m.nightAbs, w), time: after, notes: tail }),
-          'before',
+          m.tzeit + MIKVAH_NIGHT_MS,
+          // A mikvah night that is the night of a Shabbat or Yom Tov is in that day's text, whenever its own time.
+          { restNight: isRestDay(m.nightAbs, ctx.yomTov) ? m.nightAbs : null },
         );
       }
     }
@@ -387,9 +531,34 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
         b.start - opts.onah.minutesBefore * MINUTE,
         'reminder.onah',
         w => ({ from: from(w), to: to(w), why: `${orZaruaOnly}${why}`, bedikah: b.veset ? ' Bedikah.' : '', clash, mark: b.veset ? 'O' : 'OZ' }),
-        'before',
+        b.end,
       );
     }
+  }
+
+  // One text per stretch of Shabbat and Yom Tov, the morning it begins; and what is still of use after it
+  // ends, for whoever did not get that text (src/app/queue.ts sends each line once).
+  const style = opts.style;
+  for (const [first, items] of stretches) {
+    let last = first;
+    while (isRestDay(last + 1, ctx.yomTov)) last++;
+    const start = dayTimes(first - 1, ctx.place, ctx.zopts).sunset - CANDLE_LIGHTING_MINUTES * MINUTE;
+    const at = Math.min(localTime(first - 1, opts.restEve.hour, opts.restEve.minute), start - BEFORE_REST_DAY_MINUTES * MINUTE);
+    const afterAt = dayTimes(last, ctx.place, ctx.zopts).tzeit + AFTER_REST_DAY_MINUTES * MINUTE;
+    const afterUntil = Math.min(afterAt + REMINDER_WINDOW_MS, nextRestStart(afterAt, ctx));
+    const words = (sent: number, until: number): DateWords => ({ dates: ctx.dates, lang: 'en', today: localAbs(sent, tz), relative: localAbs(until - 1, tz) === localAbs(sent, tz) });
+    const item = (i: (typeof items)[number], w: DateWords): RestItem => ({ key: i.key, kind: i.kind, at: i.at, end: i.end, vars: lineVars(i.kind, i.varsFor(w)) });
+    const eve: RestText = { rest: restName(first, last), style, items: items.map(i => item(i, words(at, start))) };
+    const after: RestText = { rest: null, style, items: items.filter(i => i.end > afterAt).map(i => item(i, words(afterAt, afterUntil))) };
+    out.push({
+      key: `rest:${first}`,
+      kind: 'rest',
+      at,
+      until: start,
+      text: restText(eve),
+      msg: { key: discreet ? 'reminder.rest.discreet' : 'reminder.rest', vars: { rest: eve.rest as string } },
+      rest: { eve, after: { at: afterAt, until: afterUntil, text: after } },
+    });
   }
 
   return out.sort((a, b) => a.at - b.at || a.key.localeCompare(b.key));

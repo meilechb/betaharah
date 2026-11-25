@@ -273,6 +273,7 @@ export function dashboardState(args: StateArgs) {
         mikvah: capital(f('{mikvah_night}')),
         mikvah_book: 'Book the mikvah',
         onah: capital(f('{onat_perishah}')),
+        rest: f('Before {shabbat} and {yom_tov}'),
       },
     },
     phones: data.phones.map(p => ({

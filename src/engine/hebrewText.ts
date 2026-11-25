@@ -32,6 +32,28 @@ export function heClock(clock12: string): string {
   return clock12;
 }
 
+/** A clock time for a line that names the part of the day: "6:50 בבוקר" for "6:50 AM", "4:36" for "4:36 PM". */
+export function heTime(clock12: string): string {
+  if (clock12.endsWith(' PM')) return clock12.slice(0, -3);
+  if (!clock12.endsWith(' AM')) return clock12;
+  const time = clock12.slice(0, -3);
+  const hour = Number(time.split(':')[0]);
+  return `${time} ${hour === 12 || hour < 4 ? 'בלילה' : 'בבוקר'}`;
+}
+
+const FULL_DAYS = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת'] as const;
+
+/**
+ * An onah by the civil day it falls on, as people say it: "יום ראשון ביום",
+ * "יום ראשון בלילה", "ליל שבת" (Friday night), "מוצאי שבת" (Saturday night).
+ * `civilAbs` is the R.D. number of the civil day (for a night: of its evening).
+ */
+export function heOnahWhen(civilAbs: number, part: CivilPart): string {
+  const dow = dayOfWeek(civilAbs);
+  if (part === 'night') return dow === 6 ? 'מוצאי שבת' : dow === 5 ? 'ליל שבת' : `${FULL_DAYS[dow]} בלילה`;
+  return `${FULL_DAYS[dow]} ביום`;
+}
+
 const DAYS = ['יום א׳', 'יום ב׳', 'יום ג׳', 'יום ד׳', 'יום ה׳', 'יום ו׳', 'שבת'] as const;
 
 const CIVIL_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'] as const;

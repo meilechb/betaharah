@@ -304,7 +304,54 @@ describe('app settings', () => {
     expect(bad({ boundaryMarginMinutes: -1 })).toThrow(ValidationError);
     expect(bad({ reminders: { ...DEFAULT_APP_SETTINGS.reminders, hefsek: { on: 'yes', minutesBeforeSunset: 120 } } })).toThrow(ValidationError);
     expect(bad({ reminders: { ...DEFAULT_APP_SETTINGS.reminders, bedikot: { ...DEFAULT_APP_SETTINGS.reminders.bedikot, morningHour: 24 } } })).toThrow(ValidationError);
+    for (const days of [[0], [8], [1.5], '1,7', ['1']]) {
+      expect(bad({ reminders: { ...DEFAULT_APP_SETTINGS.reminders, bedikot: { ...DEFAULT_APP_SETTINGS.reminders.bedikot, days } } }), String(days)).toThrow(ValidationError);
+    }
+    expect(bad({ reminders: { ...DEFAULT_APP_SETTINGS.reminders, bedikot: { ...DEFAULT_APP_SETTINGS.reminders.bedikot, morning: 'yes' } } })).toThrow(ValidationError);
+    expect(bad({ reminders: { ...DEFAULT_APP_SETTINGS.reminders, restEve: { hour: 24, minute: 0 } } })).toThrow(ValidationError);
+    expect(bad({ reminders: { ...DEFAULT_APP_SETTINGS.reminders, restEve: '9:00' } })).toThrow(ValidationError);
     expect(() => parseAppSettings('x')).toThrow(ValidationError);
+  });
+
+  it('new accounts: the reminder times as before, an hour for an entry close to sunrise or sunset, every bedikah day and part, the text before Shabbat at 9:00 AM', () => {
+    const r = DEFAULT_APP_SETTINGS.reminders;
+    expect([r.hefsek.minutesBeforeSunset, r.bedikot.minutesBeforeSunset, r.mikvah.minutesBeforeSunset, r.onah.minutesBefore]).toEqual([120, 90, 180, 120]);
+    expect(DEFAULT_APP_SETTINGS.boundaryMarginMinutes).toBe(60);
+    expect(r.bedikot).toMatchObject({ days: [1, 2, 3, 4, 5, 6, 7], morning: true, beforeSunset: true });
+    expect(r.restEve).toEqual({ hour: 9, minute: 0 });
+    expect(parseAppSettings(DEFAULT_APP_SETTINGS)).toEqual(DEFAULT_APP_SETTINGS);
+  });
+
+  it('an account saved before: keeps every time it saved, reads all seven days, both parts and 9:00 AM, and ignores the old Shabbat switch', () => {
+    const saved = {
+      ...valid,
+      boundaryMarginMinutes: 20,
+      reminders: {
+        style: 'plain',
+        hefsek: { on: true, minutesBeforeSunset: 120 },
+        bedikot: { on: true, morningHour: 8, morningMinute: 0, minutesBeforeSunset: 90 },
+        mikvah: { on: true, minutesBeforeSunset: 180 },
+        mikvahBook: { on: true, hour: 9, minute: 0 },
+        onah: { on: true, minutesBefore: 120 },
+        beforeRestDays: false,
+        hefsekMaxDays: 10,
+      },
+    };
+    const s = parseAppSettings(JSON.parse(JSON.stringify(saved)));
+    expect(s.boundaryMarginMinutes).toBe(20);
+    expect(s.reminders).toEqual({
+      style: 'plain',
+      hefsek: { on: true, minutesBeforeSunset: 120 },
+      bedikot: { on: true, morningHour: 8, morningMinute: 0, minutesBeforeSunset: 90, days: [1, 2, 3, 4, 5, 6, 7], morning: true, beforeSunset: true },
+      mikvah: { on: true, minutesBeforeSunset: 180 },
+      mikvahBook: { on: true, hour: 9, minute: 0 },
+      onah: { on: true, minutesBefore: 120 },
+      restEve: { hour: 9, minute: 0 },
+      hefsekMaxDays: 10,
+    });
+    // the days are kept in order, once each
+    const days = parseAppSettings({ ...saved, reminders: { ...saved.reminders, bedikot: { ...saved.reminders.bedikot, days: [7, 1, 7] } } }).reminders.bedikot.days;
+    expect(days).toEqual([1, 7]);
   });
 
   it('every listed place is valid and has sun times all year', () => {

@@ -40,8 +40,8 @@ describe('dates in words', () => {
     expect(dayWords(TUE, w('both', { long: true, year: true }))).toBe('Tuesday, Nov 24, 2026 (14 Kislev 5787)');
     expect(dayWords(TUE, w('hebrew', { lang: 'he' }))).toBe('Tue, י״ד כסלו');
     // Saturday by day is Shabbat, short or long
-    expect(dayWords(TUE + 4, w('civil'))).toBe('Shabbat, Nov 28');
-    expect(dayWords(TUE + 4, w('civil', { long: true }))).toBe('Shabbat, Nov 28');
+    expect(dayWords(TUE + 4, w('civil'))).toBe('Shabbos, Nov 28');
+    expect(dayWords(TUE + 4, w('civil', { long: true }))).toBe('Shabbos, Nov 28');
   });
 
   it('a night: the weekday of its evening; its civil date is the evening, its Hebrew date the one that begins then, as its eve', () => {
@@ -57,17 +57,17 @@ describe('dates in words', () => {
 
   it('the night before Rosh Chodesh, a night across a civil month and across a civil year, and the eve of a new Hebrew year', () => {
     // 30 Kislev is Thursday 10 December; the night of 1 Tevet begins that evening
-    expect(nightWords(abs(2026, 12, 11), w('both'))).toBe('Thu night, Dec 10 (eve of 1 Tevet)');
+    expect(nightWords(abs(2026, 12, 11), w('both'))).toBe('Thu night, Dec 10 (eve of 1 Teves)');
     expect(dayWords(abs(2026, 12, 10), w('hebrew'))).toBe('Thu, 30 Kislev');
     // the evening of 30 November belongs to 21 Kislev, whose daytime is 1 December
     expect(nightWords(abs(2026, 12, 1), w('both'))).toBe('Mon night, Nov 30 (eve of 21 Kislev)');
     expect(dayWords(abs(2026, 12, 1), w('both'))).toBe('Tue, Dec 1 (21 Kislev)');
     // the evening of 31 December 2026 belongs to 22 Tevet, whose daytime is 1 January 2027
-    expect(nightWords(abs(2027, 1, 1), w('both', { year: true }))).toBe('Thu night, Dec 31, 2026 (eve of 22 Tevet 5787)');
-    expect(dayWords(abs(2027, 1, 1), w('both', { year: true }))).toBe('Fri, Jan 1, 2027 (22 Tevet 5787)');
+    expect(nightWords(abs(2027, 1, 1), w('both', { year: true }))).toBe('Thu night, Dec 31, 2026 (eve of 22 Teves 5787)');
+    expect(dayWords(abs(2027, 1, 1), w('both', { year: true }))).toBe('Fri, Jan 1, 2027 (22 Teves 5787)');
     // Rosh Hashanah 5788 begins on the evening of Friday 1 October 2027
     expect(nightWords(abs(2027, 10, 2), w('hebrew', { year: true }))).toBe('Fri night, eve of 1 Tishrei 5788');
-    expect(onahWords({ abs: abs(2027, 10, 2), part: 'day' }, w('hebrew', { year: true }), ' by day')).toBe('Shabbat, 1 Tishrei 5788 by day');
+    expect(onahWords({ abs: abs(2027, 10, 2), part: 'day' }, w('hebrew', { year: true }), ' by day')).toBe('Shabbos, 1 Tishrei 5788 by day');
   });
 
   it('today, tonight, tomorrow, tomorrow night, yesterday and last night, when exact as of now', () => {
@@ -85,7 +85,7 @@ describe('dates in words', () => {
   it('within the coming six days the weekday alone; from the seventh day, and in the past, the weekday and the date', () => {
     const now = w('both', { today: TUE, long: true });
     expect(dayWords(TUE + 2, now)).toBe('Thursday');
-    expect(dayWords(TUE + 4, now)).toBe('Shabbat');
+    expect(dayWords(TUE + 4, now)).toBe('Shabbos');
     expect(dayWords(TUE + 6, now)).toBe('Monday');
     expect(dayWords(TUE + 7, now)).toBe('Tuesday, Dec 1 (21 Kislev)');
     expect(nightWords(TUE + 7, now)).toBe('Monday night');
@@ -224,9 +224,9 @@ describe('Coming up, the Log and the calendar on the page', () => {
 
   it('the Log: the weekday and the date in full, in the terms language', () => {
     const night: LogEntry = { id: 'n', kind: 'flow', onah: { abs: abs(2027, 1, 1), part: 'night' }, veset: true };
-    expect(entryText(night, 'en', 'hebrew')).toBe('Flow: Thursday night, eve of 22 Tevet 5787');
+    expect(entryText(night, 'en', 'hebrew')).toBe('Flow: Thursday night, eve of 22 Teves 5787');
     expect(entryText(night, 'en', 'civil')).toBe('Flow: Thursday night, Dec 31, 2026');
-    expect(entryText(night, 'en', 'both')).toBe('Flow: Thursday night, Dec 31, 2026 (eve of 22 Tevet 5787)');
+    expect(entryText(night, 'en', 'both')).toBe('Flow: Thursday night, Dec 31, 2026 (eve of 22 Teves 5787)');
     expect(entryText(night, 'he', 'hebrew')).toBe('ראייה: Thursday night, eve of כ״ב טבת תשפ״ז');
     const data = withEntries('both', [flow]);
     expect(calculationState(data, compute(data, now), now).entries[0]!.text).toBe('Flow: Sunday, Nov 22, 2026 (12 Kislev 5787), by day');

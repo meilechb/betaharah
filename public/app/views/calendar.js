@@ -105,7 +105,7 @@ function index() {
 
 // ---------- pages: civil months or Hebrew months ----------
 
-const FALL = ['Tishrei', 'Cheshvan', 'Kislev', 'Tevet', 'תשרי', 'חשון', 'חשוון', 'מרחשון', 'כסלו', 'טבת'];
+const FALL = ['Tishrei', 'Cheshvan', 'Kislev', 'Teves', 'תשרי', 'חשון', 'חשוון', 'מרחשון', 'כסלו', 'טבת'];
 
 /** The Hebrew year of a page: the grid's, when it sends it; otherwise worked out from the civil year. */
 function hebrewYear(day) {

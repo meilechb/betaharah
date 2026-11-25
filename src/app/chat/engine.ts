@@ -37,7 +37,7 @@
  */
 import { localAbs, absToCivil } from '../../engine/civil';
 import { dayWords, type DateStyle, type DateWords } from '../../engine/dates';
-import { statusMessage, type TextMessage } from '../../engine/present';
+import { restPieces, statusMessage, type RestText, type TextMessage } from '../../engine/present';
 import { onahAt } from '../../engine/zmanim';
 import { parseDayWords, parseOnahWords, resolveHefsekDay, resolveMikvahNight, resolveWhen, whenTokens, type ResolveContext, type ResolvedOnah, type WhenSpec } from '../commands';
 import { compute, confirmationParts, entryEnglish, recordEntry, removeEntry, tooEarlyNight, UNDO_WINDOW_MS, whereOf, type Computed, type DraftEntry, type RejectReason } from '../household';
@@ -48,7 +48,7 @@ import { looksLikeDate, parseDated, recordDated, type DatedOutcome } from './dat
 import { foldToGsm } from './gsm';
 import { MESSAGE_BY_KEY, shortWords } from './messages';
 import { compose, generalActionsIn, generalWords, matchGeneral, matchOption, NO_TEXTS, optionsOf, renderBody, wordsOf, type Piece, type SiteTexts, type Vars } from './site-texts';
-import type { BeginInput, ChatContext, ChatState, ConfirmAction, ConverseInput, ConverseOutput, Effect, GreetInput, GreetOutput, OutMessage, Place, RecordKind } from './types';
+import type { BeginInput, ChatContext, ChatExpect, ChatState, ConfirmAction, ConverseInput, ConverseOutput, Effect, GreetInput, GreetOutput, OutMessage, Place, RecordKind } from './types';
 
 /** The options of a message are kept this long. */
 export const CHAT_TTL_MS = 24 * 3_600_000;
@@ -114,7 +114,7 @@ export function validChat(x: unknown): ChatState | null {
   const c = x as Partial<ChatState>;
   if (c.v !== 2 || typeof c.at !== 'number' || !Number.isFinite(c.at) || typeof c.key !== 'string' || !MESSAGE_BY_KEY.has(c.key)) return null;
   if (!Array.isArray(c.opts) || c.opts.length > 6 || !c.opts.every(o => Array.isArray(o) && o.length === 2 && typeof o[0] === 'string' && typeof o[1] === 'string' && o[1].length <= 20)) return null;
-  if (c.expect !== undefined && c.expect !== 'zip' && c.expect !== 'date') return null;
+  if (c.expect !== undefined && !(['zip', 'date', 'days', 'time'] as const).includes(c.expect)) return null;
   const k = c.ctx as ChatContext | undefined;
   if (typeof k !== 'object' || k === null) return null;
   const strings = (a: unknown, max: number): boolean => Array.isArray(a) && a.length <= max && a.every(s => typeof s === 'string');
@@ -165,6 +165,20 @@ export function messageOut(texts: SiteTexts, msg: TextMessage, now: number): { o
   return { out, chat };
 }
 
+/**
+ * The text of a Shabbat or Yom Tov in the operator's wording: one text, or
+ * two when its lines with the options do not fit two segments (split
+ * between lines, each ending with the options), with the options its last
+ * line leaves for the reply.
+ */
+export function restOut(texts: SiteTexts, rest: RestText, now: number): { outs: OutMessage[]; chat: ChatState | null } {
+  const pieces = restPieces(rest);
+  const outs = toOut(texts, pieces);
+  const last = pieces[pieces.length - 1];
+  const opts = last ? optionsOf(texts, last.key) : [];
+  return { outs, chat: last && opts.length > 0 ? { v: 2, at: now, key: last.key, opts, ctx: {} } : null };
+}
+
 // ---------- the reply being built ----------
 
 class Reply {
@@ -173,7 +187,7 @@ class Reply {
   changed = false;
   computed: Computed | undefined;
   ctx: ChatContext = {};
-  expect: 'zip' | 'date' | undefined;
+  expect: ChatExpect | undefined;
   readonly texts: SiteTexts;
 
   constructor(
@@ -191,7 +205,7 @@ class Reply {
     return this;
   }
 
-  ask(ctx: ChatContext, expect?: 'zip' | 'date'): this {
+  ask(ctx: ChatContext, expect?: ChatExpect): this {
     this.ctx = ctx;
     this.expect = expect;
     return this;
@@ -749,8 +763,16 @@ function reminders(r: Reply, rest: readonly string[]): void {
     return;
   }
   if (words.has('wording')) return wording(r, []);
+  if (['bedikot', 'bedikos', 'bedikah', 'bedikahs', 'bedikas'].some(w => words.has(w))) return bedikot(r);
+  if (['shabbat', 'shabbos', 'yom', 'tov'].some(w => words.has(w))) return restEve(r);
   const on = canText(r.me);
-  r.say('reminders.show', { state: on ? 'on' : 'off', kinds: String(r.me.reminders.length), style: r.input.data.app.reminders.style }, [on ? 'off' : 'on', 'kinds', 'wording']);
+  r.say('reminders.show', { state: on ? 'on' : 'off', kinds: String(r.me.reminders.length), style: r.input.data.app.reminders.style }, [
+    on ? 'off' : 'on',
+    'kinds',
+    'wording',
+    'bedikot',
+    'rest_eve',
+  ]);
 }
 
 function remindersOn(r: Reply): void {
@@ -813,6 +835,97 @@ function setWording(r: Reply, style: 'plain' | 'discreet'): void {
   r.input.data.app.reminders = { ...rem, style };
   r.changed = true;
   r.say('reminders.wording_changed', { style });
+}
+
+/** "all 7", "1 and 7", "1, 2 and 7", "7 only", "none": the clean days that get bedikah reminders. */
+export function cleanDaysWords(days: readonly number[]): string {
+  if (days.length === 7) return 'all 7';
+  if (days.length === 0) return 'none';
+  if (days.length === 1) return `${days[0]} only`;
+  return `${days.slice(0, -1).join(', ')} and ${days[days.length - 1]}`;
+}
+
+/** The bedikah settings as the texts say them, with the options that change them (each switch offers its other state). */
+function bedikotSay(r: Reply, key: string): void {
+  const b = r.input.data.app.reminders.bedikot;
+  const vars = { state: b.on ? 'on' : 'off', days: cleanDaysWords(b.days), morning: b.morning ? 'on' : 'off', sunset: b.beforeSunset ? 'on' : 'off' };
+  r.say(key, vars, ['days', b.morning ? 'morning_off' : 'morning_on', b.beforeSunset ? 'sunset_off' : 'sunset_on', 'menu']);
+}
+
+function bedikot(r: Reply): void {
+  bedikotSay(r, 'reminders.bedikot');
+}
+
+type BedikotChange = Partial<Pick<HouseholdData['app']['reminders']['bedikot'], 'days' | 'morning' | 'beforeSunset'>>;
+
+/** Changes the bedikah reminders of the account (a copy, so that a shared default object is never changed). */
+function setBedikot(r: Reply, change: BedikotChange): void {
+  const rem = r.input.data.app.reminders;
+  const next = { ...rem.bedikot, ...change };
+  if (next.days.join() === rem.bedikot.days.join() && next.morning === rem.bedikot.morning && next.beforeSunset === rem.bedikot.beforeSunset) {
+    bedikotSay(r, 'reminders.bedikot_same');
+    return;
+  }
+  r.input.data.app.reminders = { ...rem, bedikot: next };
+  r.changed = true;
+  bedikotSay(r, 'reminders.bedikot_changed');
+}
+
+/** DAYS: all seven, 1 and 7, or the numbers written in reply (asked again when they are not clean days). */
+function askDays(r: Reply, key: 'reminders.days_ask' | 'reminders.days_bad'): void {
+  r.say(key, { days: cleanDaysWords(r.input.data.app.reminders.bedikot.days) }).ask({}, 'days');
+}
+
+/**
+ * The clean days written after CHOOSE DAYS: numbers from 1 to 7, apart or
+ * together, with commas, "and" or a range ("1 2 7", "1,7", "127", "1-3").
+ * Null for anything else.
+ */
+export function parseCleanDays(raw: string): number[] | null {
+  let s = raw.toLowerCase().replace(/(\d)\s*-\s*(\d)/g, (_, a: string, b: string) => {
+    const from = Number(a);
+    const to = Number(b);
+    return from <= to ? Array.from({ length: to - from + 1 }, (_, i) => String(from + i)).join(' ') : `${a}-${b}`;
+  });
+  s = s.replace(/\b(and|days?|clean)\b|[&,.;+\s]/g, '');
+  if (!/^[1-7]+$/.test(s)) return null;
+  const set = new Set([...s].map(Number));
+  return [1, 2, 3, 4, 5, 6, 7].filter(d => set.has(d));
+}
+
+/** A clock time as written: "8:30 AM", "9am", "8.30", "13:00"; without AM or PM, as on a 24-hour clock. Null for anything else. */
+export function parseClockTime(raw: string): { hour: number; minute: number } | null {
+  const m = /^\s*(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*(?:([ap])\.?\s*m\.?)?\s*$/i.exec(raw);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = m[2] === undefined ? 0 : Number(m[2]);
+  if (minute > 59) return null;
+  const half = m[3]?.toLowerCase();
+  if (half) {
+    if (hour < 1 || hour > 12) return null;
+    hour = (hour % 12) + (half === 'p' ? 12 : 0);
+  } else if (hour > 23) return null;
+  return { hour, minute };
+}
+
+/** "9:00 AM": a time of day as the texts write it. */
+function clockWords(hour: number, minute: number): string {
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+/** The one text before Shabbat and Yom Tov: its time, which a time written in reply changes. */
+function restEve(r: Reply): void {
+  const t = r.input.data.app.reminders.restEve;
+  r.say('reminders.rest_eve', { time: clockWords(t.hour, t.minute) }).ask({}, 'time');
+}
+
+function setRestEve(r: Reply, t: { hour: number; minute: number }): void {
+  const rem = r.input.data.app.reminders;
+  if (rem.restEve.hour !== t.hour || rem.restEve.minute !== t.minute) {
+    r.input.data.app.reminders = { ...rem, restEve: { hour: t.hour, minute: t.minute } };
+    r.changed = true;
+  }
+  r.say('reminders.rest_eve_changed', { time: clockWords(t.hour, t.minute) });
 }
 
 // ---------- phones ----------
@@ -1200,6 +1313,22 @@ function choose(r: Reply, chat: ChatState, id: string, rest: readonly string[]):
     case 'plain':
     case 'discreet':
       return setWording(r, id);
+    case 'bedikot':
+      return bedikot(r);
+    case 'days_all':
+      return setBedikot(r, { days: [1, 2, 3, 4, 5, 6, 7] });
+    case 'days_1_7':
+      return setBedikot(r, { days: [1, 7] });
+    case 'days':
+      return askDays(r, 'reminders.days_ask');
+    case 'morning_on':
+    case 'morning_off':
+      return setBedikot(r, { morning: id === 'morning_on' });
+    case 'sunset_on':
+    case 'sunset_off':
+      return setBedikot(r, { beforeSunset: id === 'sunset_on' });
+    case 'rest_eve':
+      return restEve(r);
     case 'hebrew':
       return setTerms(r, 'he');
     case 'english':
@@ -1281,12 +1410,37 @@ export function converse(input: ConverseInput): ConverseOutput {
     return r.done();
   }
   const words = wordsOf(raw);
-  // A digit alone is never a command.
-  if (words.length === 0 || (words.length === 1 && /^\d$/.test(words[0] as string))) {
+  // A digit alone is never a command (it may be the data asked for: a clean day, an hour).
+  const numbersAsked = chat?.expect === 'days' || chat?.expect === 'time';
+  if (words.length === 0 || (words.length === 1 && /^\d$/.test(words[0] as string) && !numbersAsked)) {
     notUnderstood(r);
     return r.done();
   }
   const lists = generalWords(r.texts);
+
+  // The clean days, or the time, the last message asked for; numbers that are neither are asked for again.
+  if (chat?.expect === 'days') {
+    const days = parseCleanDays(raw);
+    if (days) {
+      setBedikot(r, { days });
+      return r.done();
+    }
+    if (/\d/.test(raw)) {
+      askDays(r, 'reminders.days_bad');
+      return r.done();
+    }
+  }
+  if (chat?.expect === 'time') {
+    const t = parseClockTime(raw);
+    if (t) {
+      setRestEve(r, t);
+      return r.done();
+    }
+    if (/\d/.test(raw)) {
+      r.say('reminders.rest_eve_bad').ask({}, 'time');
+      return r.done();
+    }
+  }
 
   // The free text the last message asked for.
   if (chat?.expect === 'zip') {

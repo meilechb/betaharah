@@ -4,7 +4,7 @@
  * message) is made here.
  *
  * A time is named first in everyday words: a weekday for a daytime
- * ("Tuesday", "Tue"; a Saturday is "Shabbat") and the weekday of the evening
+ * ("Tuesday", "Tue"; a Saturday is "Shabbos") and the weekday of the evening
  * for a night ("Monday night"). With today's date known, the nearest days
  * are "today", "tonight", "tomorrow", "tomorrow night", "yesterday" and
  * "last night", and anything else in the coming six days is its weekday
@@ -93,7 +93,7 @@ function near(abs: number, w: DateWords): number | null {
  */
 export function dayWords(abs: number, w: DateWords): string {
   const shabbat = dayOfWeek(abs) === 6;
-  const name = shabbat ? 'Shabbat' : weekdayName(abs, w);
+  const name = shabbat ? 'Shabbos' : weekdayName(abs, w);
   const diff = near(abs, w);
   if (diff !== null) {
     if (w.relative !== false && diff === 0) return 'today';

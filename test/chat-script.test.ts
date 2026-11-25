@@ -57,7 +57,7 @@ describe('from the first text to a finished setup', () => {
     expect(lines(p.send('Nov 1 night'))).toEqual(['Recorded: flow Sun night, eve of 22 Cheshvan 5787. Hefsek from Fri, 26 Cheshvan. Hefsek done? Its date, for example: Nov 27.\nReply: NOT YET']);
     p.wait(1);
     expect(lines(p.send('11/6'))[0]).toMatch(
-      /^Recorded: hefsek Fri, 26 Cheshvan 5787\. Clean days from Shabbat, 27 Cheshvan\. Mikvah Fri night, eve of 4 Kislev after \d:\d\d PM\. Setup is done\. Reminders are off for now\.\nReply: PERIOD, HEFSEK, REMINDERS, MORE$/,
+      /^Recorded: hefsek Fri, 26 Cheshvan 5787\. Clean days from Shabbos, 27 Cheshvan\. Mikvah Fri night, eve of 4 Kislev after \d:\d\d PM\. Setup is done\. Reminders are off for now\.\nReply: PERIOD, HEFSEK, REMINDERS, MORE$/,
     );
     expect(data.entries.map(e => e.entry.kind)).toEqual(['flow', 'hefsek']);
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newHousehold, type HouseholdData } from '../src/app/model';
 import { allowText, nextWake, postponeDue, rebuildQueue, refundText, RETRY_MS, SENDING_TIMEOUT_MS, settle, takeDue, textsThisMonth } from '../src/app/queue';
-import type { Reminder } from '../src/engine/present';
+import { restText, type Reminder, type RestItem } from '../src/engine/present';
 
 const A = '+17325550101';
 const B = '+17325550102';
@@ -258,5 +258,104 @@ describe('a household\'s monthly count of texts', () => {
     expect(allowText(data, 2, december)).toBe(true);
     expect(textsThisMonth(data, december)).toBe(1);
     expect(allowText(data, 0, december)).toBe(false);
+  });
+});
+
+describe('the one text before Shabbat or Yom Tov', () => {
+  // The text goes at EVE (the morning before), until START (candle lighting); after the days end (AFTER), a
+  // text brings what is still of use to whoever did not get it.
+  const EVE = NOW + 2 * HOUR;
+  const START = NOW + 8 * HOUR;
+  const AFTER = NOW + 34 * HOUR;
+  const item = (key: string, kind: RestItem['kind'], at: number, end = at + HOUR): RestItem => ({
+    key,
+    kind,
+    at,
+    end,
+    vars: { day: 'Shabbos', n: '2', sunset: '4:31 PM', required: '', time: '5:16 PM', notes: '' },
+  });
+  const HEFSEK = item('hefsek:1', 'hefsek', START + 20 * HOUR);
+  const MIKVAH = item('mikvah:1', 'mikvah', START + 24 * HOUR, AFTER + 6 * HOUR);
+  const LATE = item('mikvah_book:1', 'mikvah', START + 10 * HOUR, AFTER + 6 * HOUR);
+  const rest = (items: RestItem[]): Reminder => ({
+    key: 'rest:100',
+    kind: 'rest',
+    at: EVE,
+    until: START,
+    text: '',
+    msg: { key: 'reminder.rest', vars: { rest: 'Shabbos' } },
+    rest: {
+      eve: { rest: 'Shabbos', style: 'plain', items },
+      after: { at: AFTER, until: AFTER + 3 * HOUR, text: { rest: null, style: 'plain', items: items.filter(i => i.end > AFTER) } },
+    },
+  });
+  const sendAll = (data: HouseholdData, now: number): string[] => {
+    const taken = takeDue(data, now, 8, 100);
+    for (const q of taken) settle(data, q, 'sent', now);
+    return taken.map(q => `${q.key}>${q.to.slice(-1)}: ${q.text}`);
+  };
+
+  it('each phone gets one text with the lines of the kinds it gets, as one item that a refresh updates in place', () => {
+    const data = household();
+    rebuildQueue(data, [rest([HEFSEK])], NOW);
+    expect(pending(data)).toEqual(['rest:100>1']); // B does not get the hefsek kind
+    rebuildQueue(data, [rest([HEFSEK, MIKVAH])], NOW + HOUR);
+    expect(pending(data)).toEqual(['rest:100>1', 'rest:100:after>1', 'rest:100>2', 'rest:100:after>2']);
+    expect(data.queue.find(q => q.key === 'rest:100' && q.to === A)!.text).toBe(restText({ rest: 'Shabbos', style: 'plain', items: [HEFSEK, MIKVAH] }));
+    expect(sendAll(data, EVE)).toEqual([
+      'rest:100>1: Over Shabbos. Shabbos: hefsek taharah before 4:31 PM. Shabbos: mikvah night, after 5:16 PM.',
+      'rest:100>2: Over Shabbos. Shabbos: mikvah night, after 5:16 PM.',
+    ]);
+    expect(data.queue.find(q => q.key === 'rest:100' && q.to === A)).toMatchObject({ status: 'sent', text: '', covered: ['hefsek:1', 'mikvah:1'] });
+  });
+
+  it('a refresh after it went out sends nothing again; what becomes known before the days begin goes at once, alone', () => {
+    const data = household();
+    rebuildQueue(data, [rest([HEFSEK, MIKVAH])], NOW);
+    sendAll(data, EVE);
+    // the six-hourly refresh: nothing more
+    rebuildQueue(data, [rest([HEFSEK, MIKVAH])], EVE + HOUR);
+    expect(sendAll(data, EVE + HOUR)).toEqual([]);
+    // something recorded at noon on Friday: only it, at once, in a text of its own
+    rebuildQueue(data, [rest([HEFSEK, LATE, MIKVAH])], EVE + 2 * HOUR);
+    expect(sendAll(data, EVE + 2 * HOUR)).toEqual([
+      'rest:100:more:1>1: Over Shabbos. Shabbos: mikvah night, after 5:16 PM.',
+      'rest:100:more:1>2: Over Shabbos. Shabbos: mikvah night, after 5:16 PM.',
+    ]);
+    // and again: nothing
+    rebuildQueue(data, [rest([HEFSEK, LATE, MIKVAH])], EVE + 3 * HOUR);
+    expect(sendAll(data, EVE + 3 * HOUR)).toEqual([]);
+    // after the days end: everything was brought already, so nothing
+    rebuildQueue(data, [rest([HEFSEK, LATE, MIKVAH])], AFTER);
+    expect(sendAll(data, AFTER)).toEqual([]);
+    expect(data.queue.filter(q => q.key === 'rest:100:after').map(q => q.status)).toEqual(['dropped', 'dropped']);
+    // the reminders it replaced are never sent on their own
+    expect(data.queue.some(q => !q.key.startsWith('rest:'))).toBe(false);
+  });
+
+  it('known only once the days have begun: nothing during them; after they end, only what is still ahead and was not brought', () => {
+    const data = household();
+    rebuildQueue(data, [rest([HEFSEK])], NOW);
+    sendAll(data, EVE);
+    // recorded on Shabbat: nothing is sent during it
+    rebuildQueue(data, [rest([HEFSEK, MIKVAH, item('bedikah:x', 'hefsek', START + 12 * HOUR)])], START + HOUR);
+    expect(sendAll(data, START + 2 * HOUR)).toEqual([]);
+    // after it: the mikvah night (still ahead), not the hefsek (brought, and over) nor the line whose day is over
+    expect(sendAll(data, AFTER)).toEqual(['rest:100:after>1: Shabbos: mikvah night, after 5:16 PM.', 'rest:100:after>2: Shabbos: mikvah night, after 5:16 PM.']);
+  });
+
+  it('all of it known only after candle lighting: what is still ahead goes after the days', () => {
+    const data = household();
+    rebuildQueue(data, [rest([HEFSEK, MIKVAH])], START + HOUR);
+    expect(pending(data)).toEqual(['rest:100:after>1', 'rest:100:after>2']);
+    expect(sendAll(data, AFTER)).toEqual(['rest:100:after>1: Shabbos: mikvah night, after 5:16 PM.', 'rest:100:after>2: Shabbos: mikvah night, after 5:16 PM.']);
+  });
+
+  it('a text that went as two texts counts as two', () => {
+    const data = household();
+    rebuildQueue(data, [rest([HEFSEK])], NOW);
+    const [q] = takeDue(data, EVE, 8, 100);
+    settle(data, q!, 'sent', EVE, 2);
+    expect(textsThisMonth(data, EVE)).toBe(2);
   });
 });

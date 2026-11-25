@@ -202,13 +202,37 @@ export function filedText(texts: SiteTexts, key: string, vars: Vars = {}): strin
 
 // ---------- reading a reply ----------
 
-/** The words of a text: capitals, letters and digits only. */
+/**
+ * Words whose spelling changed, read as the spelling shown now: a reply,
+ * a label and a word list may each have either one ("SHABBAT" is read as
+ * "SHABBOS", "BEDIKOT" as "BEDIKOS"), so both are always understood.
+ */
+const RESPELLED: Record<string, string> = {
+  SHABBAT: 'SHABBOS',
+  BEDIKOT: 'BEDIKOS',
+  VESATOT: 'VESTOS',
+  VESET: 'VEST',
+  ONOT: 'ONOS',
+  ONAT: 'ONAS',
+  BEINONIT: 'BEINONIS',
+  TEVET: 'TEVES',
+  SHEVAT: 'SHVAT',
+};
+
+/** One word, in capitals, as it is compared: "shabbat" and "Shabbos" are both "SHABBOS". */
+export function wordKey(word: string): string {
+  const w = word.toUpperCase();
+  return Object.hasOwn(RESPELLED, w) ? (RESPELLED[w] as string) : w;
+}
+
+/** The words of a text: capitals, letters and digits only, each as compared (wordKey). */
 export function wordsOf(text: string): string[] {
   return text
     .normalize('NFKC')
     .toUpperCase()
     .split(/[^A-Z0-9]+/)
-    .filter(w => w !== '');
+    .filter(w => w !== '')
+    .map(wordKey);
 }
 
 export type Match = { id: string; rest: string[] } | 'ambiguous' | null;
@@ -244,7 +268,7 @@ export function matchOption(raw: string, options: ReadonlyArray<readonly [string
   const said = new Set(words);
   const hits: Array<{ id: string; mine: Set<string> }> = [];
   for (const [id, label] of options) {
-    const mine = new Set<string>([...wordsOf(label).filter(w => counts.get(w) === 1 && !STOP_WORDS.has(w)), ...own(id).map(w => w.toUpperCase())]);
+    const mine = new Set<string>([...wordsOf(label).filter(w => counts.get(w) === 1 && !STOP_WORDS.has(w)), ...own(id).map(wordKey)]);
     if ([...mine].some(w => said.has(w))) hits.push({ id, mine: new Set([...mine, ...wordsOf(label)]) });
   }
   if (hits.length === 0) return null;
@@ -256,18 +280,18 @@ export function matchOption(raw: string, options: ReadonlyArray<readonly [string
 /** Which general action a reply names, if exactly one. */
 export function matchGeneral(raw: string, lists: Record<string, readonly string[]>): Match {
   const said = new Set(wordsOf(raw));
-  const hits = Object.entries(lists).filter(([, words]) => words.some(w => said.has(w.toUpperCase())));
+  const hits = Object.entries(lists).filter(([, words]) => words.some(w => said.has(wordKey(w))));
   if (hits.length === 0) return null;
   if (hits.length > 1) return 'ambiguous';
   const [action, words] = hits[0]!;
-  return { id: action, rest: restOf(raw, new Set(words.map(w => w.toUpperCase()))) };
+  return { id: action, rest: restOf(raw, new Set(words.map(wordKey))) };
 }
 
 /** The general actions a reply names (for telling whether a reply is about something else than the options). */
 export function generalActionsIn(raw: string, lists: Record<string, readonly string[]>): string[] {
   const said = new Set(wordsOf(raw));
   return Object.entries(lists)
-    .filter(([, words]) => words.some(w => said.has(w.toUpperCase())))
+    .filter(([, words]) => words.some(w => said.has(wordKey(w))))
     .map(([a]) => a);
 }
 
@@ -320,7 +344,7 @@ function prefixProblem(prefix: string): string | null {
 function foreignWords(id: string, lists: Record<string, readonly string[]>): Map<string, string> {
   const own = new Set([id, ...(OPTION_FAMILY[id] ?? [])]);
   const out = new Map<string, string>();
-  for (const [action, words] of Object.entries(lists)) if (!own.has(action)) for (const w of words) out.set(w.toUpperCase(), action);
+  for (const [action, words] of Object.entries(lists)) if (!own.has(action)) for (const w of words) out.set(wordKey(w), action);
   return out;
 }
 
@@ -382,9 +406,10 @@ export function checkWords(texts: SiteTexts, words: Record<string, string[]>, pr
       if (!WORD.test(w)) throw new TextsError(field, `"${w}" is not one word of letters and digits (at most 20).`);
       if (/^\d+$/.test(w)) throw new TextsError(field, `"${w}" is only digits; digits are not words here.`);
       if (CARRIER_WORDS.has(w.toUpperCase())) throw new TextsError(field, `"${w}" is a word the carrier acts on.`);
-      const other = owner.get(w);
+      const key = wordKey(w).toLowerCase(); // "vesatot" and "vestos" are one word
+      const other = owner.get(key);
       if (other && other !== a.action) throw new TextsError(field, `"${w}" is already a word for "${actionName(other)}".`);
-      owner.set(w, a.action);
+      owner.set(key, a.action);
     }
   }
   const lists = generalWords({ ...texts, words });

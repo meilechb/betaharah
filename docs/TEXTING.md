@@ -38,7 +38,7 @@ checks the same texts). They assume Lakewood, NJ, on Tuesday 24 November
   letters, from the same helpers as the website (`src/engine/dates.ts`).
   A time is named in plain words first: `today`, `tonight`, `tomorrow`,
   `tomorrow night`, `yesterday`, `last night`, a weekday alone within the
-  coming six days (`Thu`, `Shabbat`, `Mon night`); otherwise the weekday and
+  coming six days (`Thu`, `Shabbos`, `Mon night`); otherwise the weekday and
   the date: `Tue, 16 Kislev` / `Tue, Nov 26` / `Tue, Nov 26 (16 Kislev)`,
   and for a night the date of its evening and the Hebrew date it begins:
   `Mon night, eve of 16 Kislev` / `Mon night, Nov 25` /
@@ -82,7 +82,7 @@ In this order:
    | Undo | undo |
    | Main options | menu, options, more (`?` too; `more` shows MORE's page) |
    | Stain, count broken | stain; broken |
-   | History, location, customs, nightfall, vesatot | history; location, zip; customs, custom; nightfall; vesatot |
+   | History, location, customs, nightfall, vestos | history; location, zip; customs, custom; nightfall; vestos, vesatot |
    | Reminders, kinds, wording | reminders, reminder; kinds; wording |
    | Phones, add, leave | phones, phone; add; leave |
    | Calendar, terms, dates, sign-in link, setup, delete | calendar; terms; dates; web, website; setup; delete |
@@ -93,7 +93,7 @@ In this order:
    `period last night`, `period yesterday 9pm`, `period Nov 22 night`,
    `hefsek yesterday`, `hefsek 11/26`. A few settings take one too:
    `location 08701`, `reminders on`, `reminders off`, `wording discreet`,
-   `terms hebrew`, `dates both`, `calendar link`, `pause vesatot`, `resume vesatot`,
+   `terms hebrew`, `dates both`, `calendar link`, `pause vestos`, `resume vestos`,
    `delete account`.
 6. **Otherwise**: `Not understood; nothing was changed.` with the main
    options.
@@ -147,7 +147,7 @@ own limits (4 per number a day, 100 a day for the site).
 < Recorded: flow Sun night, eve of 22 Cheshvan 5787. Hefsek from Fri, 26 Cheshvan. Hefsek done? Its date, for example: Nov 27.
   Reply: NOT YET
 > 11/6
-< Recorded: hefsek Fri, 26 Cheshvan 5787. Clean days from Shabbat, 27 Cheshvan. Mikvah Fri night, eve of 4 Kislev after 5:25 PM. Setup is done. Reminders are off for now.
+< Recorded: hefsek Fri, 26 Cheshvan 5787. Clean days from Shabbos, 27 Cheshvan. Mikvah Fri night, eve of 4 Kislev after 5:25 PM. Setup is done. Reminders are off for now.
   Reply: PERIOD, HEFSEK, REMINDERS, MORE
 ```
 
@@ -164,10 +164,10 @@ days are over the calendar takes it that she immersed on the mikvah night.
 < When did it begin?
   Reply: NOW, LAST NIGHT, ANOTHER DAY          (at night: NOW, TODAY BY DAY, ANOTHER DAY)
 > last night
-< Recorded: flow last night. Hefsek from Shabbat.
+< Recorded: flow last night. Hefsek from Shabbos.
   Reply: UNDO, STATUS
 > hefsek
-< Hefsek tahara: which day?
+< Hefsek taharah: which day?
   Reply: TODAY, YESTERDAY, ANOTHER DAY
 > another day
 < Which date? For example: Nov 26.
@@ -196,7 +196,9 @@ days are over the calendar takes it that she immersed on the mikvah night.
   date as it was read: `Not recorded: no period is open. (Read as Thu, 7
   Kislev 5786.)`
 - A time shortly after sunrise or sunset adds `Counted as night: sunset
-  was 4:31 PM.` (information only).
+  was 4:31 PM.` (information only). "Shortly" is the account's "Texts close
+  to sunrise or sunset" setting (Reminders, Advanced): 60 minutes for new
+  accounts; an account keeps the number it saved.
 - `undo` removes the latest entry of the last 48 hours and gives the
   status; `history` lists the latest five as FIRST to FIFTH, and erasing
   one asks YES or NO.
@@ -224,7 +226,7 @@ The hefsek reminder offers `DONE`, which records the hefsek on the day the
 reminder was about; every other reminder offers `STATUS`:
 
 ```
-< Hefsek tahara: today, before sunset at 4:33 PM.
+< Hefsek taharah: today, before sunset at 4:33 PM.
   Reply: DONE, STATUS
 > done
 < Recorded: hefsek today. Clean days from tomorrow. Mikvah Thu night, eve of 24 Kislev after 5:16 PM.
@@ -235,7 +237,51 @@ reminder was about; every other reminder offers `STATUS`:
 BEDIKAH, PM BEDIKAH, MIKVAH NIGHT, BOOKING, ONAH) turns one on or off.
 `wording` chooses plain or discreet wording for the whole account (the
 discreet hefsek reminder is `H today before 4:33 PM.`, with the same
-options). Reminder times are set on the website.
+options). The other reminder times are set on the website.
+
+`bedikos` (or BEDIKOS from REMINDERS; `bedikot` is understood too) sets the bedikah reminders of the
+account; DAYS asks which clean days, and the numbers written in reply are
+data (`1 2 7`, `1,7`, `1-3 7`, or a single `7`):
+
+```
+> bedikos
+< Bedikah reminders are on: clean days all 7; morning on; before sunset on.
+  Reply: DAYS, MORNING OFF, BEFORE SUNSET OFF, MENU
+> days
+< Bedikah reminders on clean days all 7. Other days: their numbers, such as 1 2 7.
+  Reply: ALL DAYS, 1 AND 7, MENU
+> 1 and 7
+< Changed. Bedikah reminders are on: clean days 1 and 7; morning on; before sunset on.
+  Reply: DAYS, MORNING OFF, BEFORE SUNSET OFF, MENU
+```
+
+`shabbos` (or SHABBOS from REMINDERS; `shabbat` is understood too) shows the time of the text before
+Shabbos and Yom Tov; a time written in reply (`8:30 AM`, `9`, `13:00`)
+changes it.
+
+### Shabbos and Yom Tov
+
+Nothing is sent from candle lighting until nightfall. What would fall in
+that time is one text, the morning the days begin (default 9:00 AM; at the
+latest 90 minutes before candle lighting): a first line, then one line per
+day's reminder in time order, the morning and before-sunset bedikah of a day
+on one line. Each line is its own text in the registry (`reminder.rest.*`,
+plain and discreet), so the operator can word each:
+
+```
+< Over Shabbos. Tomorrow: clean day 2, bedikah morning and before 4:32 PM.
+  Reply: STATUS
+< Over Yom Tov and Shabbos. Tomorrow: clean day 3, bedikah morning and before 7:42 PM. Fri: clean day 4, bedikah morning and before 7:43 PM. Shabbos: clean day 5, bedikah morning and before 7:44 PM.
+  Reply: STATUS
+```
+
+It is one queued item per phone (`rest:<first day>`): a refresh updates it
+until it is sent and never sends it again. Each sent text keeps the keys of
+the reminders it carried (`covered`); what becomes known later, before
+candle lighting, goes at once as `rest:<day>:more:<n>` with only the new
+lines; after the days end, `rest:<day>:after` brings only what is still
+ahead and no text brought. Too long for two segments, it goes as two texts,
+split between lines.
 
 ## Settings, phones and the account
 
@@ -244,7 +290,8 @@ options). Reminder times are set on the website.
   asks YES or NO. Places outside the US and Canada are set on the website.
 - **Customs**: `customs` lists them in three pages of options (and ALL 12
   goes through all twelve); each custom offers its options and KEEP.
-  Pausing vesatot asks YES or NO; `resume vesatot` turns them back on.
+  Pausing vestos asks YES or NO; `resume vestos` turns them back on
+  (`vesatot` is understood too, as are the other earlier spellings).
 - **Calendar**: CREATE LINK, SHOW LINK, NEW LINK (YES or NO), REMOVE LINK
   (YES or NO). Google Calendar is connected on the website.
 - **Terms**: HEBREW or ENGLISH, for the calendar and the website; texts
@@ -265,7 +312,7 @@ options). Reminder times are set on the website.
 
 Anything that cannot be undone asks YES or NO first: erasing an entry,
 removing a phone, leaving, deleting the account, replacing or removing the
-calendar link, pausing vesatot, and a shared location.
+calendar link, pausing vestos, and a shared location.
 
 ## The texts filed with the carrier
 
