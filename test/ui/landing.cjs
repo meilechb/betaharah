@@ -221,7 +221,7 @@ async function withoutScript(browser, label = '') {
   for (const p of HOME_PHRASES) if (!main.includes(p)) fail(where, 'missing: ' + p);
   for (const sel of ['#hero-sms', '#offline-note', '#signup-note']) if (await page.locator(sel).isVisible()) fail(where, sel + ' shows an empty line');
   if (!(await page.locator('#hero-start').isVisible())) fail(where, 'no "Start for free"');
-  if (!(await page.locator('.month').isVisible())) fail(where, 'the calendar is not shown');
+  if (!(await page.locator('.month').first().isVisible())) fail(where, 'the calendar is not shown');
   const opacity = await page.locator('#privacy p').evaluate(el => getComputedStyle(el).opacity);
   if (opacity !== '1') fail(where, 'a section is left invisible');
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
