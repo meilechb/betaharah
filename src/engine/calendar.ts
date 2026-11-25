@@ -16,8 +16,8 @@ import type { OnahView, PeriodView, Timeline } from './timeline';
 import type { BaseReason, VesetReason } from './vesatot';
 
 const MINUTE = 60_000;
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Shabbat'] as const;
-/** The civil weekday of an evening: "the night of Shabbat" would be read as Friday night. */
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Shabbos'] as const;
+/** The civil weekday of an evening: "the night of Shabbos" would be read as Friday night. */
 const CIVIL_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 

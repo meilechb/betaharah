@@ -55,7 +55,7 @@ function baseReasonEnglish(r: BaseReason): string {
     case 'chodesh':
       return 'chodesh';
     case 'haflagah':
-      return `haflagah ${r.length}${r.unit === 'days' ? 'd' : ' onot'}`;
+      return `haflagah ${r.length}${r.unit === 'days' ? 'd' : ' onos'}`;
   }
 }
 
@@ -93,7 +93,7 @@ export function fillText(template: string, vars: Record<string, string>): string
  * its defaults); `text` below is always this default.
  */
 export const REMINDER_TEXTS: Record<string, string> = {
-  'reminder.hefsek': 'Hefsek tahara: {day}, before sunset at {sunset}.{eve}',
+  'reminder.hefsek': 'Hefsek taharah: {day}, before sunset at {sunset}.{eve}',
   'reminder.hefsek.discreet': 'H {day} before {sunset}.',
   'reminder.bedikah_morning': 'Clean day {n} of 7 is {day}: bedikah in the morning and again before sunset at {sunset}.{required}',
   'reminder.bedikah_morning.discreet': 'Day {n}/7 {day}: AM, and before {sunset}.',
@@ -109,7 +109,7 @@ export const REMINDER_TEXTS: Record<string, string> = {
   // that falls in it, in time order (restPieces below). After it ends, what she did not get is sent as the lines alone.
   'reminder.rest': 'Over {rest}.',
   'reminder.rest.discreet': 'Over {rest}.',
-  'reminder.rest.hefsek': '{day}: hefsek tahara before {sunset}.',
+  'reminder.rest.hefsek': '{day}: hefsek taharah before {sunset}.',
   'reminder.rest.hefsek.discreet': '{day}: H before {sunset}.',
   'reminder.rest.bedikot': '{day}: clean day {n}, bedikah morning and before {sunset}{required}.',
   'reminder.rest.bedikot.discreet': '{day}: day {n}/7, AM and before {sunset}.',
@@ -139,8 +139,8 @@ export interface RestItem {
 }
 
 /**
- * The words of a text of a Shabbat or Yom Tov: `rest` names it ("Shabbat",
- * "Yom Tov and Shabbat") on the first line; null for the text after it ends,
+ * The words of a text of a Shabbat or Yom Tov: `rest` names it ("Shabbos",
+ * "Yom Tov and Shabbos") on the first line; null for the text after it ends,
  * which is its lines alone.
  */
 export interface RestText {
@@ -325,10 +325,10 @@ function onahBlocks(onot: readonly OnahView[]): OnahBlock[] {
   return blocks;
 }
 
-/** "Shabbat", "Yom Tov", "Yom Tov and Shabbat": the days of a stretch, as its text names them. */
+/** "Shabbos", "Yom Tov", "Yom Tov and Shabbos": the days of a stretch, as its text names them. */
 export function restName(first: number, last: number): string {
   const names = new Set<string>();
-  for (let d = first; d <= last; d++) names.add(dayOfWeek(d) === 6 ? 'Shabbat' : 'Yom Tov');
+  for (let d = first; d <= last; d++) names.add(dayOfWeek(d) === 6 ? 'Shabbos' : 'Yom Tov');
   return [...names].join(' and ');
 }
 
@@ -498,8 +498,8 @@ export function buildReminders(t: Timeline, opts: ReminderOptions, ctx: Reminder
       if (opts.mikvah.on) {
         const notes: string[] = [];
         if (m.postponedOver.length > 0) notes.push('moved past the fast');
-        if (m.restNight) notes.push('Shabbat or Yom Tov night');
-        else if (m.afterRestDay) notes.push('after Shabbat or Yom Tov');
+        if (m.restNight) notes.push('Shabbos or Yom Tov night');
+        else if (m.afterRestDay) notes.push('after Shabbos or Yom Tov');
         const clash = t.onot.some(o => o.onMikvahNight && o.onah.abs === m.nightAbs);
         if (clash) notes.push('also an onah');
         const tail = notes.length ? ` (${notes.join('; ')})` : '';

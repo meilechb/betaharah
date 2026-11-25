@@ -70,7 +70,7 @@ export const GENERAL_ACTIONS: Array<{ action: string; name: string; words: strin
   { action: 'location', name: 'Location', words: ['location', 'zip'] },
   { action: 'customs', name: 'Customs', words: ['customs', 'custom'] },
   { action: 'nightfall', name: 'Nightfall', words: ['nightfall'] },
-  { action: 'vesatot', name: 'Vesatot (pause, resume)', words: ['vesatot'] },
+  { action: 'vesatot', name: 'Vestos (pause, resume)', words: ['vestos', 'vesatot'] },
   { action: 'reminders', name: 'Reminders (on, off)', words: ['reminders', 'reminder'] },
   { action: 'kinds', name: 'Reminder kinds', words: ['kinds'] },
   { action: 'wording', name: 'Reminder wording', words: ['wording'] },
@@ -262,7 +262,7 @@ const WHEN_FLOW: Opt[] = [
 add('record.when_flow', 'Recording', 'PERIOD with no time. NOW is offered with LAST NIGHT by day, with TODAY BY DAY at night.', 'When did it begin?', WHEN_FLOW);
 add('record.when_stain', 'Recording', 'STAIN with no time.', 'When was the stain?', WHEN_FLOW);
 add('record.when_broken', 'Recording', 'COUNT BROKEN with no time.', 'When was the count broken?', WHEN_FLOW);
-add('record.when_hefsek', 'Recording', 'HEFSEK with no day.', 'Hefsek tahara: which day?', [
+add('record.when_hefsek', 'Recording', 'HEFSEK with no day.', 'Hefsek taharah: which day?', [
   ['today', 'TODAY'],
   ['yesterday', 'YESTERDAY'],
   ['another_day', 'ANOTHER DAY'],
@@ -361,24 +361,24 @@ add('history.gone', 'Recording', 'The chosen entry was already removed.', 'That 
 // ---------- reminders ----------
 
 const REMINDER_WHEN: Record<string, string> = {
-  'reminder.hefsek': 'Reminder: the day the hefsek tahara can be done. DONE records the hefsek for that day.',
+  'reminder.hefsek': 'Reminder: the day the hefsek taharah can be done. DONE records the hefsek for that day.',
   'reminder.bedikah_morning': 'Reminder: the morning of each clean day.',
   'reminder.bedikah_afternoon': 'Reminder: before sunset on each clean day.',
   'reminder.mikvah_book': 'Reminder: the morning after the hefsek was recorded.',
   'reminder.mikvah': 'Reminder: the day of the mikvah night.',
   'reminder.onah': 'Reminder: before an onah.',
   'reminder.rest':
-    'Reminder: the morning a Shabbat or Yom Tov begins (at the time set), the first line of one text with every reminder that falls in it, one line each.',
-  'reminder.rest.hefsek': 'A line of the text before Shabbat or Yom Tov: the hefsek tahara on one of its days.',
-  'reminder.rest.bedikot': 'A line of the text before Shabbat or Yom Tov: both bedikot of a clean day on one of its days.',
-  'reminder.rest.bedikah_morning': 'A line of the text before Shabbat or Yom Tov: the morning bedikah alone.',
-  'reminder.rest.bedikah_afternoon': 'A line of the text before Shabbat or Yom Tov: the bedikah before sunset alone.',
-  'reminder.rest.mikvah': 'A line of the text before Shabbat or Yom Tov: a mikvah night on it, or right after it.',
-  'reminder.rest.mikvah_book': 'A line of the text before Shabbat or Yom Tov: booking the mikvah, which would have been sent on it.',
-  'reminder.rest.onah': 'A line of the text before Shabbat or Yom Tov: an onah that begins on it.',
+    'Reminder: the morning a Shabbos or Yom Tov begins (at the time set), the first line of one text with every reminder that falls in it, one line each.',
+  'reminder.rest.hefsek': 'A line of the text before Shabbos or Yom Tov: the hefsek taharah on one of its days.',
+  'reminder.rest.bedikot': 'A line of the text before Shabbos or Yom Tov: both bedikos of a clean day on one of its days.',
+  'reminder.rest.bedikah_morning': 'A line of the text before Shabbos or Yom Tov: the morning bedikah alone.',
+  'reminder.rest.bedikah_afternoon': 'A line of the text before Shabbos or Yom Tov: the bedikah before sunset alone.',
+  'reminder.rest.mikvah': 'A line of the text before Shabbos or Yom Tov: a mikvah night on it, or right after it.',
+  'reminder.rest.mikvah_book': 'A line of the text before Shabbos or Yom Tov: booking the mikvah, which would have been sent on it.',
+  'reminder.rest.onah': 'A line of the text before Shabbos or Yom Tov: an onah that begins on it.',
 };
-/** The examples of the lines of the text before Shabbat or Yom Tov: days that are near. */
-const REST_EXAMPLES: Record<string, string> = { rest: 'Shabbat', day: 'Shabbat', required: ' (required)', from: '6:52 AM Shabbat', to: '4:30 PM Shabbat' };
+/** The examples of the lines of the text before Shabbos or Yom Tov: days that are near. */
+const REST_EXAMPLES: Record<string, string> = { rest: 'Shabbos', day: 'Shabbos', required: ' (required)', from: '6:52 AM Shabbos', to: '4:30 PM Shabbos' };
 const REMINDER_EXAMPLES: Record<string, string> = {
   day: DATE,
   sunset: '4:31 PM',
@@ -386,7 +386,7 @@ const REMINDER_EXAMPLES: Record<string, string> = {
   n: '1',
   required: ' Required on this day.',
   time: '5:16 PM',
-  notes: ' (after Shabbat or Yom Tov)',
+  notes: ' (after Shabbos or Yom Tov)',
   from: EX.from,
   to: EX.to,
   why: 'day 30, chodesh',
@@ -420,8 +420,8 @@ add('reminders.show', 'Reminders', 'REMINDERS. TURN ON or TURN OFF is offered, w
   ...ON_OFF,
   ['kinds', 'KINDS'],
   ['wording', 'WORDING'],
-  ['bedikot', 'BEDIKOT'],
-  ['rest_eve', 'SHABBAT'],
+  ['bedikot', 'BEDIKOS'],
+  ['rest_eve', 'SHABBOS'],
 ], {
   state: 'off',
   kinds: '6',
@@ -458,7 +458,7 @@ add('reminders.wording', 'Reminders', 'WORDING: plain or discreet, for every pho
 ], { style: 'plain' });
 add('reminders.wording_changed', 'Reminders', 'The wording was changed.', 'Changed: reminder wording is {style} for every phone.', MAIN, { style: 'discreet' });
 add('reminders.wording_same', 'Reminders', 'The wording chosen is the one already set.', 'Reminder wording is already {style}. Nothing was changed.', MAIN, { style: 'plain' });
-/** BEDIKOT: which clean days (DAYS), and the morning and before-sunset reminders, each offered in its other state. */
+/** BEDIKOS: which clean days (DAYS), and the morning and before-sunset reminders, each offered in its other state. */
 const BEDIKOT: Opt[] = [
   ['days', 'DAYS'],
   ['morning_on', 'MORNING ON'],
@@ -470,7 +470,7 @@ const BEDIKOT: Opt[] = [
 const DAYS: Opt[] = [['days_all', 'ALL DAYS'], ['days_1_7', '1 AND 7'], MENU];
 const BEDIKOT_EXAMPLE = { state: 'on', days: 'all 7', morning: 'on', sunset: 'on' };
 const BEDIKOT_BODY = 'Bedikah reminders are {state}: clean days {days}; morning {morning}; before sunset {sunset}.';
-add('reminders.bedikot', 'Reminders', 'BEDIKOT: the bedikah reminders of the account. MORNING and BEFORE SUNSET offer whichever applies.', BEDIKOT_BODY, BEDIKOT, BEDIKOT_EXAMPLE);
+add('reminders.bedikot', 'Reminders', 'BEDIKOS: the bedikah reminders of the account. MORNING and BEFORE SUNSET offer whichever applies.', BEDIKOT_BODY, BEDIKOT, BEDIKOT_EXAMPLE);
 add('reminders.bedikot_changed', 'Reminders', 'The bedikah days, or the morning or before-sunset reminder, were changed.', `Changed. ${BEDIKOT_BODY}`, BEDIKOT, {
   ...BEDIKOT_EXAMPLE,
   days: '1 and 7',
@@ -488,13 +488,13 @@ add('reminders.days_bad', 'Reminders', 'Numbers after DAYS that are not clean da
 add(
   'reminders.rest_eve',
   'Reminders',
-  'SHABBAT: the time of the one text the morning before Shabbat or Yom Tov; a time written in reply changes it.',
-  'Before Shabbat and Yom Tov: one text that morning at {time}, with what falls on those days. A time such as 8:30 AM changes it.',
-  [['bedikot', 'BEDIKOT'], MENU],
+  'SHABBOS: the time of the one text the morning before Shabbos or Yom Tov; a time written in reply changes it.',
+  'Before Shabbos and Yom Tov: one text that morning at {time}, with what falls on those days. A time such as 8:30 AM changes it.',
+  [['bedikot', 'BEDIKOS'], MENU],
   { time: '9:00 AM' },
 );
-add('reminders.rest_eve_changed', 'Reminders', 'A time was written after SHABBAT.', 'The text before Shabbat and Yom Tov comes at {time} that morning.', MAIN, { time: '8:30 AM' });
-add('reminders.rest_eve_bad', 'Reminders', 'Numbers after SHABBAT that are not a time.', 'Not understood: a time such as 8:30 AM. Nothing was changed.', [MENU]);
+add('reminders.rest_eve_changed', 'Reminders', 'A time was written after SHABBOS.', 'The text before Shabbos and Yom Tov comes at {time} that morning.', MAIN, { time: '8:30 AM' });
+add('reminders.rest_eve_bad', 'Reminders', 'Numbers after SHABBOS that are not a time.', 'Not understood: a time such as 8:30 AM. Nothing was changed.', [MENU]);
 
 // ---------- settings: location ----------
 
@@ -522,7 +522,7 @@ export const CUSTOM_LABELS: Record<string, string[]> = {
   beinonitLength: ['ONE ONAH', 'FULL DAY'],
   chodeshLength: ['ONE ONAH', 'FULL DAY'],
   orZarua: ['OBSERVED', 'NOT OBSERVED'],
-  haflagahMethod: ['IN DAYS', 'IN ONOT'],
+  haflagahMethod: ['IN DAYS', 'IN ONOS'],
   longerHaflagah: ['LATEST ONLY', 'LONGER ONES TOO'],
   chodesh30: ['FIRST OF NEXT MONTH', 'THE 29TH', 'BOTH', 'NONE'],
   longCycle: ['AS USUAL', 'NOT OBSERVED'],
@@ -543,8 +543,8 @@ for (const c of SMS_CUSTOMS) {
 }
 add('customs.page1', 'Settings', 'CUSTOMS: the first five customs to see or change.', 'Customs (1 of 3):', [
   ['minWaitDays', 'WAIT DAYS'],
-  ['beinonitDays', 'BEINONIT DAY'],
-  ['beinonitLength', 'BEINONIT LENGTH'],
+  ['beinonitDays', 'BEINONIS DAY'],
+  ['beinonitLength', 'BEINONIS LENGTH'],
   ['chodeshLength', 'CHODESH LENGTH'],
   ['all', 'ALL 12'],
   ['next', 'NEXT'],
@@ -558,7 +558,7 @@ add('customs.page2', 'Settings', 'NEXT in the list of customs.', 'Customs (2 of 
   ['next', 'NEXT'],
 ]);
 add('customs.page3', 'Settings', 'NEXT again in the list of customs.', 'Customs (3 of 3):', [
-  ['vesatot', 'VESATOT'],
+  ['vesatot', 'VESTOS'],
   ['yomTov', 'YOM TOV'],
   ['nightfall', 'NIGHTFALL'],
   ['all', 'ALL 12'],
@@ -568,11 +568,11 @@ add('custom.kept', 'Settings', 'Going through the customs: an answer that kept o
 add('custom.changed', 'Settings', 'One custom was changed.', 'Changed: {name}: {choice}.', MAIN, { name: 'nightfall', choice: '72 minutes' });
 add('custom.same', 'Settings', 'One custom answered with its current option.', 'That is already the setting. Nothing was changed.', MAIN);
 add('customs.done', 'Settings', 'The end of going through all 12 customs.', 'All 12 customs are saved.', MAIN);
-add('vesatot.pause_ask', 'Settings', 'PAUSED for vesatot, or the words PAUSE VESATOT.', 'Pause vesatot? No onot perishah are shown while they are paused.', [['yes', 'YES'], ['no', 'NO']]);
-add('vesatot.paused', 'Settings', 'YES: vesatot are paused.', 'Changed: vesatot are paused.', MAIN);
-add('vesatot.already_paused', 'Settings', 'Pausing vesatot when they are already paused.', 'Vesatot are already paused.', [['vesatot', 'VESATOT'], MENU]);
-add('vesatot.resumed', 'Settings', 'The words RESUME VESATOT.', 'Changed: vesatot are calculated again.', MAIN);
-add('vesatot.already_on', 'Settings', 'RESUME VESATOT when they are calculated.', 'Vesatot are already calculated. Nothing was changed.', MAIN);
+add('vesatot.pause_ask', 'Settings', 'PAUSED for vestos, or the words PAUSE VESTOS.', 'Pause vestos? No onos perishah are shown while they are paused.', [['yes', 'YES'], ['no', 'NO']]);
+add('vesatot.paused', 'Settings', 'YES: vestos are paused.', 'Changed: vestos are paused.', MAIN);
+add('vesatot.already_paused', 'Settings', 'Pausing vestos when they are already paused.', 'Vestos are already paused.', [['vesatot', 'VESTOS'], MENU]);
+add('vesatot.resumed', 'Settings', 'The words RESUME VESTOS.', 'Changed: vestos are calculated again.', MAIN);
+add('vesatot.already_on', 'Settings', 'RESUME VESTOS when they are calculated.', 'Vestos are already calculated. Nothing was changed.', MAIN);
 
 // ---------- settings: terms, web ----------
 
