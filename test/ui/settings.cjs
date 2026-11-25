@@ -378,7 +378,7 @@ const H = { 'x-betaharah': '1' };
     await noSideways('calendar');
   });
 
-  await step('calendar: what the calendar app shows, five switches; the feed follows them', async () => {
+  await step('calendar: what the calendar app shows, six switches; the feed follows them', async () => {
     await openSection('calendar', 'Calendar');
     await page.click('#link-create');
     await savedIn('calendar');
@@ -390,9 +390,10 @@ const H = { 'x-betaharah': '1' };
       return (await r.text()).split('\r\n').filter(l => l.startsWith('SUMMARY:')).map(l => l.slice(8));
     };
     const want = [
-      ['apart', 'Days apart', 'Niddah days and onot', true],
+      ['onot', 'Onot', '', true],
       ['period', 'Period start', '', true],
       ['hefsek', 'Hefsek taharah', '', true],
+      ['niddah', 'Niddah days', '', false],
       ['cleanDays', 'Seven clean days', '', false],
       ['mikvah', 'Mikvah night', '', false],
     ];
@@ -402,9 +403,17 @@ const H = { 'x-betaharah': '1' };
     const expected = want.map(([k, label, help, on]) => ['cal-show-' + k, label, help, on]);
     if (JSON.stringify(rows) !== JSON.stringify(expected)) throw new Error('switches: ' + JSON.stringify(rows));
     if ((await page.textContent('#cal-show-title')) !== 'Shown in your calendar app') throw new Error('group title');
-    if (JSON.stringify((await state()).app.calendar.show) !== JSON.stringify({ apart: true, period: true, hefsek: true, cleanDays: false, mikvah: false })) throw new Error('defaults');
+    if (JSON.stringify((await state()).app.calendar.show) !== JSON.stringify({ onot: true, period: true, hefsek: true, niddah: false, cleanDays: false, mikvah: false })) throw new Error('defaults');
     const before = await feed();
-    if (!before.includes('Niddah')) throw new Error('no period event in the feed: ' + before.join(' | '));
+    if (before.includes('Niddah')) throw new Error('the niddah days are in the feed by default');
+    if (!before.some(t => t.startsWith('Veset onah'))) throw new Error('no onot in the feed: ' + before.join(' | '));
+    // the niddah days switched on, and off again
+    await page.click('label[for="cal-show-niddah"]');
+    await savedIn('calendar');
+    if (!(await feed()).includes('Niddah')) throw new Error('no niddah event once switched on');
+    await page.click('label[for="cal-show-niddah"]');
+    await savedIn('calendar');
+    if ((await feed()).includes('Niddah')) throw new Error('the niddah event stayed after switching off');
     if (before.some(t => t.startsWith('Seven clean days') || t.startsWith('Mikvah night'))) throw new Error('clean days or mikvah night in the feed by default');
     // switching the clean days on
     await page.click('label[for="cal-show-cleanDays"]');
@@ -414,14 +423,14 @@ const H = { 'x-betaharah': '1' };
     const on = await feed();
     if (!on.some(t => t.startsWith('Seven clean days'))) throw new Error('no clean days in the feed once switched on');
     if (on.length <= before.length) throw new Error('the feed did not grow');
-    // and the days apart off
-    await page.click('label[for="cal-show-apart"]');
+    // and the onot off
+    await page.click('label[for="cal-show-onot"]');
     await savedIn('calendar');
-    const noApart = await feed();
-    if (noApart.includes('Niddah') || noApart.some(t => t.startsWith('Veset onah') || t.startsWith('Or Zarua'))) throw new Error('days apart still in the feed');
+    const noOnot = await feed();
+    if (noOnot.some(t => t.startsWith('Veset onah') || t.startsWith('Or Zarua'))) throw new Error('onot still in the feed');
     await page.screenshot({ path: out + '/settings-calendar-show-390.png', fullPage: true });
     // back to the defaults
-    await page.click('label[for="cal-show-apart"]');
+    await page.click('label[for="cal-show-onot"]');
     await savedIn('calendar');
     await page.click('label[for="cal-show-cleanDays"]');
     await savedIn('calendar');

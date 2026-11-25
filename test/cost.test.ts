@@ -63,7 +63,7 @@ describe('cost of one request', () => {
 
   it('the whole calculation for three years of history: a few milliseconds', async () => {
     const data = longHistory(now);
-    const all = { ...data, app: { ...data.app, calendar: { ...data.app.calendar, show: { apart: true, period: true, hefsek: true, cleanDays: true, mikvah: true } } } };
+    const all = { ...data, app: { ...data.app, calendar: { ...data.app.calendar, show: { onot: true, period: true, hefsek: true, niddah: true, cleanDays: true, mikvah: true } } } };
     let events = 0;
     let state: ReturnType<typeof dashboardState> | null = null;
     // What one request does at most: work the picture out once, rebuild the

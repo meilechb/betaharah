@@ -211,9 +211,10 @@ function moreGroup() {
 
 /** The kinds of event, with their labels; terms in the household's chosen form. */
 const SHOWN = [
-  ['apart', 'Days apart', '{niddah} days and {onot}'],
+  ['onot', '{onot}', null],
   ['period', 'Period start', null],
   ['hefsek', '{hefsek}', null],
+  ['niddah', '{niddah} days', null],
   ['cleanDays', '{clean_days}', null],
   ['mikvah', '{mikvah_night}', null],
 ];
