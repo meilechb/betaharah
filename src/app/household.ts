@@ -84,7 +84,7 @@ export function compute(data: HouseholdData, now: number): Computed | null {
 /** The events given to calendar apps (Google Calendar and the subscription feed): the kinds the household shows there. */
 export function publishedEvents(data: HouseholdData, computed: Computed): CalendarEvent[] {
   const opts = { style: data.app.calendar.style, lang: data.app.terms, timeZone: computed.place.timeZone };
-  return calendarAppEvents(computed.timeline, computed.events, data.app.calendar.show, opts);
+  return calendarAppEvents(computed.timeline, data.app.calendar.show, opts);
 }
 
 // ---------- recording an entry ----------

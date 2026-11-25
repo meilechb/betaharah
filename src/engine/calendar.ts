@@ -9,6 +9,8 @@ import { absToCivil, dayOfWeek } from './civil';
 import { onahIndex } from './onah';
 import { clock12, roundToMinute } from './present';
 import { capital, dayOfMonth, fill, hebrewDate, term, type TermLanguage } from './terms';
+import type { CivilPart } from './hebrewText';
+import { HE, heClock, heDay, heEvening, hePart, rtl } from './hebrewText';
 import type { OnahView, PeriodView, Timeline } from './timeline';
 import type { BaseReason, VesetReason } from './vesatot';
 
@@ -89,12 +91,34 @@ export function reasonText(r: VesetReason, lang: TermLanguage): string {
   return capital(baseReason(r, lang));
 }
 
+function baseReasonHebrew(r: BaseReason): string {
+  switch (r.kind) {
+    case 'beinonit':
+      return `${term('onah_beinonit', 'he')} – יום ${r.day}`;
+    case 'chodesh':
+      if (r.rule === 'same_date') return `${term('veset_hachodesh', 'he')} – ${dayOfMonth(r.dayOfMonth, 'he')} בחודש`;
+      if (r.rule === 'day29') return `${term('veset_hachodesh', 'he')} – כ״ט בחודש, לראייה בל׳ בחודש`;
+      return `${term('veset_hachodesh', 'he')} – א׳ בחודש הבא, לראייה בל׳ בחודש`;
+    case 'haflagah': {
+      const unit = r.unit === 'days' ? 'ימים' : term('onot', 'he');
+      return r.latest ? `${term('veset_haflagah', 'he')} – ${r.length} ${unit}` : `${term('haflagah', 'he')} קודמת שעדיין לא עברה – ${r.length} ${unit}`;
+    }
+  }
+}
+
+/** One reason for an onat perishah as a line wholly in Hebrew (for a calendar app). */
+export function reasonTextHebrew(r: VesetReason): string {
+  if (r.kind === 'or_zarua') return `${term('or_zarua', 'he')} של ${baseReasonHebrew(r.of)}`;
+  if (r.kind === 'full_day') return `${term('full_day', 'he')} של ${baseReasonHebrew(r.of)}`;
+  return baseReasonHebrew(r);
+}
+
 export type CalendarStyle = 'words' | 'discreet';
 
 export interface CalendarEvent {
   /** Stable identity of the event, used to update rather than duplicate it. */
   key: string;
-  /** 'apart' (a whole niddah period) is made only for calendar apps: see calendarAppEvents. */
+  /** 'apart' (a whole niddah period, the 'niddah' switch) is made only for calendar apps: see calendarAppEvents. */
   kind: 'flow' | 'onah' | 'hefsek' | 'clean_day' | 'mikvah' | 'apart';
   title: string;
   description: string;
@@ -112,7 +136,18 @@ export interface CalendarOptions {
   style: CalendarStyle;
   lang: TermLanguage;
   timeZone: string;
+  /**
+   * True for the events given to a calendar app (see calendarAppEvents).
+   * There each title and description is in one language only: with Hebrew
+   * terms it is wholly Hebrew, because a calendar app scrambles a line that
+   * mixes Hebrew and English. The start of a period is an all-day event on
+   * its date, so that it is seen in a month view.
+   */
+  forApp?: boolean;
 }
+
+/** True when the texts are written wholly in Hebrew. */
+const hebrewOnly = (opts: CalendarOptions): boolean => opts.forApp === true && opts.lang === 'he' && opts.style === 'words';
 
 const PROJECTED = ' (projected)';
 /** The line a projected event ends with; the pages find it by its first word. */
@@ -125,6 +160,19 @@ function onahEvent(o: OnahView, opts: CalendarOptions): CalendarEvent {
   const key = `onah:${onahIndex(o.onah)}`;
   if (opts.style === 'discreet') {
     return { key, kind: 'onah', title: o.veset ? '◆' : '◇', description: '', timed, projected: false, light: !o.veset };
+  }
+  if (hebrewOnly(opts)) {
+    const lines = [...o.reasons.map(r => reasonTextHebrew(r)), o.veset ? HE.separationAndBedikah : HE.separation];
+    if (o.onMikvahNight) lines.push(HE.onMikvahNight);
+    return {
+      key,
+      kind: 'onah',
+      title: rtl(`${term(o.veset ? 'veset_onah' : 'or_zarua', 'he')} – ${hePart(part)}`),
+      description: lines.map(rtl).join('\n'),
+      timed,
+      projected: false,
+      light: !o.veset,
+    };
   }
   // The event's own date and hours are not repeated: the reasons, then what is done.
   const lines = [...o.reasons.map(r => reasonText(r, lang)), o.veset ? fill('Separation, and a {bedikah}.', lang) : 'Separation.'];
@@ -144,32 +192,53 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
   const out: CalendarEvent[] = [];
   const discreet = opts.style === 'discreet';
   const { lang, timeZone: tz } = opts;
-  const suffix = p.projected ? PROJECTED : '';
+  const he = hebrewOnly(opts);
+  const suffix = p.projected ? (he ? HE.projectedSuffix : PROJECTED) : '';
+  /** A line or a title: wholly Hebrew when the texts are, otherwise the English sentence with its terms filled in. */
+  const say = (english: string, hebrew: string): string => (he ? rtl(hebrew) : fill(english, lang));
 
   // The start of the period.
-  out.push({
-    key: `flow:${p.startId}`,
-    kind: 'flow',
-    title: discreet
-      ? '•'
-      : p.cause === 'flow'
-        ? `${capital(term('flow', lang))} (${p.start.part})`
-        : `${capital(term('stain', lang))}: ${term('niddah', lang)} began (${p.start.part})`,
-    description: '',
-    timed: { start: roundToMinute(p.startWindow.start, 'floor'), end: roundToMinute(p.startWindow.end, 'ceil') },
-    projected: false,
-  });
+  if (opts.forApp) {
+    // In a calendar app: all day, on the civil date it began (a night: the date of that evening).
+    const startAbs = p.start.part === 'night' ? p.start.abs - 1 : p.start.abs;
+    const part: CivilPart = p.start.part;
+    out.push({
+      key: `flow:${p.startId}`,
+      kind: 'flow',
+      title: discreet
+        ? '•'
+        : p.cause === 'flow'
+          ? say(`Period began (${part === 'day' ? 'by day' : 'at night'})`, `${HE.periodBegan} – ${hePart(part, true)}`)
+          : say(`Stain: {niddah} began (${part === 'day' ? 'by day' : 'at night'})`, `${term('stain', 'he')}, ${HE.niddahBegan} – ${hePart(part, true)}`),
+      description: '',
+      allDay: { startAbs, endAbsExclusive: startAbs + 1 },
+      projected: false,
+    });
+  } else {
+    out.push({
+      key: `flow:${p.startId}`,
+      kind: 'flow',
+      title: discreet
+        ? '•'
+        : p.cause === 'flow'
+          ? `${capital(term('flow', lang))} (${p.start.part})`
+          : `${capital(term('stain', lang))}: ${term('niddah', lang)} began (${p.start.part})`,
+      description: '',
+      timed: { start: roundToMinute(p.startWindow.start, 'floor'), end: roundToMinute(p.startWindow.end, 'ceil') },
+      projected: false,
+    });
+  }
 
   // Hefsek taharah.
   const hefsekTimed = { start: roundToMinute(p.hefsekMinchaKetana, 'ceil'), end: roundToMinute(p.hefsekSunset, 'floor') };
   const hefsek = capital(term('hefsek', lang));
   if (p.hefsekAbs !== null) {
     const lines: string[] = [];
-    if (p.hefsekEarly) lines.push(fill('Before the days of waiting ended; the {clean_days} begin after them.', lang));
+    if (p.hefsekEarly) lines.push(say('Before the days of waiting ended; the {clean_days} begin after them.', HE.hefsekEarly));
     out.push({
       key: `hefsek:${p.startId}`,
       kind: 'hefsek',
-      title: discreet ? 'H ✓' : `${hefsek} ✓`,
+      title: discreet ? 'H ✓' : he ? rtl(`${hefsek} ✓`) : `${hefsek} ✓`,
       description: discreet ? '' : lines.join('\n'),
       timed: hefsekTimed,
       projected: false,
@@ -180,11 +249,11 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
   } else if (p.mikvahDoneAbs === null) {
     const deadline = clock12(p.hefsekSunset, tz, 'floor');
     // The event runs from minchah ketanah to sunset; its hours are not repeated here.
-    const lines = [fill('Before {sunset}; preferably after {minchah_ketanah}.', lang)];
+    const lines = [say('Before {sunset}; preferably after {minchah_ketanah}.', HE.hefsekWhen)];
     out.push({
       key: `hefsek:${p.startId}`,
       kind: 'hefsek',
-      title: discreet ? `H < ${deadline}` : `${hefsek} (by ${deadline})`,
+      title: discreet ? `H < ${deadline}` : he ? rtl(`${hefsek} (עד ${heClock(deadline)})`) : `${hefsek} (by ${deadline})`,
       description: discreet ? '' : lines.join('\n'),
       timed: hefsekTimed,
       projected: true,
@@ -193,13 +262,18 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
 
   // The seven clean days.
   for (const day of p.planCleanDays) {
-    const lines = [capital(fill(`{bedikah} in the morning and before {sunset} (${clock12(day.sunset, tz, 'floor')}).`, lang))];
-    if (day.n === 1 || day.n === 7) lines.push(fill('A {bedikah} on this day is required.', lang));
-    if (p.projected) lines.push(fill(PROJECTED_NOTE, lang));
+    const sunset = clock12(day.sunset, tz, 'floor');
+    const lines = [he ? rtl(`בדיקה בבוקר ולפני השקיעה (${heClock(sunset)})`) : capital(fill(`{bedikah} in the morning and before {sunset} (${sunset}).`, lang))];
+    if (day.n === 1 || day.n === 7) lines.push(say('A {bedikah} on this day is required.', HE.bedikahRequired));
+    if (p.projected) lines.push(say(PROJECTED_NOTE, HE.projectedNote));
     out.push({
       key: `clean:${p.startId}:${day.n}`,
       kind: 'clean_day',
-      title: discreet ? `${day.n}/7${p.projected ? ' ?' : ''}` : `${capital(term('clean_days', lang))}: day ${day.n}${suffix}`,
+      title: discreet
+        ? `${day.n}/7${p.projected ? ' ?' : ''}`
+        : he
+          ? rtl(`${term('clean_days', 'he')}: יום ${day.n}${suffix}`)
+          : `${capital(term('clean_days', lang))}: day ${day.n}${suffix}`,
       description: discreet ? '' : lines.join('\n'),
       allDay: { startAbs: day.abs, endAbsExclusive: day.abs + 1 },
       projected: p.projected,
@@ -212,7 +286,7 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
     out.push({
       key: `mikvah:${p.startId}`,
       kind: 'mikvah',
-      title: discreet ? 'M ✓' : `${capital(term('immersion', lang))} ✓`,
+      title: discreet ? 'M ✓' : he ? rtl(`${term('immersion', 'he')} ✓`) : `${capital(term('immersion', lang))} ✓`,
       description: '',
       timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 60 * MINUTE },
       projected: false,
@@ -222,16 +296,20 @@ function periodEvents(p: PeriodView, clash: boolean, opts: CalendarOptions): Cal
     const m = p.planMikvah;
     const after = clock12(m.tzeit, tz, 'ceil');
     const lines: string[] = [];
-    if (m.postponedOver.length > 0) lines.push(fill('Moved: no {immersion} on the night of {yom_kippur} or {tisha_bav}.', lang));
-    if (m.restNight) lines.push(fill('The night of {shabbat} or {yom_tov}: prepare beforehand.', lang));
-    if (m.afterRestDay && !m.restNight) lines.push(fill('The night after {shabbat} or {yom_tov}.', lang));
-    if (m.afterRestDay && m.restNight) lines.push(fill('The day before is {shabbat} or {yom_tov}: prepare before that.', lang));
-    if (clash) lines.push(fill('It falls on an {onat_perishah}.', lang));
-    if (p.projected) lines.push(fill(PROJECTED_NOTE, lang));
+    if (m.postponedOver.length > 0) lines.push(say('Moved: no {immersion} on the night of {yom_kippur} or {tisha_bav}.', HE.mikvahMoved));
+    if (m.restNight) lines.push(say('The night of {shabbat} or {yom_tov}: prepare beforehand.', HE.mikvahRestNight));
+    if (m.afterRestDay && !m.restNight) lines.push(say('The night after {shabbat} or {yom_tov}.', HE.mikvahAfterRest));
+    if (m.afterRestDay && m.restNight) lines.push(say('The day before is {shabbat} or {yom_tov}: prepare before that.', HE.mikvahRestBefore));
+    if (clash) lines.push(say('It falls on an {onat_perishah}.', HE.onOnatPerishah));
+    if (p.projected) lines.push(say(PROJECTED_NOTE, HE.projectedNote));
     out.push({
       key: `mikvah:${p.startId}`,
       kind: 'mikvah',
-      title: discreet ? `M > ${after}${p.projected ? ' ?' : ''}` : `${capital(term('mikvah_night', lang))} (after ${after})${suffix}`,
+      title: discreet
+        ? `M > ${after}${p.projected ? ' ?' : ''}`
+        : he
+          ? rtl(`${term('mikvah_night', 'he')} (אחרי ${heClock(after)})${suffix}`)
+          : `${capital(term('mikvah_night', lang))} (after ${after})${suffix}`,
       description: discreet ? '' : lines.join('\n'),
       timed: { start: roundToMinute(m.tzeit, 'ceil'), end: roundToMinute(m.tzeit, 'ceil') + 90 * MINUTE },
       projected: p.projected,
@@ -258,18 +336,23 @@ export function buildCalendar(t: Timeline, opts: CalendarOptions): CalendarEvent
 
 // ---------- what a calendar app shows ----------
 
-/** The kinds of event a household chooses to show in its calendar app. */
-export type ShownKind = 'apart' | 'period' | 'hefsek' | 'cleanDays' | 'mikvah';
+/**
+ * The kinds of event a household chooses to show in its calendar app.
+ * 'niddah' is the one all-day event for each niddah period; 'onot' are the
+ * onot of separation. They are separate switches: the niddah days are known
+ * without a calendar, the onot are not.
+ */
+export type ShownKind = 'onot' | 'period' | 'hefsek' | 'niddah' | 'cleanDays' | 'mikvah';
 export type CalendarShow = Record<ShownKind, boolean>;
 
-export const SHOWN_KINDS: readonly ShownKind[] = ['apart', 'period', 'hefsek', 'cleanDays', 'mikvah'];
+export const SHOWN_KINDS: readonly ShownKind[] = ['onot', 'period', 'hefsek', 'niddah', 'cleanDays', 'mikvah'];
 
-/** By default only the days apart, the start of each period and the hefsek taharah. */
-export const DEFAULT_CALENDAR_SHOW: CalendarShow = { apart: true, period: true, hefsek: true, cleanDays: false, mikvah: false };
+/** By default only the onot of separation, the start of each period and the hefsek taharah. */
+export const DEFAULT_CALENDAR_SHOW: CalendarShow = { onot: true, period: true, hefsek: true, niddah: false, cleanDays: false, mikvah: false };
 
 const SHOWN_AS: Record<CalendarEvent['kind'], ShownKind> = {
-  apart: 'apart',
-  onah: 'apart',
+  apart: 'niddah',
+  onah: 'onot',
   flow: 'period',
   hefsek: 'hefsek',
   clean_day: 'cleanDays',
@@ -316,16 +399,23 @@ export function apartEvents(t: Timeline, opts: CalendarOptions): CalendarEvent[]
       lastAbs = mikvah.eveningAbs;
       if (next) lastAbs = Math.min(lastAbs, civilStart(next) - 1);
       const after = clock12(mikvah.tzeit, tz, 'ceil');
-      description =
-        p.hefsekAbs !== null || p.doneMikvah !== null
-          ? fill(`Until {mikvah_night}: ${shortDate(mikvah.eveningAbs)}, after ${after}.`, lang)
-          : capital(fill(`{mikvah_night} would be ${shortDate(mikvah.eveningAbs)}, if the {hefsek} is done ${shortDate(p.planHefsekAbs)}.`, lang));
+      if (hebrewOnly(opts)) {
+        description =
+          p.hefsekAbs !== null || p.doneMikvah !== null
+            ? rtl(`עד ${term('mikvah_night', 'he')}: ${heEvening(mikvah.eveningAbs)}, אחרי ${heClock(after)}`)
+            : rtl(`${term('mikvah_night', 'he')}: ${heEvening(mikvah.eveningAbs)}, אם ה${term('hefsek', 'he')} ייעשה ב${heDay(p.planHefsekAbs)}`);
+      } else {
+        description =
+          p.hefsekAbs !== null || p.doneMikvah !== null
+            ? fill(`Until {mikvah_night}: ${shortDate(mikvah.eveningAbs)}, after ${after}.`, lang)
+            : capital(fill(`{mikvah_night} would be ${shortDate(mikvah.eveningAbs)}, if the {hefsek} is done ${shortDate(p.planHefsekAbs)}.`, lang));
+      }
     }
     lastAbs = Math.max(lastAbs, startAbs);
     return {
       key: `apart:${p.startId}`,
       kind: 'apart',
-      title: discreet ? 'N' : capital(term('niddah', lang)),
+      title: discreet ? 'N' : hebrewOnly(opts) ? rtl(term('niddah', 'he')) : capital(term('niddah', lang)),
       description: discreet ? '' : description,
       allDay: { startAbs, endAbsExclusive: lastAbs + 1 },
       projected: p.projected && p.doneMikvah === null && !p.closedByNextPeriod,
@@ -336,11 +426,13 @@ export function apartEvents(t: Timeline, opts: CalendarOptions): CalendarEvent[]
 /**
  * The events a calendar app is given (Google Calendar and the subscription
  * feed alike): the events of the kinds that are switched on, with one event
- * for each niddah period when the days apart are. The app's own month
- * calendar, the reminders and the texts use every event of `events`.
+ * for each niddah period when the niddah days are. They are written for a
+ * calendar app (see CalendarOptions.forApp). The app's own month calendar,
+ * the reminders and the texts use buildCalendar's events, all of them.
  */
-export function calendarAppEvents(t: Timeline, events: readonly CalendarEvent[], show: CalendarShow, opts: CalendarOptions): CalendarEvent[] {
-  const out = show.apart ? apartEvents(t, opts) : [];
-  for (const e of events) if (show[SHOWN_AS[e.kind]]) out.push(e);
+export function calendarAppEvents(t: Timeline, show: CalendarShow, opts: CalendarOptions): CalendarEvent[] {
+  const app = { ...opts, forApp: true };
+  const out = show.niddah ? apartEvents(t, app) : [];
+  for (const e of buildCalendar(t, app)) if (show[SHOWN_AS[e.kind]]) out.push(e);
   return out;
 }

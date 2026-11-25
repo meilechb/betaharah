@@ -133,13 +133,18 @@ from: the status card, the chosen day, or the form.
 
 `settings/calendar.js`, top to bottom: Google Calendar, the subscription link,
 "Shown in your calendar app", event titles and the calendar's name, then
-"More". "Shown in your calendar app" has five switches, saved in
-`app.calendar.show` (`PUT /api/app`): Days apart (`apart`: one all-day niddah
-event per period, from its first day through the evening of its mikvah
-night, and the onot), Period start (`period`), Hefsek taharah (`hefsek`),
-Seven clean days (`cleanDays`) and Mikvah night (`mikvah`). By default a
-calendar app shows only the days apart, the start of each period and the
-hefsek taharah; the other two are off. They apply to Google Calendar and the
+"More". "Shown in your calendar app" has six switches, saved in
+`app.calendar.show` (`PUT /api/app`): Onot (`onot`), Period start (`period`),
+Hefsek taharah (`hefsek`), Niddah days (`niddah`: one all-day event per
+period, from its first day through the evening of its mikvah night), Seven
+clean days (`cleanDays`) and Mikvah night (`mikvah`). By default a calendar
+app shows only the onot, the start of each period and the hefsek taharah;
+the other three are off. The niddah days and the onot are separate switches:
+the niddah days are known without a calendar. In a calendar app the
+start of a period is an all-day event on its date ("Period began (by day)"),
+and with Hebrew terms every title and description is wholly Hebrew, each
+line ending with a right-to-left mark (`src/engine/hebrewText.ts`): a
+calendar app scrambles a line that mixes Hebrew and English. They apply to Google Calendar and the
 subscription feed only (`calendarAppEvents` in `src/engine/calendar.ts`); the
 month calendar on the Today tab, the reminders and the texts keep every event.
 The guided setup's calendar step has no such switches.

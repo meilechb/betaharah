@@ -245,15 +245,21 @@ describe('calendar events', () => {
 describe('what a calendar app shows', () => {
   const civil = (y: number, m: number, d: number) => civilToAbs({ y, m, d });
   const lastDay = (e: CalendarEvent) => e.allDay!.endAbsExclusive - 1;
-  const ALL: CalendarShow = { apart: true, period: true, hefsek: true, cleanDays: true, mikvah: true };
-  const publish = (t: ReturnType<typeof timeline>, show: CalendarShow, opts = EN) => calendarAppEvents(t, buildCalendar(t, opts), show, opts);
+  const ALL: CalendarShow = { onot: true, period: true, hefsek: true, niddah: true, cleanDays: true, mikvah: true };
+  const WITH_NIDDAH: CalendarShow = { ...DEFAULT_CALENDAR_SHOW, niddah: true };
+  const publish = (t: ReturnType<typeof timeline>, show: CalendarShow, opts = EN) => calendarAppEvents(t, show, opts);
   // The owner's example: a period on Friday Oct 23, 2026 by day, the hefsek taharah on Wednesday Oct 28, in Lakewood.
   const OCT23: LogEntry = { id: 'f', kind: 'flow', onah: { abs: civil(2026, 10, 23), part: 'day' }, veset: true };
   const OCT28: LogEntry = { id: 'h', kind: 'hefsek', abs: civil(2026, 10, 28) };
 
-  it('by default: one event for the period, the flow, the hefsek and the onot; no clean days, no mikvah night', () => {
+  it('by default: the flow, the hefsek and the onot; no niddah days, no clean days, no mikvah night', () => {
     const t = timeline([OCT23, OCT28], at(2026, 10, 30, 12));
-    const events = publish(t, DEFAULT_CALENDAR_SHOW);
+    expect(new Set(publish(t, DEFAULT_CALENDAR_SHOW).map(e => e.kind))).toEqual(new Set(['flow', 'hefsek', 'onah']));
+  });
+
+  it('with the niddah days switched on: one all-day event for the period as well', () => {
+    const t = timeline([OCT23, OCT28], at(2026, 10, 30, 12));
+    const events = publish(t, WITH_NIDDAH);
     expect(new Set(events.map(e => e.kind))).toEqual(new Set(['apart', 'flow', 'hefsek', 'onah']));
     const apart = events.filter(e => e.kind === 'apart');
     expect(apart).toHaveLength(1);
@@ -264,7 +270,13 @@ describe('what a calendar app shows', () => {
     expect(lastDay(p)).toBe(civil(2026, 11, 4));
     expect(p.description).toMatch(/^Until mikvah night: Wed, Nov 4, after \d:\d\d PM\.$/);
     expect(events.find(e => e.kind === 'hefsek')!.title).toBe('Hefsek taharah ✓');
-    expect(events.find(e => e.kind === 'flow')!.title).toBe('Flow (day)');
+    const period = events.find(e => e.kind === 'flow')!;
+    // the start of the period: all day on its date, so that a month view shows it
+    expect(period.title).toBe('Period began (by day)');
+    expect(period.allDay).toEqual({ startAbs: civil(2026, 10, 23), endAbsExclusive: civil(2026, 10, 24) });
+    expect(period.timed).toBeUndefined();
+    // the app's own event for it keeps its hours
+    expect(buildCalendar(t, EN).find(e => e.kind === 'flow')).toMatchObject({ title: 'Flow (day)', timed: expect.anything() });
     expect(events.filter(e => e.kind === 'onah').length).toBeGreaterThan(0);
     // the app's own list is unchanged and has no period event
     expect(buildCalendar(t, EN).some(e => e.kind === 'apart')).toBe(false);
@@ -272,15 +284,15 @@ describe('what a calendar app shows', () => {
 
   it('each switch adds or removes its own kinds only', () => {
     const t = timeline([OCT23, OCT28], at(2026, 10, 30, 12), { orZarua: 'yes' });
-    const kindsOf: Record<ShownKind, string[]> = { apart: ['apart', 'onah'], period: ['flow'], hefsek: ['hefsek'], cleanDays: ['clean_day'], mikvah: ['mikvah'] };
-    const none: CalendarShow = { apart: false, period: false, hefsek: false, cleanDays: false, mikvah: false };
+    const kindsOf: Record<ShownKind, string[]> = { onot: ['onah'], niddah: ['apart'], period: ['flow'], hefsek: ['hefsek'], cleanDays: ['clean_day'], mikvah: ['mikvah'] };
+    const none: CalendarShow = { onot: false, period: false, hefsek: false, niddah: false, cleanDays: false, mikvah: false };
     expect(publish(t, none)).toEqual([]);
     for (const kind of SHOWN_KINDS) {
       const events = publish(t, { ...none, [kind]: true });
       expect([...new Set(events.map(e => e.kind))].sort(), kind).toEqual(kindsOf[kind]);
     }
-    // the Or Zarua onot are among the days apart
-    expect(publish(t, { ...none, apart: true }).some(e => e.light)).toBe(true);
+    // the Or Zarua onot are among the onot
+    expect(publish(t, { ...none, onot: true }).some(e => e.light)).toBe(true);
     // everything on: every event of the app's own list, and the period's
     expect(publish(t, ALL)).toHaveLength(buildCalendar(t, EN).length + 1);
     expect(publish(t, ALL).filter(e => e.kind === 'clean_day')).toHaveLength(7);
@@ -289,17 +301,18 @@ describe('what a calendar app shows', () => {
   it('a period that began at night begins on the date of that evening', () => {
     const night: LogEntry = { id: 'f', kind: 'flow', onah: { abs: civil(2026, 10, 23), part: 'night' }, veset: true };
     const t = timeline([night, OCT28], at(2026, 10, 30, 12));
-    const p = publish(t, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'apart')!;
+    const p = publish(t, WITH_NIDDAH).find(e => e.kind === 'apart')!;
     expect(p.allDay!.startAbs).toBe(civil(2026, 10, 22));
-    // the flow event begins that evening too
+    // the event for the start of the period is on that evening's date too
     const f = publish(t, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'flow')!;
-    expect(localDateTime(f.timed!.start, TZ)).toMatchObject({ m: 10, d: 22 });
+    expect(f.title).toBe('Period began (at night)');
+    expect(f.allDay!.startAbs).toBe(civil(2026, 10, 22));
     expect(lastDay(p)).toBe(t.periods[0]!.planMikvah.eveningAbs);
   });
 
   it('with no hefsek yet, it runs to the mikvah night it would be, and moves as the days pass', () => {
     const t1 = timeline([flow], at(2026, 11, 23, 10)); // flow Sunday Nov 22
-    const p1 = publish(t1, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'apart')!;
+    const p1 = publish(t1, WITH_NIDDAH).find(e => e.kind === 'apart')!;
     const plan = t1.periods[0]!;
     expect(p1.allDay!.startAbs).toBe(SUN);
     expect(lastDay(p1)).toBe(plan.planMikvah.eveningAbs);
@@ -307,7 +320,7 @@ describe('what a calendar app shows', () => {
     expect(p1.description).toBe('Mikvah night would be Thu, Dec 3, if the hefsek taharah is done Thu, Nov 26.');
     // two days after the first possible day, still no hefsek: two days later
     const t2 = timeline([flow], at(2026, 11, 28, 10));
-    const p2 = publish(t2, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'apart')!;
+    const p2 = publish(t2, WITH_NIDDAH).find(e => e.kind === 'apart')!;
     expect(lastDay(p2)).toBe(lastDay(p1) + 2);
     expect(p2.key).toBe(p1.key);
     expect(p2.description).toBe('Mikvah night would be Sat, Dec 5, if the hefsek taharah is done Sat, Nov 28.');
@@ -316,7 +329,7 @@ describe('what a calendar app shows', () => {
   it('a recorded immersion on a later night extends it to that night', () => {
     const late: LogEntry[] = [flow, hefsek, { id: 'm', kind: 'mikvah', abs: SUN + 13 }]; // a night late: the evening of Dec 4
     const t = timeline(late, at(2026, 12, 6, 10));
-    const p = publish(t, DEFAULT_CALENDAR_SHOW).find(e => e.kind === 'apart')!;
+    const p = publish(t, WITH_NIDDAH).find(e => e.kind === 'apart')!;
     expect(t.periods[0]!.planMikvah.eveningAbs).toBe(civil(2026, 12, 3));
     expect(lastDay(p)).toBe(civil(2026, 12, 4));
     expect(p.description).toMatch(/^Until mikvah night: Fri, Dec 4, after \d:\d\d PM\.$/);
@@ -325,7 +338,7 @@ describe('what a calendar app shows', () => {
   it('a period closed by the next one with no hefsek runs up to the day before the next began', () => {
     const next: LogEntry = { id: 'g', kind: 'flow', onah: { abs: civil(2026, 12, 20), part: 'night' }, veset: true };
     const t = timeline([flow, next], at(2026, 12, 21, 10));
-    const [first, second] = publish(t, DEFAULT_CALENDAR_SHOW).filter(e => e.kind === 'apart');
+    const [first, second] = publish(t, WITH_NIDDAH).filter(e => e.kind === 'apart');
     expect(first!.key).toBe('apart:f');
     expect(first!.allDay!.startAbs).toBe(SUN);
     expect(lastDay(first!)).toBe(civil(2026, 12, 18)); // the next began the evening of Dec 19
@@ -335,11 +348,11 @@ describe('what a calendar app shows', () => {
 
   it('both title styles and both forms of the terms', () => {
     const t = timeline([OCT23, OCT28], at(2026, 10, 30, 12));
-    const he = publish(t, DEFAULT_CALENDAR_SHOW, HE).find(e => e.kind === 'apart')!;
-    expect(he.title).toBe('נדה');
-    expect(he.description).toMatch(/^Until ליל טבילה: Wed, Nov 4, after \d:\d\d PM\.$/);
-    const heProjected = publish(timeline([flow], at(2026, 11, 23, 10)), DEFAULT_CALENDAR_SHOW, HE).find(e => e.kind === 'apart')!;
-    expect(heProjected.description).toBe('ליל טבילה would be Thu, Dec 3, if the הפסק טהרה is done Thu, Nov 26.');
+    const he = publish(t, WITH_NIDDAH, HE).find(e => e.kind === 'apart')!;
+    expect(he.title).toBe('נדה\u200f');
+    expect(he.description).toMatch(/^עד ליל טבילה: יום ד׳ בערב, אור לכ״ה חשון, אחרי \d:\d\d\u200f$/);
+    const heProjected = publish(timeline([flow], at(2026, 11, 23, 10)), WITH_NIDDAH, HE).find(e => e.kind === 'apart')!;
+    expect(heProjected.description).toBe('ליל טבילה: יום ה׳ בערב, אור לכ״ד כסלו, אם ההפסק טהרה ייעשה ביום ה׳, ט״ז כסלו\u200f');
     for (const lang of ['en', 'he'] as const) {
       const discreet = publish(t, ALL, { style: 'discreet', lang, timeZone: TZ });
       const p = discreet.find(e => e.kind === 'apart')!;
@@ -358,7 +371,8 @@ describe('what a calendar app shows', () => {
     for (const t of scenarios) {
       for (const opts of [EN, HE]) {
         for (const e of publish(t, ALL, opts)) {
-          expect(e.description).not.toMatch(/\brav\b|רב|\?/i);
+          // "רב" as a word of its own ("בערב", in the evening, has the same letters)
+          expect(e.description).not.toMatch(/\brav\b|(^|[\s(])רב($|[\s.,;:)])|\?/im);
           expect(e.title + e.description).not.toMatch(/[{}]|undefined|NaN/);
         }
       }
@@ -368,9 +382,11 @@ describe('what a calendar app shows', () => {
   it('knows the kind of an event the app wrote by its key', () => {
     expect(hiddenKey('clean:f:1', DEFAULT_CALENDAR_SHOW)).toBe(true);
     expect(hiddenKey('mikvah:f', DEFAULT_CALENDAR_SHOW)).toBe(true);
-    for (const key of ['apart:f', 'onah:123', 'flow:f', 'hefsek:f']) expect(hiddenKey(key, DEFAULT_CALENDAR_SHOW)).toBe(false);
-    expect(hiddenKey('onah:123', { ...DEFAULT_CALENDAR_SHOW, apart: false })).toBe(true);
-    expect(hiddenKey('something:else', { apart: false, period: false, hefsek: false, cleanDays: false, mikvah: false })).toBe(false);
+    for (const key of ['onah:123', 'flow:f', 'hefsek:f']) expect(hiddenKey(key, DEFAULT_CALENDAR_SHOW)).toBe(false);
+    expect(hiddenKey('apart:f', DEFAULT_CALENDAR_SHOW)).toBe(true);
+    expect(hiddenKey('apart:f', WITH_NIDDAH)).toBe(false);
+    expect(hiddenKey('onah:123', { ...DEFAULT_CALENDAR_SHOW, onot: false })).toBe(true);
+    expect(hiddenKey('something:else', { onot: false, period: false, hefsek: false, niddah: false, cleanDays: false, mikvah: false })).toBe(false);
   });
 
   it('a sync removes the events of a kind switched off, even at the far edge of the window', () => {
@@ -515,5 +531,50 @@ describe('the calendar feed', () => {
     expect(one).toContain('SUMMARY:a\\,b\\;c\\\\d');
     expect(one).toContain('DESCRIPTION:x\\ny');
     expect(one).toContain('UID:k_1@betaharah');
+  });
+});
+
+describe('a calendar app with Hebrew terms', () => {
+  const civil = (y: number, m: number, d: number) => civilToAbs({ y, m, d });
+  const ALL: CalendarShow = { onot: true, period: true, hefsek: true, niddah: true, cleanDays: true, mikvah: true };
+  const scenarios = [
+    timeline([flow], at(2026, 11, 23, 10)),
+    timeline([flow, hefsek], at(2026, 11, 27, 10)),
+    timeline([flow, hefsek, { id: 'm', kind: 'mikvah', abs: SUN + 13 }], at(2026, 12, 6, 10)),
+    timeline([flow, { id: 'g', kind: 'flow', onah: { abs: civil(2026, 12, 20), part: 'night' }, veset: true }], at(2026, 12, 21, 10), { orZarua: 'yes' }),
+    timeline([{ id: 's', kind: 'stain', onah: { abs: SUN, part: 'night' } }], at(2026, 11, 23, 10)),
+  ];
+
+  it('every title and every line is wholly Hebrew: no English letters, begun by a Hebrew letter and kept right-to-left to its end', () => {
+    let lines = 0;
+    for (const t of scenarios) {
+      for (const e of calendarAppEvents(t, ALL, HE)) {
+        for (const line of [e.title, ...e.description.split('\n').filter(l => l !== '')]) {
+          expect(line, line).not.toMatch(/[A-Za-z]/);
+          expect(line, line).toMatch(/^[\u05D0-\u05EA]/);
+          expect(line.endsWith('\u200F'), line).toBe(true);
+          lines++;
+        }
+      }
+    }
+    expect(lines).toBeGreaterThan(60);
+  });
+
+  it('says the same as the English: the onah of the owner\'s example', () => {
+    const t = timeline([{ id: 'f', kind: 'flow', onah: { abs: civil(2026, 10, 23), part: 'day' }, veset: true }, { id: 'h', kind: 'hefsek', abs: civil(2026, 10, 28) }], at(2026, 10, 30, 12));
+    const plain = (e: CalendarEvent) => [e.title, ...e.description.split('\n')].map(l => l.replace(/\u200F/g, ''));
+    const onDay = (events: CalendarEvent[], d: number) => events.find(e => e.kind === 'onah' && localDateTime(e.timed!.start, TZ).d === d && localDateTime(e.timed!.start, TZ).hh < 12)!;
+    const en = calendarAppEvents(t, DEFAULT_CALENDAR_SHOW, EN);
+    const he = calendarAppEvents(t, DEFAULT_CALENDAR_SHOW, HE);
+    expect(plain(onDay(en, 21))).toEqual(['Veset onah (day)', 'Onah beinonit (day 30)', 'Separation, and a bedikah.']);
+    expect(plain(onDay(he, 21))).toEqual(['עונת הוסת – יום', 'עונה בינונית – יום 30', 'פרישה ובדיקה']);
+    expect(plain(onDay(en, 22))).toEqual(['Veset onah (day)', 'Veset hachodesh (day 12 of the month)', 'Separation, and a bedikah.']);
+    expect(plain(onDay(he, 22))).toEqual(['עונת הוסת – יום', 'וסת החודש – י״ב בחודש', 'פרישה ובדיקה']);
+  });
+
+  it('the app\'s own events are unchanged by it', () => {
+    const t = scenarios[1]!;
+    expect(buildCalendar(t, HE).find(e => e.kind === 'hefsek')!.title).toBe('הפסק טהרה ✓');
+    expect(buildCalendar(t, HE).find(e => e.kind === 'flow')!.timed).toBeDefined();
   });
 });

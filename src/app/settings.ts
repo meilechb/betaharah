@@ -206,12 +206,17 @@ function calendarName(input: unknown): string {
   return name;
 }
 
-/** What the calendar app shows. Saved before this setting existed: the defaults. */
+/**
+ * What the calendar app shows. Saved before this setting existed: the
+ * defaults. Saved while the niddah days and the onot were one switch
+ * ('apart'): that switch is read as the onot, and the niddah days are off.
+ */
 function parseShow(input: unknown): CalendarShow {
   if (input === undefined) return { ...DEFAULT_CALENDAR_SHOW };
   const o = obj(input, 'calendar.show');
+  const from = o.apart !== undefined && o.onot === undefined && o.niddah === undefined ? { ...o, onot: o.apart, niddah: false } : o;
   const show = {} as CalendarShow;
-  for (const kind of SHOWN_KINDS) show[kind] = bool(o[kind], `calendar.show.${kind}`);
+  for (const kind of SHOWN_KINDS) show[kind] = bool(from[kind], `calendar.show.${kind}`);
   return show;
 }
 

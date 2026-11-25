@@ -400,7 +400,8 @@ body.lp {
   position: relative;
   padding: clamp(36px, 5.5vw, 72px) 0 clamp(24px, 3vw, 40px);
   isolation: isolate;
-  overflow: hidden;
+  /* The glow (::before) reaches 10% past each side and is clipped there; the day sheet may still hang below. */
+  overflow: clip visible;
 }
 .top-hero::before {
   content: '';
@@ -2906,7 +2907,6 @@ body.lp {
 }
 .iphone-screen {
   position: relative;
-  aspect-ratio: 9 / 19.5;
   border-radius: 34px;
   background: #fff;
   overflow: hidden;
@@ -2960,8 +2960,10 @@ body.lp {
 .iphone-who .avatar {
   width: 34px; height: 34px; border-radius: 50%;
   display: grid; place-items: center;
-  background: #6c6c70; color: #fff; font-weight: 600; font-size: 16px;
+  overflow: hidden;
+  background: #fff;
 }
+.iphone-who .avatar img { width: 34px; height: 34px; display: block; }
 .iphone-who b { font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 2px; }
 .iphone-who b svg { width: 8px; height: 5px; fill: none; stroke: #6c6c70; stroke-width: 1.6; }
 .imsg {
@@ -2995,13 +2997,22 @@ body.lp {
   color: #fff;
   border-radius: 16px;
 }
-.imsg .out::after {
-  content: "";
-  position: absolute;
-  right: -4px; bottom: 0;
-  border: 7px solid transparent;
-  border-left-color: #008932;
-  border-bottom: 0;
+.imsg .out.tail { border-bottom-right-radius: 5px; }
+.imsg .out.tail::before,
+.imsg .out.tail::after { content: ""; position: absolute; bottom: 0; }
+.imsg .out.tail::before {
+  right: -6px;
+  width: 12px;
+  height: 16px;
+  background: #008932;
+  border-bottom-left-radius: 10px 14px;
+}
+.imsg .out.tail::after {
+  right: -10px;
+  width: 10px;
+  height: 16px;
+  background: #fff;
+  border-bottom-left-radius: 8px;
 }
 .imsg .in {
   align-self: flex-start;
@@ -3009,20 +3020,29 @@ body.lp {
   color: #000;
   border-radius: 16px;
 }
-.imsg .in::after {
-  content: "";
-  position: absolute;
-  left: -4px; bottom: 0;
-  border: 7px solid transparent;
-  border-right-color: #e9e9eb;
-  border-bottom: 0;
+.imsg .in.tail { border-bottom-left-radius: 5px; }
+.imsg .in.tail::before,
+.imsg .in.tail::after { content: ""; position: absolute; bottom: 0; }
+.imsg .in.tail::before {
+  left: -6px;
+  width: 12px;
+  height: 16px;
+  background: #e9e9eb;
+  border-bottom-right-radius: 10px 14px;
+}
+.imsg .in.tail::after {
+  left: -10px;
+  width: 10px;
+  height: 16px;
+  background: #fff;
+  border-bottom-right-radius: 8px;
 }
 .iphone-compose {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 10px;
-  background: rgba(255, 255, 255, 0.94);
+  padding: 6px 8px 16px;
+  background: #fff;
   border-top: 0.5px solid rgba(60, 60, 67, 0.18);
 }
 .iphone-plus, .iphone-mic {
@@ -3094,8 +3114,9 @@ body.lp {
     grid-template-columns: 1fr auto;
     gap: clamp(24px, 6vw, 80px);
   }
-.text-phone {
-  margin: 0;
+  .text-phone {
+    margin: 0;
+  }
 }
 
 /* Hero calendar: colored days, a light header, a sheet that sits by the day. */
@@ -3155,6 +3176,13 @@ body.lp {
   font-size: 11px;
 }
 #try .day .mk svg { width: 14px; height: 14px; }
+#try .mk.hefsek.projected,
+#try .mk.hefsek.plan {
+  background: transparent;
+  border: 1.5px dashed var(--hefsek);
+  color: var(--hefsek);
+  border-radius: 6px;
+}
 #try .day.tone-flow { background: color-mix(in srgb, var(--flow) 18%, var(--surface)); }
 #try .day.tone-hefsek { background: color-mix(in srgb, var(--hefsek) 24%, var(--surface)); }
 #try .day.tone-clean { background: color-mix(in srgb, var(--clean) 20%, var(--surface)); }
@@ -3225,12 +3253,26 @@ body.lp {
   color: var(--ink);
   box-shadow: 0 18px 50px rgba(28, 34, 48, 0.22);
 }
-.try-sheet.sheet-pop {
-  position: fixed;
+#try { position: relative; overflow: visible; }
+#try .try-sheet.sheet-pop {
+  position: absolute;
   inset: auto;
   margin: 0;
+  z-index: 6;
 }
-.try-sheet.sheet-mobile {
+#try .try-sheet.sheet-pop::before {
+  content: "";
+  position: absolute;
+  top: var(--arrow, 28px);
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  transform: rotate(45deg);
+  box-shadow: -2px 2px 4px rgba(28, 34, 48, 0.04);
+}
+#try .try-sheet.point-left::before { left: -6px; }
+#try .try-sheet.point-right::before { right: -6px; }
+#try .try-sheet.sheet-mobile {
   position: fixed;
   inset: auto 0 0 0;
   margin: 0;
@@ -3239,6 +3281,16 @@ body.lp {
   border-radius: 22px 22px 0 0;
   max-height: 86vh;
   overflow: auto;
+  z-index: 30;
+}
+#try .try-sheet.sheet-mobile::before {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 5px;
+  border-radius: 99px;
+  background: #d9d3c8;
+  margin: 0 auto 12px;
 }
 .try-sheet[open] { animation: pop-in 0.22s ease; }
 .try-sheet.sheet-mobile[open] { animation: sheet-up 0.28s ease; }
@@ -3246,23 +3298,26 @@ body.lp {
 @keyframes sheet-up { from { transform: translateY(24px); } }
 .try-sheet .sheet-x {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 32px;
-  height: 32px;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
   border: 0;
   border-radius: 999px;
-  background: var(--bg);
-  color: var(--ink);
+  background: transparent;
+  color: var(--muted);
   display: grid;
   place-items: center;
   cursor: pointer;
 }
-.try-sheet .sheet-x .ic { width: 16px; height: 16px; }
+.try-sheet .sheet-x:hover { background: var(--bg); color: var(--ink); }
+.try-sheet .sheet-x .ic { width: 14px; height: 14px; }
 .try-sheet h3 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 400; margin: 0 28px 4px 0; }
-.try-sheet .sheet-when { margin: 0 0 14px; display: flex; flex-direction: column; gap: 2px; }
-.try-sheet .sheet-when b { color: var(--ink); font-size: 0.95rem; }
-.try-sheet .sheet-when span { color: var(--muted); font-size: 0.85rem; }
+.try-sheet .sheet-when { margin: 0 0 14px; }
+.try-sheet .sheet-when b { display: block; color: var(--ink); font-size: 0.95rem; font-weight: 650; }
 .try-sheet .addgrid { grid-template-columns: 1fr; gap: 8px; }
 .try-sheet .addbtn {
   min-height: 56px;
