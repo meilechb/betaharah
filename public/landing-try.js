@@ -105,7 +105,8 @@ let selected = null;
 let entries = [];
 let place = FALLBACK;
 let askedLocation = false;
-let pulse = null;
+let animate = false;
+let prevMarks = new Map();
 let generation = 0;
 
 function indexOf(g) {
@@ -192,15 +193,9 @@ async function calculate(added) {
     showSheetError('');
     grid = json.state.grid;
     indexCache = null;
-    if (statusLine) {
-      statusLine.textContent = resultSentence(json.state);
-      statusLine.classList.remove('changed');
-      if (added) {
-        void statusLine.offsetWidth;
-        statusLine.classList.add('changed');
-      }
-    }
+    fillSummary(json.state, added);
     if (errorLine) errorLine.hidden = true;
+    animate = added;
     draw();
     return true;
   } catch {
@@ -232,12 +227,63 @@ async function post(where, today) {
   return { ok: res.ok, status: res.status, json };
 }
 
-function openSheet(date) {
+function fillSummary(state, added) {
+  const box = document.getElementById('try-summary');
+  if (!box) return;
+  const events = (state.grid && state.grid.events) || [];
+  const short = d => fmt(d, { weekday: 'short', month: 'short', day: 'numeric' });
+  const rows = [];
+  const hefsek = events.find(e => e.kind === 'hefsek');
+  const mikvah = events.find(e => e.kind === 'mikvah');
+  if (hefsek) rows.push(['Hefsek', short(hefsek.startDate)]);
+  if (mikvah) rows.push(['Mikvah night', short(mikvah.startDate)]);
+  box.replaceChildren(...rows.map(([name, when]) => el('li', {}, el('b', {}, name), el('span', {}, when))));
+  box.hidden = rows.length === 0;
+  if (added) {
+    box.classList.remove('changed');
+    void box.offsetWidth;
+    box.classList.add('changed');
+  }
+}
+
+function toneOf(events) {
+  if (events.some(e => e.kind === 'mikvah')) return ' tone-mikvah';
+  if (events.some(e => e.kind === 'hefsek')) return ' tone-hefsek';
+  if (events.some(e => e.kind === 'flow' || e.kind === 'stain')) return ' tone-flow';
+  if (events.some(e => e.kind === 'clean_day')) return ' tone-clean';
+  if (events.some(e => e.kind === 'onah')) return ' tone-onah';
+  return '';
+}
+
+function openSheet(date, button) {
   selected = date;
+  const day = grid && indexOf(grid).days.get(date);
   sheetDate.textContent = longDate(date);
+  const heb = document.getElementById('try-sheet-hebrew');
+  if (heb) heb.textContent = day && day.hebrewDay ? day.hebrewDay + ' ' + (day.hebrewMonth || '') : '';
   showSheetError('');
   draw();
+  const mobile = window.matchMedia('(max-width: 720px)').matches;
+  sheet.classList.toggle('sheet-mobile', mobile);
+  sheet.classList.toggle('sheet-pop', !mobile);
   if (!sheet.open) sheet.showModal();
+  if (mobile) {
+    sheet.style.left = '';
+    sheet.style.top = '';
+    sheet.style.width = '';
+    return;
+  }
+  const btn = button || document.getElementById('try-day-' + date);
+  const r = btn ? btn.getBoundingClientRect() : { left: 80, top: 160, width: 40, bottom: 200 };
+  const w = Math.min(360, window.innerWidth - 16);
+  let left = r.left + r.width / 2 - w / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+  let top = r.bottom + 10;
+  const h = sheet.offsetHeight || 360;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 10);
+  sheet.style.width = w + 'px';
+  sheet.style.left = left + 'px';
+  sheet.style.top = top + 'px';
 }
 
 function closeSheet() {
@@ -248,7 +294,6 @@ async function addOption(option) {
   const body = { kind: option.kind, date: selected };
   if (option.part) body.part = option.part;
   entries.push(body);
-  pulse = selected;
   await locate();
   const ok = await calculate(true);
   if (ok) closeSheet();
@@ -279,6 +324,8 @@ function monthTable(i, g) {
     const isSelected = date === selected;
     const today = date === g.today;
     const home = selected || (entries[0] && entries[0].date) || g.today;
+    const sig = events.map(e => e.kind + (e.key || '')).join('|');
+    const fresh = animate && prevMarks.get(date) !== sig && sig !== '';
     cells.push(
       el(
         'td',
@@ -288,12 +335,12 @@ function monthTable(i, g) {
           {
             type: 'button',
             id: 'try-day-' + date,
-            class: 'day' + (day.rest ? ' rest' : '') + (today ? ' today' : '') + (isSelected ? ' selected' : '') + (date === pulse ? ' pulse' : ''),
+            class: 'day' + (day.rest ? ' rest' : '') + (today ? ' today' : '') + (isSelected ? ' selected' : '') + toneOf(events) + (fresh ? ' just' : ''),
             tabindex: date === home ? '0' : '-1',
             'aria-pressed': String(isSelected),
             'aria-current': today ? 'date' : null,
             'aria-label': dayLabel(g, date, day, events),
-            onclick: () => openSheet(date),
+            onclick: e => openSheet(date, e.currentTarget),
           },
           el('span', { class: 'cd' }, String(d)),
           day.hebrewDay ? el('span', { class: 'hd' }, day.hebrewDay, day.monthStart ? el('span', { class: 'hm' }, ' ' + day.hebrewMonth) : null) : null,
@@ -341,6 +388,8 @@ function draw() {
   };
   const inMonth = grid.days.filter(d => d.date.startsWith(month));
   const hebrew = inMonth.length ? (inMonth[0].hebrewMonth === inMonth[inMonth.length - 1].hebrewMonth ? inMonth[0].hebrewMonth : inMonth[0].hebrewMonth + ' – ' + inMonth[inMonth.length - 1].hebrewMonth) : '';
+  const marks = new Map();
+  for (const [date, evs] of i.starting) marks.set(date, evs.map(e => e.kind + (e.key || '')).join('|'));
   root.replaceChildren(
     el(
       'div',
@@ -351,13 +400,15 @@ function draw() {
     ),
     monthTable(i, grid),
   );
+  prevMarks = marks;
+  animate = false;
 }
 
 function optionButton(option) {
   const glyph = option.mark === 'flow' ? svgIcon('i-drop') : option.mark === 'hefsek' ? 'H' : option.mark === 'mikvah' ? 'M' : '×';
   return el(
     'button',
-    { type: 'button', class: 'addbtn', id: option.id, onclick: () => addOption(option) },
+    { type: 'button', class: 'addbtn tile-' + option.mark, id: option.id, onclick: () => addOption(option) },
     el('span', { class: 'mk ' + (option.mark === 'broken' ? 'broken' : option.mark), 'aria-hidden': 'true' }, glyph),
     el('span', {}, option.label),
   );
@@ -380,6 +431,7 @@ export function startTry() {
   sheet.addEventListener('click', e => {
     if (e.target === sheet) closeSheet();
   });
+  document.getElementById('try-cancel')?.addEventListener('click', closeSheet);
   const today = browserToday();
   const start = addDays(today, -12);
   entries = [{ kind: 'flow', date: start, part: 'day' }];

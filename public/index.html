@@ -48,6 +48,7 @@
       <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></symbol>
       <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></symbol>
       <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" /></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></symbol>
     </svg>
 
     <a class="skip" href="#main">Skip to the content</a>
@@ -72,7 +73,6 @@
           <p class="hero-lead">Tap any day to try it.</p>
         </div>
         <div class="wrap demo try" id="try">
-          <p class="demo-status" id="try-status">Mikvah night shows on the month.</p>
           <p class="try-error" id="try-error" role="alert" hidden></p>
           <div id="try-cal" class="app-cal">
             <div class="month-nav">
@@ -107,6 +107,14 @@
               </tbody>
             </table>
           </div>
+          <ul class="hero-legend">
+            <li><span class="sw flow"></span>Period</li>
+            <li><span class="sw hefsek"></span>Hefsek</li>
+            <li><span class="sw clean"></span>Clean days</li>
+            <li><span class="sw mikvah"></span>Mikvah night</li>
+            <li><span class="sw onah"></span>Onah</li>
+          </ul>
+          <ul class="try-sum" id="try-summary" hidden></ul>
           <a class="btn btn-primary btn-lg" href="/app/" id="hero-start">Start for free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
           <p class="signup-note" id="signup-note" role="status" hidden></p>
         </div>
@@ -114,15 +122,17 @@
 
       <dialog class="try-sheet" id="try-sheet" aria-labelledby="try-sheet-title">
         <form method="dialog">
+          <button type="button" class="sheet-x" id="try-cancel" aria-label="Close">
+            <svg class="ic" aria-hidden="true"><use href="#i-x" /></svg>
+          </button>
           <h3 id="try-sheet-title">What happened?</h3>
-          <p id="try-sheet-date"></p>
+          <p class="sheet-when"><b id="try-sheet-date"></b><span id="try-sheet-hebrew"></span></p>
           <div class="addgrid" id="try-sheet-main"></div>
           <details class="day-more">
-            <summary>Other things to add</summary>
+            <summary>More options</summary>
             <div class="addgrid" id="try-sheet-more"></div>
           </details>
           <p class="try-error" id="try-sheet-error" role="alert" hidden></p>
-          <button class="btn btn-ghost" id="try-cancel" value="cancel">Cancel</button>
         </form>
       </dialog>
 
@@ -246,19 +256,44 @@
             <p class="offline-note" id="offline-note" hidden></p>
             <p class="offline-note" id="prefix-note" hidden></p>
           </div>
-          <figure class="iphone" aria-label="A text to Betaharah">
-            <div class="iphone-screen">
-              <div class="iphone-status" aria-hidden="true"><span>9:41</span><span class="iphone-island"></span><span>5G</span></div>
-              <header class="iphone-head">
-                <span class="avatar" aria-hidden="true">B</span>
-                <b>Betaharah</b>
-                <small>Text message</small>
-              </header>
-              <ol class="imsg">
-                <li class="stamp">Today 10:14 AM</li>
-                <li class="out"><span class="visually-hidden">She sends: </span>period now</li>
-                <li class="in"><span class="visually-hidden">Reply: </span>Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.</li>
-              </ol>
+          <figure class="iphone" aria-label="Messages with Betaharah">
+            <div class="iphone-bezel">
+              <div class="iphone-screen">
+                <div class="iphone-status" aria-hidden="true">
+                  <span class="iphone-time">9:41</span>
+                  <span class="iphone-island"></span>
+                  <span class="iphone-sys">
+                    <svg viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="0.6" /><rect x="4.5" y="5" width="3" height="7" rx="0.6" /><rect x="9" y="2.5" width="3" height="9.5" rx="0.6" /><rect x="13.5" y="0" width="3" height="12" rx="0.6" /></svg>
+                    <svg viewBox="0 0 16 12" aria-hidden="true"><path d="M8 3.2c2 0 3.8.8 5.2 2.1l1-1.1A9 9 0 0 0 8 1.6 9 9 0 0 0 1.8 4.2l1 1.1A7 7 0 0 1 8 3.2Z" /><path d="M8 6.2c1.1 0 2.1.4 2.9 1.2l1-1.1A6 6 0 0 0 8 4.6a6 6 0 0 0-3.9 1.7l1 1.1A4 4 0 0 1 8 6.2Z" /><circle cx="8" cy="10" r="1.3" /></svg>
+                    <svg viewBox="0 0 25 12" aria-hidden="true"><rect x="0.5" y="0.5" width="21" height="11" rx="2.5" /><rect x="2" y="2" width="16" height="8" rx="1" /><path d="M23 4.2v3.6c.8-.3 1.4-1 1.4-1.8s-.6-1.5-1.4-1.8Z" /></svg>
+                  </span>
+                </div>
+                <header class="iphone-bar">
+                  <span class="iphone-back" aria-hidden="true"><svg viewBox="0 0 12 20"><path d="M10 2 2 10l8 8" /></svg><b>12</b></span>
+                  <span class="iphone-who">
+                    <span class="avatar">B</span>
+                    <b>Betaharah <svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" /></svg></b>
+                  </span>
+                  <span class="iphone-back spacer" aria-hidden="true"></span>
+                </header>
+                <ol class="imsg">
+                  <li class="kind">Text Message</li>
+                  <li class="stamp">Today 9:02 AM</li>
+                  <li class="out"><span class="visually-hidden">She sends: </span>JOIN</li>
+                  <li class="in"><span class="visually-hidden">Reply: </span>Welcome to Betaharah. Setup step 1 of 3: your ZIP code (or Canadian postal code), for the times of sunset.</li>
+                  <li class="stamp">Today 10:14 AM</li>
+                  <li class="out"><span class="visually-hidden">She sends: </span>period now</li>
+                  <li class="in"><span class="visually-hidden">Reply: </span>Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.</li>
+                  <li class="out"><span class="visually-hidden">She sends: </span>status</li>
+                  <li class="delivered">Delivered</li>
+                  <li class="in"><span class="visually-hidden">Reply: </span>Niddah since Sun Nov 22. Hefsek from Thu Nov 26 before 4:33 PM.</li>
+                </ol>
+                <div class="iphone-compose" aria-hidden="true">
+                  <span class="iphone-plus"><svg viewBox="0 0 16 16"><path d="M8 1v14M1 8h14" /></svg></span>
+                  <span class="iphone-field">Text Message</span>
+                  <span class="iphone-mic"><svg viewBox="0 0 12 18"><rect x="3" y="1" width="6" height="10" rx="3" /><path d="M1 8a5 5 0 0 0 10 0M6 13v4" /></svg></span>
+                </div>
+              </div>
             </div>
           </figure>
         </div>
