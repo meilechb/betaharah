@@ -9,6 +9,7 @@
  * signed-in household.
  */
 import { buildCalendar, type CalendarEvent } from '../engine/calendar';
+import type { DateStyle } from '../engine/dates';
 import { absToCivil, localAbs, localToInstant, zoneOffsetMs, type CivilDate } from '../engine/civil';
 import { daysInHebrewMonth, hebrewOfAbs } from '../engine/hebrew';
 import { isRestDay } from '../engine/holidays';
@@ -24,6 +25,18 @@ export interface GridDay {
   date: string;
   hebrewDay: string;
   hebrewMonth: string;
+  /** The Hebrew year as a number (5787), for a Hebrew-month view. */
+  hebrewYear: number;
+  /** The Hebrew year as the household writes it: '5787', or 'תשפ״ז'. */
+  hebrewYearText: string;
+  /**
+   * The Hebrew month, stable and unique: 'YYYY-MM' with the Hebrew year and
+   * the month numbered as the calendar numbers it (Nisan = 01 ... Tishrei =
+   * 07 ... Adar I = 12, Adar II = 13), e.g. '5787-09' for Kislev 5787. For
+   * grouping days by Hebrew month; it does not sort in calendar order
+   * (the year begins with Tishrei), so keep the days' order.
+   */
+  hebrewMonthId: string;
   monthStart: boolean;
   rest: boolean;
   sunrise: string;
@@ -104,8 +117,15 @@ function hebrewMonthText(abs: number, lang: TermLanguage): string {
   return text.slice(text.indexOf(' ') + 1);
 }
 
+/** The Hebrew year that the daytime of `abs` falls in, as hebrewDate writes it: '5787', or 'תשפ״ז'. */
+function hebrewYearText(abs: number, lang: TermLanguage): string {
+  const text = hebrewDate(abs, lang); // "13 Kislev 5787", "י״ג כסלו תשפ״ז"
+  return text.slice(text.lastIndexOf(' ') + 1);
+}
+
 export interface GridOptions {
   lang: TermLanguage;
+  dates: DateStyle;
   style: 'words' | 'discreet';
   yomTov: 'diaspora' | 'israel';
   now: number;
@@ -127,6 +147,7 @@ export function buildGrid(computed: Computed, opts: GridOptions): Grid {
   let h = hebrewOfAbs(first);
   let monthLength = daysInHebrewMonth(h.yy, h.mm);
   let monthName = hebrewMonthText(first, lang);
+  let yearText = hebrewYearText(first, lang);
   // The civil date is counted forward in the same way.
   const civil = absToCivil(first);
   for (let abs = first; abs <= last; abs++) {
@@ -137,6 +158,7 @@ export function buildGrid(computed: Computed, opts: GridOptions): Grid {
         h = hebrewOfAbs(abs);
         monthLength = daysInHebrewMonth(h.yy, h.mm);
         monthName = hebrewMonthText(abs, lang);
+        yearText = hebrewYearText(abs, lang);
       }
       if (civil.d < daysInCivilMonth(civil.y, civil.m)) civil.d++;
       else if (civil.m < 12) Object.assign(civil, { m: civil.m + 1, d: 1 });
@@ -148,6 +170,9 @@ export function buildGrid(computed: Computed, opts: GridOptions): Grid {
       date: civilIso(civil),
       hebrewDay: hebrewDayText(h.dd, lang),
       hebrewMonth: monthName,
+      hebrewYear: h.yy,
+      hebrewYearText: yearText,
+      hebrewMonthId: `${h.yy}-${pad2(h.mm)}`,
       monthStart: h.dd === 1,
       rest: isRestDay(abs, opts.yomTov),
       // Rounded as everywhere else: sunrise up, sunset down.
@@ -156,7 +181,7 @@ export function buildGrid(computed: Computed, opts: GridOptions): Grid {
     });
   }
 
-  const source = opts.style === 'words' ? computed.events : buildCalendar(timeline, { style: 'words', lang, timeZone: tz });
+  const source = opts.style === 'words' ? computed.events : buildCalendar(timeline, { style: 'words', lang, timeZone: tz, dates: opts.dates });
   const placed: Array<{ at: number; event: GridEvent }> = [];
   for (const e of source) {
     let startAbs: number;

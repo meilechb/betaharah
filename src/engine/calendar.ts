@@ -6,9 +6,10 @@
  * for a calendar that other people may see.
  */
 import { absToCivil, dayOfWeek } from './civil';
+import type { DateStyle } from './dates';
 import { onahIndex } from './onah';
 import { clock12, roundToMinute } from './present';
-import { capital, dayOfMonth, fill, hebrewDate, term, type TermLanguage } from './terms';
+import { capital, dayOfMonth, fill, term, type TermLanguage } from './terms';
 import type { OnahView, PeriodView, Timeline } from './timeline';
 import type { BaseReason, VesetReason } from './vesatot';
 
@@ -25,36 +26,6 @@ export function weekday(abs: number): string {
 export function civilDate(abs: number): string {
   const c = absToCivil(abs);
   return `${MONTHS[c.m - 1]} ${c.d}, ${c.y}`;
-}
-
-/** "Thursday, 16 Kislev 5787 (Nov 26, 2026)" for the daytime of a Hebrew date. */
-export function fullDate(abs: number, lang: TermLanguage): string {
-  return `${weekday(abs)}, ${hebrewDate(abs, lang)} (${civilDate(abs)})`;
-}
-
-/**
- * An onah in words. A night belongs to the Hebrew date that follows it, so
- * it is named by the evening on which it begins:
- * "Sunday evening, Dec 20, 2026 (the night of 11 Tevet 5787)", or
- * "Monday, 11 Tevet 5787 (Dec 21, 2026), by day".
- */
-const CIVIL_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
-
-/**
- * A night in words: the civil evening on which it begins, and the Hebrew
- * date it belongs to: "Saturday evening, Dec 12, 2026 (the night of 3 Tevet
- * 5787)". `nightAbs` is the R.D. number of that Hebrew date's daytime. The
- * evening is named by its civil weekday, because "the night of Shabbat"
- * would be read as Friday night.
- */
-export function eveningLabel(nightAbs: number, lang: TermLanguage): string {
-  const evening = nightAbs - 1;
-  return `${CIVIL_WEEKDAYS[dayOfWeek(evening)]} evening, ${civilDate(evening)} (the night of ${hebrewDate(nightAbs, lang)})`;
-}
-
-export function onahLabel(onah: { abs: number; part: 'night' | 'day' }, lang: TermLanguage): string {
-  if (onah.part === 'day') return `${fullDate(onah.abs, lang)}, by day`;
-  return capital(eveningLabel(onah.abs, lang));
 }
 
 function baseReason(r: BaseReason, lang: TermLanguage): string {
@@ -103,6 +74,12 @@ export interface CalendarOptions {
   style: CalendarStyle;
   lang: TermLanguage;
   timeZone: string;
+  /**
+   * Which date a description writes after a weekday. A description has no
+   * "today" (it is read on any day): dates in it are written in full, with
+   * the helpers of src/engine/dates.ts.
+   */
+  dates: DateStyle;
 }
 
 const PROJECTED = ' (projected)';

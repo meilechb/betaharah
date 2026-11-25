@@ -64,6 +64,26 @@ so in your report; do not edit the frozen files.
   keeps working. Never hard-code a term that exists in `S.words`
   (`src/engine/terms.ts` lists them). Hebrew words sit inside English
   sentences; the page never turns right-to-left (`dir="rtl"`).
+- **Dates.** Every date the server writes (status, Coming up, the Log, alerts,
+  confirmations, calendar events, texts) comes from one set of helpers,
+  `src/engine/dates.ts`, and follows `S.app.dates`: `'hebrew'` (the default,
+  also for accounts saved before the choice), `'civil'` or `'both'`. A time is
+  named first in plain words: a weekday for a daytime ("Tuesday", "Shabbat"),
+  the evening's weekday for a night ("Monday night"); with "now" known,
+  "today", "tonight", "tomorrow", "tomorrow night", "yesterday", "last night",
+  and the weekday alone within the coming six days. Otherwise the date follows:
+  `Tue, 16 Kislev` / `Tue, Nov 26` / `Tue, Nov 26 (16 Kislev)`; a night
+  `Mon night, eve of 16 Kislev` / `Mon night, Nov 25` /
+  `Mon night, Nov 25 (eve of 16 Kislev)` (the civil date of its evening, the
+  Hebrew date that begins then). The Log and calendar descriptions always
+  write the date, with its year in the Log. The Hebrew date is in the terms'
+  form (English letters or Hebrew script); texts always use English letters.
+  The page does not format these itself. For a Hebrew-month view each grid day
+  has `hebrewYear` (5787), `hebrewYearText` ('5787' or 'תשפ״ז') and
+  `hebrewMonthId` ('5787-09': the year and the month as the calendar numbers
+  it, Nisan 01 … Tishrei 07 … Adar I 12, Adar II 13; for grouping, not
+  sorting), and `S.today.text` is the onah it is now in words with its date.
+  Settings, Language and dates has the choice.
 - **Wording.** Plain, literal English. Short sentences. No figurative phrases,
   jokes, exclamation marks or marketing tone. A button says exactly what it does
   ("Save location", "Remove link"), not "OK" or "Submit".

@@ -3,6 +3,7 @@
  * reminders, how the calendar looks. Validated whenever they are saved.
  */
 import { civilToAbs, isValidTimeZone } from '../engine/civil';
+import { DATE_STYLES, type DateStyle } from '../engine/dates';
 import { DEFAULT_REMINDER_OPTIONS, type ReminderKind, type ReminderOptions } from '../engine/present';
 import type { GeoPoint } from '../engine/sun';
 import type { TermLanguage } from '../engine/terms';
@@ -38,6 +39,12 @@ export interface AppSettings {
   useElevation: boolean;
   /** Halachic terms in English letters or in Hebrew script, on the dashboard and in the calendar. */
   terms: TermLanguage;
+  /**
+   * Which date follows the weekday wherever a date is written out (the
+   * pages, the calendar, the texts): the Hebrew date, the civil date, or
+   * both. Accounts saved before there was a choice read as 'hebrew'.
+   */
+  dates: DateStyle;
   calendar: {
     /** The calendar's name in Google Calendar and in the subscription feed. */
     name: string;
@@ -58,6 +65,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   place: null,
   useElevation: false,
   terms: 'en',
+  dates: 'hebrew',
   calendar: { name: 'Betaharah', style: 'words', historyDays: 400 },
   reminders: DEFAULT_REMINDER_OPTIONS,
   boundaryMarginMinutes: 20,
@@ -210,6 +218,7 @@ export function parseAppSettings(input: unknown): AppSettings {
     place: o.place === null || o.place === undefined ? null : parsePlace(o.place),
     useElevation: bool(o.useElevation, 'useElevation'),
     terms: oneOf(o.terms, 'terms', ['en', 'he'] as const),
+    dates: o.dates === undefined ? DEFAULT_APP_SETTINGS.dates : oneOf(o.dates, 'dates', DATE_STYLES),
     calendar: {
       name: calendarName(calendar.name),
       style: oneOf(calendar.style, 'calendar.style', ['words', 'discreet'] as const),

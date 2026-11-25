@@ -1021,7 +1021,7 @@ describe('settings', () => {
     expect(withPlace.status).toBe(200);
     const s = withPlace.json.state;
     expect(s.status).toEqual({ headline: 'Tehorah', detail: '', phase: 'tehorah', day: null });
-    expect(s.today).toEqual({ hebrew: 'Monday, 13 Kislev 5787', civil: 'Nov 23, 2026', part: 'day', date: '2026-11-23', civilDate: '2026-11-23' });
+    expect(s.today).toEqual({ hebrew: 'Monday, 13 Kislev 5787', civil: 'Nov 23, 2026', text: 'Monday, 13 Kislev', part: 'day', date: '2026-11-23', civilDate: '2026-11-23' });
     expect(s.halachic.confirmedAt).toBeNull();
     const customs = await c.put('/api/halachic', BASIC);
     expect(customs.json.state.halachic.confirmedAt).toBe(START);
@@ -1058,7 +1058,7 @@ describe('settings', () => {
     expect(en.labels.kinds).toEqual({ flow: 'Flow', stain: 'Stain', hefsek: 'Hefsek taharah', broken: 'Count broken', mikvah: 'Immersion' });
     expect(en.halachic.choices[0].title).toBe('Days before the hefsek taharah');
     expect(en.halachic.tzeitTitle).toBe('Nightfall');
-    expect(en.entries[0].text).toBe('Flow: Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
+    expect(en.entries[0].text).toBe('Flow: Sunday, 12 Kislev 5787, by day');
     expect(en.upcoming.map((e: any) => e.title)).toContain('Hefsek taharah (by 4:33 PM)');
     expect(JSON.stringify(en)).not.toMatch(/[֐-׿]/);
 
@@ -1069,11 +1069,13 @@ describe('settings', () => {
     expect(he.labels.kinds).toEqual({ flow: 'ראייה', stain: 'כתם', hefsek: 'הפסק טהרה', broken: 'Count broken', mikvah: 'טבילה' });
     expect(he.labels.reminders.onah).toBe('עונת פרישה');
     expect(he.halachic.choices[0].title).toBe('Days before the הפסק טהרה');
-    expect(he.entries[0].text).toBe('ראייה: Sunday, י״ב כסלו תשפ״ז (Nov 22, 2026), by day');
+    expect(he.entries[0].text).toBe('ראייה: Sunday, י״ב כסלו תשפ״ז, by day');
     expect(he.today.hebrew).toBe('Monday, י״ג כסלו תשפ״ז');
     expect(he.upcoming.map((e: any) => e.title)).toContain('הפסק טהרה (by 4:33 PM)');
-    // the choice changes wording only: the same events at the same times
-    expect(he.upcoming.map((e: any) => [e.key, e.when])).toEqual(en.upcoming.map((e: any) => [e.key, e.when]));
+    // the choice changes wording only: the same events at the same times; a Hebrew date is in the chosen script
+    expect(he.upcoming.map((e: any) => e.key)).toEqual(en.upcoming.map((e: any) => e.key));
+    expect(en.upcoming.find((e: any) => e.kind === 'mikvah').when).toBe('Thursday night, eve of 24 Kislev, after 5:16 PM');
+    expect(he.upcoming.find((e: any) => e.kind === 'mikvah').when).toBe('Thursday night, eve of כ״ד כסלו, after 5:16 PM');
     expect(JSON.stringify(he)).not.toMatch(/[{}]\w+[{}]|\{[a-z_]+\}/);
     // text messages stay in English letters whichever is chosen
     for (const r of he.reminders) expect(r.text).not.toMatch(/[֐-׿]/);
@@ -1100,7 +1102,7 @@ describe('recording on the website', () => {
   it('records a period from start to immersion, and says what follows each step', async () => {
     const flow = await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     expect(flow.status).toBe(200);
-    expect(flow.json.message).toBe('Recorded: flow Sun Nov 22 by day. Hefsek from Thu Nov 26.');
+    expect(flow.json.message).toBe('Recorded: flow yesterday by day. Hefsek from Thu.');
     expect(flow.json.state.status.headline).toBe('Niddah, before the hefsek taharah');
     expect(flow.json.state.entries[0]).toMatchObject({ kind: 'flow', source: 'dashboard' });
 
@@ -1109,17 +1111,17 @@ describe('recording on the website', () => {
 
     world.clock.now = at(11, 26, 16);
     const hefsek = await c.post('/api/entries', { kind: 'hefsek', when: 'now' });
-    expect(hefsek.json.message).toBe('Recorded: hefsek Thu Nov 26. Clean days Fri Nov 27 - Thu Dec 3. Mikvah Thu Dec 3 after 5:16 PM.');
+    expect(hefsek.json.message).toBe('Recorded: hefsek today. Clean days from tomorrow. Mikvah Thu night, eve of 24 Kislev after 5:16 PM.');
     expect(hefsek.json.state.status.headline).toBe('Niddah, after the hefsek taharah');
 
     world.clock.now = at(11, 30, 10);
     const early = await c.post('/api/entries', { kind: 'mikvah', when: 'now' });
     expect(early.status).toBe(400);
-    expect(early.json.error).toBe('Not recorded: the count is not complete. Mikvah night is Thu Dec 3 after 5:16 PM.');
+    expect(early.json.error).toBe('Not recorded: the count is not complete. Mikvah night is Thu night after 5:16 PM.');
 
     world.clock.now = at(12, 3, 20);
     const mikvah = await c.post('/api/entries', { kind: 'mikvah', when: 'now' });
-    expect(mikvah.json.message).toBe('Recorded: mikvah Thu Dec 3 night.');
+    expect(mikvah.json.message).toBe('Recorded: mikvah tonight.');
     expect(mikvah.json.state.status.headline).toBe('Tehorah');
     expect(mikvah.json.state.entries).toHaveLength(3);
     expect(mikvah.json.state.setup.find((x: any) => x.key === 'entry').done).toBe(true);
@@ -1158,7 +1160,7 @@ describe('recording on the website', () => {
     const clean = evening.upcoming.filter((u: any) => u.kind === 'clean_day').map((u: any) => u.date);
     expect(clean).toEqual(['2026-11-27', '2026-11-28', '2026-11-29', '2026-11-30', '2026-12-01', '2026-12-02', '2026-12-03']);
     const mikvah = evening.upcoming.find((u: any) => u.kind === 'mikvah');
-    expect(mikvah).toMatchObject({ date: '2026-12-03', endDate: '2026-12-03', when: 'Thu Dec 3, after 5:16 PM' });
+    expect(mikvah).toMatchObject({ date: '2026-12-03', endDate: '2026-12-03', when: 'Thursday night, eve of 24 Kislev, after 5:16 PM' });
     const night = evening.upcoming.find((u: any) => u.kind === 'onah' && u.date !== u.endDate);
     if (night) expect(night.endDate > night.date).toBe(true);
 
@@ -1225,7 +1227,7 @@ describe('husband and wife on one account', () => {
     world.clock.now = at(11, 27, 15);
     await text(WIFE, 'hefsek today', 'ev-w1');
     expect((await husband.state()).entries).toHaveLength(2);
-    expect(textsTo(WIFE).at(-1)).toMatch(/^Recorded: hefsek Fri Nov 27\./);
+    expect(textsTo(WIFE).at(-1)).toMatch(/^Recorded: hefsek today\./);
   });
 
   it('a phone that is already on the account is not added twice, and an account holds four at most', async () => {
@@ -1325,17 +1327,17 @@ describe('text messages', () => {
 
   it('records a command and replies', async () => {
     expect(await text(HUSBAND, 'period now', 'ev1')).toBe(200);
-    expect(replies()).toEqual(['Recorded: flow Mon Nov 23 by day. Hefsek from Fri Nov 27.\nReply: UNDO, STATUS']);
+    expect(replies()).toEqual(['Recorded: flow today by day. Hefsek from Fri.\nReply: UNDO, STATUS']);
     const s = await c.state();
     expect(s.entries[0]).toMatchObject({ kind: 'flow', source: 'sms' });
     expect(s.messages.map((m: any) => [m.direction, m.phone, m.body, m.status])).toEqual([
-      ['out', '0101', 'Recorded: flow Mon Nov 23 by day. Hefsek from Fri Nov 27.\nReply: UNDO, STATUS', 'sent'],
+      ['out', '0101', 'Recorded: flow today by day. Hefsek from Fri.\nReply: UNDO, STATUS', 'sent'],
       ['in', '0101', 'period now', 'received'],
     ]);
     await text(HUSBAND, 'status', 'ev2');
-    expect(replies().at(-1)).toMatch(/^Niddah since Mon Nov 23\./);
+    expect(replies().at(-1)).toMatch(/^Niddah since today\./);
     await text(HUSBAND, 'undo', 'ev3');
-    expect(replies().at(-1)).toMatch(/^Removed: flow Mon Nov 23 by day\. Tehorah\./);
+    expect(replies().at(-1)).toMatch(/^Removed: flow today by day\. Tehorah\./);
     expect((await c.state()).entries).toEqual([]);
     await text(HUSBAND, 'what?', 'ev4');
     expect(replies().at(-1)).toMatch(/^Not understood; nothing was changed\./);
@@ -1518,7 +1520,7 @@ describe('reminders', () => {
     world.clock.now = at(11, 26, 14, 34);
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
-    expect(reminders(WIFE)[0]).toBe('Hefsek tahara: Thu Nov 26, before sunset at 4:33 PM.\nReply: DONE, STATUS');
+    expect(reminders(WIFE)[0]).toBe('Hefsek tahara: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
     expect(reminders(HUSBAND)).toEqual([]); // he did not turn reminders on
     world.clock.now += MINUTE;
     await run();
@@ -1533,19 +1535,19 @@ describe('reminders', () => {
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     world.clock.now = at(11, 26, 14, 34);
     await run();
-    expect(reminders(WIFE).at(-1)).toBe('Hefsek tahara: Thu Nov 26, before sunset at 4:33 PM.\nReply: DONE, STATUS');
+    expect(reminders(WIFE).at(-1)).toBe('Hefsek tahara: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
     // DONE, written in words, an hour later
     world.clock.now = at(11, 26, 15, 40);
     await text(WIFE, 'Done.', 'ev-done');
-    expect(reminders(WIFE).at(-1)).toMatch(/^Recorded: hefsek Thu Nov 26\. Clean days Fri Nov 27 - Thu Dec 3\. Mikvah Thu Dec 3 after 5:1\d PM\.\nReply: UNDO, STATUS$/);
+    expect(reminders(WIFE).at(-1)).toMatch(/^Recorded: hefsek today\. Clean days from tomorrow\. Mikvah Thu night, eve of 24 Kislev after 5:1\d PM\.\nReply: UNDO, STATUS$/);
     const s = await c.state();
     expect(s.entries.map((e: any) => e.kind)).toEqual(['hefsek', 'flow']);
     // the next reminder (a clean day) offers STATUS, which answers with the status
     world.clock.now = at(11, 27, 8, 1);
     await run();
-    expect(reminders(WIFE).at(-1)).toMatch(/^Clean day 1 of 7 is Fri Nov 27: bedikah in the morning and again before sunset at 4:3\d PM\. Required on this day\.\nReply: STATUS$/);
+    expect(reminders(WIFE).at(-1)).toMatch(/^Clean day 1 of 7 is today: bedikah in the morning and again before sunset at 4:3\d PM\. Required on this day\.\nReply: STATUS$/);
     await text(WIFE, 'STATUS', 'ev-status');
-    expect(reminders(WIFE).at(-1)).toMatch(/^Clean day 1 of 7\. Mikvah Thu Dec 3 after 5:1\d PM\.\nReply: PERIOD, HEFSEK, HISTORY, MORE$/);
+    expect(reminders(WIFE).at(-1)).toMatch(/^Clean day 1 of 7\. Mikvah Thu night after 5:1\d PM\.\nReply: PERIOD, HEFSEK, HISTORY, MORE$/);
     // DONE now matches nothing: the options of the last text are the status's
     await text(WIFE, 'DONE', 'ev-late');
     expect(reminders(WIFE).at(-1)).toBe('Not understood; nothing was changed.\nReply: PERIOD, HEFSEK, STATUS, MORE');
@@ -1557,7 +1559,7 @@ describe('reminders', () => {
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     world.clock.now = at(11, 26, 14, 34);
     await run();
-    expect(reminders(WIFE).at(-1)).toBe('H Thu Nov 26 before 4:33 PM.\nReply: DONE, STATUS');
+    expect(reminders(WIFE).at(-1)).toBe('H today before 4:33 PM.\nReply: DONE, STATUS');
     await text(WIFE, 'done', 'ev-done');
     expect((await c.state()).entries.map((e: any) => e.kind)).toEqual(['hefsek', 'flow']);
   });
@@ -1574,14 +1576,14 @@ describe('reminders', () => {
     world.clock.now = at(11, 27, 9, 1);
     await run();
     await run();
-    expect(reminders(WIFE).filter(t => t.startsWith('Book'))).toEqual([expect.stringMatching(/^Book the mikvah: mikvah night is Thu Dec 3, after 5:1\d PM\.\nReply: STATUS$/)]);
+    expect(reminders(WIFE).filter(t => t.startsWith('Book'))).toEqual([expect.stringMatching(/^Book the mikvah: mikvah night is Thu night, after 5:1\d PM\.\nReply: STATUS$/)]);
     // the mikvah night and the morning after: no question, no prompt
     world.clock.now = at(12, 3, 16);
     await run();
     world.clock.now = at(12, 4, 9, 30);
     await run();
     const all = reminders(WIFE);
-    expect(all.find(t => t.startsWith('Mikvah night'))).toMatch(/^Mikvah night: Thu Dec 3, after 5:1\d PM\.\nReply: STATUS$/);
+    expect(all.find(t => t.startsWith('Mikvah night'))).toMatch(/^Mikvah night: tonight, after 5:1\d PM\.\nReply: STATUS$/);
     for (const t of all) expect(t).not.toMatch(/Reply 4|immers|not recorded|no M recorded/i);
     expect((await c.state()).status).toMatchObject({ phase: 'tehorah' });
   });
@@ -1711,7 +1713,7 @@ describe('reminders', () => {
     world.clock.now += 6 * MINUTE;
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
-    expect(reminders(WIFE)[0]).toMatch(/^Hefsek tahara: Thu Nov 26/);
+    expect(reminders(WIFE)[0]).toMatch(/^Hefsek tahara: today/);
   });
 
   it('while texting stays off, a due reminder is dropped once its time is over', async () => {
@@ -2344,13 +2346,13 @@ describe('the test account', () => {
     // commands change the account, and the reply comes with the new picture
     expect(await demoText(c, 'undo')).toBe('Nothing recent to undo.\nReply: HISTORY, MENU');
     const flow = await c.post('/api/demo/text', { text: 'period now' });
-    expect(flow.json.reply).toBe('Recorded: flow Mon Nov 23 by day. The count is cancelled; a new hefsek is needed.\nReply: UNDO, STATUS');
+    expect(flow.json.reply).toBe('Recorded: flow today by day. The count is cancelled; a new hefsek is needed.\nReply: UNDO, STATUS');
     expect(flow.json.replies[0].suggestions).toEqual([{ label: 'UNDO', send: 'UNDO' }, { label: 'STATUS', send: 'STATUS' }]);
     expect(flow.json.state.entryCount).toBe(15);
     expect(flow.json.state.entries[0]).toMatchObject({ kind: 'flow', source: 'sms' });
     expect(flow.json.state.status.headline).toBe('Niddah, before the hefsek taharah');
     const undo = await c.post('/api/demo/text', { text: 'undo' });
-    expect(undo.json.reply).toMatch(/^Removed: flow Mon Nov 23 by day\. Clean day 5 of 7\./);
+    expect(undo.json.reply).toMatch(/^Removed: flow today by day\. Clean day 5 of 7\./);
     expect(undo.json.state.entryCount).toBe(14);
 
     // a phone that may not record by text is told so
@@ -2563,9 +2565,24 @@ describe('the month calendar on the dashboard', () => {
     for (let i = 1; i < grid.days.length; i++) {
       expect(Date.parse(`${grid.days[i].date}T00:00:00Z`) - Date.parse(`${grid.days[i - 1].date}T00:00:00Z`)).toBe(DAY);
     }
-    expect(grid.days[62]).toEqual({ date: '2026-11-23', hebrewDay: '13', hebrewMonth: 'Kislev', monthStart: false, rest: false, sunrise: expect.any(String), sunset: expect.any(String) });
-    expect(grid.days[0]).toMatchObject({ hebrewDay: '11', hebrewMonth: 'Tishrei' });
-    expect(grid.days[186]).toMatchObject({ hebrewDay: '18', hebrewMonth: 'Adar II', rest: true }); // a Shabbat
+    expect(grid.days[62]).toEqual({
+      date: '2026-11-23',
+      hebrewDay: '13',
+      hebrewMonth: 'Kislev',
+      hebrewYear: 5787,
+      hebrewYearText: '5787',
+      hebrewMonthId: '5787-09',
+      monthStart: false,
+      rest: false,
+      sunrise: expect.any(String),
+      sunset: expect.any(String),
+    });
+    expect(grid.days[0]).toMatchObject({ hebrewDay: '11', hebrewMonth: 'Tishrei', hebrewMonthId: '5787-07' });
+    expect(grid.days[186]).toMatchObject({ hebrewDay: '18', hebrewMonth: 'Adar II', hebrewMonthId: '5787-13', rest: true }); // a Shabbat
+    expect(day(grid, '2027-02-08')).toMatchObject({ hebrewMonth: 'Adar I', hebrewMonthId: '5787-12', monthStart: true });
+    // a Hebrew-month view groups the days by their month's id: each month's days are together, and each has one id
+    const ids = grid.days.map((d: any) => d.hebrewMonthId);
+    expect(new Set(ids).size).toBe(grid.days.filter((d: any, i: number) => i === 0 || d.monthStart).length);
     // the 1st of each month, and the two Adars of a leap year
     expect(grid.days.filter((d: any) => d.monthStart).map((d: any) => `${d.date} ${d.hebrewMonth}`)).toEqual([
       '2026-10-12 Cheshvan',
@@ -2613,6 +2630,7 @@ describe('the month calendar on the dashboard', () => {
     expect(day(grid, '2026-09-26')).toMatchObject({ hebrewDay: 'ט״ו', hebrewMonth: 'תשרי' });
     expect(day(grid, '2027-02-08')).toMatchObject({ hebrewDay: 'א׳', hebrewMonth: 'אדר א׳' });
     expect(day(grid, '2027-03-27')).toMatchObject({ hebrewDay: 'י״ח', hebrewMonth: 'אדר ב׳' });
+    expect(day(grid, '2027-03-27')).toMatchObject({ hebrewYear: 5787, hebrewYearText: 'תשפ״ז', hebrewMonthId: '5787-13' });
   });
 
   it('has the calendar\'s events that touch those days, in order, with their civil dates and times', async () => {

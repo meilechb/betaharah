@@ -104,9 +104,9 @@ describe('the setup conversation', () => {
     const p = started();
     p.send('08701');
     p.send('KEEP FOR NOW');
-    expect(p.say('Nov 1 night')).toBe('Recorded: flow Sun Nov 1 night, 2026. Hefsek from Fri Nov 6. Hefsek done? Its date, for example: Nov 27.');
+    expect(p.say('Nov 1 night')).toBe('Recorded: flow Sun night, Nov 1, 2026. Hefsek from Fri, Nov 6. Hefsek done? Its date, for example: Nov 27.');
     expect(p.options()).toEqual(['NOT YET']);
-    expect(p.say('Nov 6')).toMatch(/^Recorded: hefsek Fri Nov 6, 2026\. Clean days Sat Nov 7 - Fri Nov 13\. Mikvah Fri Nov 13 after \d:\d\d PM\. Setup is done\. Reminders are off for now\.$/);
+    expect(p.say('Nov 6')).toMatch(/^Recorded: hefsek Fri, Nov 6, 2026\. Clean days from Shabbat, Nov 7\. Mikvah Fri night, Nov 13 after \d:\d\d PM\. Setup is done\. Reminders are off for now\.$/);
     expect(p.options()).toEqual(['PERIOD', 'HEFSEK', 'REMINDERS', 'MORE']);
     const q = started();
     q.send('08701');
@@ -228,24 +228,24 @@ describe('recording', () => {
   it('NOW, LAST NIGHT and TODAY BY DAY record, each confirmed with UNDO and STATUS', () => {
     const p = new Phone(household(), at(2026, 11, 24, 12));
     p.send('period');
-    expect(p.say('NOW')).toBe('Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.');
+    expect(p.say('NOW')).toBe('Recorded: flow today by day. Hefsek from Shabbat.');
     expect(p.options()).toEqual(['UNDO', 'STATUS']);
     p.send('UNDO');
     p.send('period');
-    expect(p.say('last night')).toBe('Recorded: flow Mon Nov 23 night. Hefsek from Sat Nov 28.');
+    expect(p.say('last night')).toBe('Recorded: flow last night. Hefsek from Shabbat.');
     const n = new Phone(household(), at(2026, 11, 24, 21));
     n.send('flow');
-    expect(n.say('today by day')).toBe('Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.');
+    expect(n.say('today by day')).toBe('Recorded: flow today by day. Hefsek from Shabbat.');
   });
   it('written words record too: "period yesterday night", "period now", "flow at 9pm", "stain day"', () => {
     const p = new Phone(household(), at(2026, 11, 24, 12));
-    expect(p.say('period yesterday night')).toBe('Recorded: flow Mon Nov 23 night. Hefsek from Sat Nov 28.');
+    expect(p.say('period yesterday night')).toBe('Recorded: flow last night. Hefsek from Shabbat.');
     p.say('undo');
-    expect(p.say('my period started now')).toBe('Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.');
+    expect(p.say('my period started now')).toBe('Recorded: flow today by day. Hefsek from Shabbat.');
     p.say('undo');
-    expect(p.say('flow at 9pm')).toMatch(/^Recorded: flow Mon Nov 23 night\./);
+    expect(p.say('flow at 9pm')).toMatch(/^Recorded: flow last night\./);
     p.say('undo');
-    expect(p.say('stain day')).toBe('Recorded: stain Tue Nov 24 by day. Hefsek from Sat Nov 28.');
+    expect(p.say('stain day')).toBe('Recorded: stain today by day. Hefsek from Shabbat.');
   });
   it('words that do not say when ask "when?" and record nothing', () => {
     const data = household();
@@ -259,9 +259,9 @@ describe('recording', () => {
     p.wait(1);
     expect(p.say('hefsek')).toBe('Hefsek tahara: which day?');
     expect(p.options()).toEqual(['TODAY', 'YESTERDAY', 'ANOTHER DAY']);
-    expect(p.say('today')).toMatch(/^Recorded: hefsek Sat Nov 28\. Clean days Sun Nov 29 - Sat Dec 5\. Mikvah Sat Dec 5 after \d:\d\d PM\.$/);
+    expect(p.say('today')).toMatch(/^Recorded: hefsek today\. Clean days from tomorrow\. Mikvah Sat night, Dec 5 after \d:\d\d PM\.$/);
     p.send('undo');
-    expect(p.say('hefsek yesterday')).toMatch(/^Recorded: hefsek Fri Nov 27\./);
+    expect(p.say('hefsek yesterday')).toMatch(/^Recorded: hefsek yesterday\. Clean days from today\. Mikvah Fri night after/);
   });
   it('the immersion is under MORE, OTHER ENTRIES; nothing prompts for it', () => {
     const p = new Phone(household(), at(2026, 12, 5, 10));
@@ -273,7 +273,7 @@ describe('recording', () => {
     expect(p.options()).toEqual(['STAIN', 'COUNT BROKEN', 'IMMERSION']);
     expect(p.say('immersion')).toBe('Immersion: which night?');
     expect(p.options()).toEqual(['LAST NIGHT', 'ANOTHER DAY']);
-    expect(p.say('last night')).toBe('Recorded: mikvah Fri Dec 4 night.');
+    expect(p.say('last night')).toBe('Recorded: mikvah last night.');
   });
   it('COUNT BROKEN and the refusals', () => {
     const p = new Phone(household(), at(2026, 11, 24, 12));
@@ -291,7 +291,7 @@ describe('recording', () => {
     expect(p.say('undo')).toBe('Nothing recent to undo.');
     expect(p.options()).toEqual(['HISTORY', 'MENU']);
     p.send('period now');
-    expect(p.say('UNDO')).toBe('Removed: flow Tue Nov 24 by day. Tehorah.');
+    expect(p.say('UNDO')).toBe('Removed: flow today by day. Tehorah.');
   });
 });
 
@@ -301,17 +301,17 @@ describe('status', () => {
     expect(p.say('status')).toBe('Tehorah.');
     expect(p.options()).toEqual(['PERIOD', 'HEFSEK', 'HISTORY', 'MORE']);
     p.send('period 11/22 night');
-    expect(p.say('status')).toMatch(/^Niddah since Mon Nov 23\. Hefsek from Fri Nov 27 before \d:\d\d PM\.$/);
+    expect(p.say('status')).toMatch(/^Niddah since Sun night, Nov 22\. Hefsek from Fri before \d:\d\d PM\.$/);
     p.now = at(2026, 11, 28, 12);
-    expect(p.say('status')).toMatch(/^Niddah since Mon Nov 23\. Hefsek from Fri Nov 27; next possible Sat Nov 28 before \d:\d\d PM\.$/);
+    expect(p.say('status')).toMatch(/^Niddah since Sun night, Nov 22\. Hefsek can be done today before \d:\d\d PM\.$/);
     p.send('hefsek today');
-    expect(p.say('status')).toMatch(/^Hefsek done Sat Nov 28\. Clean day 1 is Sun Nov 29\. Mikvah Sat Dec 5 after \d:\d\d PM\.$/);
+    expect(p.say('status')).toMatch(/^Clean days begin tomorrow\. Mikvah Sat night, Dec 5 after \d:\d\d PM\.$/);
     p.now = at(2026, 12, 1, 12);
-    expect(p.say('where')).toMatch(/^Clean day 3 of 7\. Mikvah Sat Dec 5 after \d:\d\d PM\.$/);
+    expect(p.say('where')).toMatch(/^Clean day 3 of 7\. Mikvah Sat night after \d:\d\d PM\.$/);
     p.now = at(2026, 12, 5, 19);
     expect(p.say('status')).toMatch(/^(Mikvah tonight after \d:\d\d PM\.|Count complete; no immersion tonight\. Mikvah .*)$/);
     p.now = at(2026, 12, 7, 12);
-    expect(p.say('status')).toMatch(/^Tehorah\. Next onah: \d+:\d\d [AP]M \w{3} \w{3} \d+\.$/);
+    expect(p.say('status')).toMatch(/^Tehorah\. Next onah: \d+:\d\d [AP]M \w{3}( night)?, \w{3} \d+\.$/);
   });
   it('without a location', () => {
     const p = new Phone(household({ place: false }));
@@ -326,22 +326,22 @@ describe('history', () => {
     const p = new Phone(data, at(2026, 11, 24, 12));
     p.send('period 11/1 day');
     p.send('hefsek 11/6');
-    expect(p.say('history')).toBe('Latest: first: hefsek Fri Nov 6; second: flow Sun Nov 1 by day. Erase one?');
+    expect(p.say('history')).toBe('Latest: first: hefsek Fri, Nov 6; second: flow Sun, Nov 1 by day. Erase one?');
     expect(p.options()).toEqual(['FIRST', 'SECOND', 'MENU']);
-    expect(p.say('second')).toBe('Erase flow Sun Nov 1 by day?');
+    expect(p.say('second')).toBe('Erase flow Sun, Nov 1 by day?');
     expect(p.options()).toEqual(['YES', 'NO']);
     expect(p.say('no')).toBe('Nothing was changed.');
     expect(data.entries).toHaveLength(2);
     p.send('history');
     p.send('first');
-    expect(p.say('yes')).toMatch(/^Erased: hefsek Fri Nov 6\. Niddah since Sun Nov 1\./);
+    expect(p.say('yes')).toMatch(/^Erased: hefsek Fri, Nov 6\. Niddah since Sun, Nov 1\./);
     expect(data.entries).toHaveLength(1);
   });
   it('none yet; the year shown when not this year', () => {
     const p = new Phone(household());
     expect(p.say('history')).toBe('No entries yet.');
     p.send('period 12/20/2025 day');
-    expect(p.say('history')).toBe('Latest: first: flow Sat Dec 20 by day, 2025. Erase one?');
+    expect(p.say('history')).toBe('Latest: first: flow Shabbat, Dec 20, 2025 by day. Erase one?');
   });
 });
 

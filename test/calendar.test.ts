@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toICalendar } from '../src/app/ics';
 import { entryText, noteText, patternText, statusLines, warningText } from '../src/app/wording';
-import { buildCalendar, civilDate, fullDate, onahLabel, reasonText, weekday, type CalendarOptions } from '../src/engine/calendar';
+import { buildCalendar, civilDate, reasonText, weekday, type CalendarOptions } from '../src/engine/calendar';
 import { civilToAbs, localDateTime, localToInstant } from '../src/engine/civil';
 import type { LogEntry } from '../src/engine/cycle';
 import { choicesFor, DEFAULT_HALACHIC_SETTINGS, HALACHIC_CHOICES, tzeitPresetsFor } from '../src/engine/settings';
@@ -16,8 +16,8 @@ const TZ = LAKEWOOD.timeZone;
 const ZOPTS = { useElevation: false, tzeit: BASIC.tzeit };
 const at = (y: number, m: number, d: number, hh: number, mi = 0): number => localToInstant({ y, m, d, hh, mi, ss: 0 }, TZ);
 const SUN = civilToAbs({ y: 2026, m: 11, d: 22 });
-const EN: CalendarOptions = { style: 'words', lang: 'en', timeZone: TZ };
-const HE: CalendarOptions = { style: 'words', lang: 'he', timeZone: TZ };
+const EN: CalendarOptions = { style: 'words', lang: 'en', timeZone: TZ, dates: 'civil' };
+const HE: CalendarOptions = { style: 'words', lang: 'he', timeZone: TZ, dates: 'civil' };
 const HEBREW = /[֐-׿]/;
 
 const timeline = (entries: LogEntry[], now: number, patch = {}) =>
@@ -82,13 +82,6 @@ describe('dates in words', () => {
     expect(weekday(SUN)).toBe('Sunday');
     expect(weekday(SUN + 6)).toBe('Shabbat');
     expect(civilDate(SUN)).toBe('Nov 22, 2026');
-    expect(fullDate(SUN, 'en')).toBe('Sunday, 12 Kislev 5787 (Nov 22, 2026)');
-  });
-
-  it('names a night by the evening on which it begins, with the Hebrew date it belongs to', () => {
-    // The night of 12 Kislev begins on the evening of Saturday 21 November.
-    expect(onahLabel({ abs: SUN, part: 'night' }, 'en')).toBe('Saturday evening, Nov 21, 2026 (the night of 12 Kislev 5787)');
-    expect(onahLabel({ abs: SUN, part: 'day' }, 'en')).toBe('Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
   });
 
   it('names each reason', () => {
@@ -178,7 +171,7 @@ describe('calendar events', () => {
 
   it('discreet style has no words and no descriptions, whichever form of terms is chosen', () => {
     for (const lang of ['en', 'he'] as const) {
-      const events = buildCalendar(timeline([flow], at(2026, 11, 23, 10), { orZarua: 'yes' }), { style: 'discreet', lang, timeZone: TZ });
+      const events = buildCalendar(timeline([flow], at(2026, 11, 23, 10), { orZarua: 'yes' }), { style: 'discreet', lang, timeZone: TZ, dates: 'hebrew' });
       for (const e of events) {
         expect(e.description).toBe('');
         expect(e.title).not.toMatch(HEBREW);
@@ -228,20 +221,21 @@ describe('calendar events', () => {
 
 describe('wording for the dashboard', () => {
   it('describes where things stand at each stage', () => {
-    const lines = (entries: LogEntry[], now: number, lang: 'en' | 'he' = 'en') => statusLines(timeline(entries, now), TZ, lang);
+    // Civil dates; the three settings are tested in test/dates.test.ts.
+    const lines = (entries: LogEntry[], now: number, lang: 'en' | 'he' = 'en') => statusLines(timeline(entries, now), TZ, lang, 'civil');
     expect(lines([], at(2026, 11, 23, 10))).toEqual({ headline: 'Tehorah', detail: '' });
     expect(lines([], at(2026, 11, 23, 10), 'he')).toEqual({ headline: 'טהורה', detail: '' });
-    expect(lines([flow], at(2026, 11, 23, 10))).toEqual({ headline: 'Niddah, before the hefsek taharah', detail: 'Hefsek taharah from Thu, Nov 26, before 4:33 PM.' });
+    expect(lines([flow], at(2026, 11, 23, 10))).toEqual({ headline: 'Niddah, before the hefsek taharah', detail: 'Hefsek taharah from Thursday, before 4:33 PM.' });
     // once the first day has passed, the next day it can be done
-    expect(lines([flow], at(2026, 11, 27, 10)).detail).toBe('Hefsek taharah from Fri, Nov 27, before 4:33 PM.');
+    expect(lines([flow], at(2026, 11, 27, 10)).detail).toBe('Hefsek taharah from today, before 4:33 PM.');
     // on the afternoon of the hefsek, before sunset; from sunset on it is the first clean day
     expect(lines([flow, hefsek], at(2026, 11, 26, 16))).toEqual({
       headline: 'Niddah, after the hefsek taharah',
-      detail: 'The seven clean days begin Fri, Nov 27. Mikvah night: Thu, Dec 3, after 5:16 PM.',
+      detail: 'The seven clean days begin tomorrow. Mikvah night: Thursday night, Dec 3, after 5:16 PM.',
     });
-    expect(lines([flow, hefsek], at(2026, 11, 26, 20))).toEqual({ headline: 'Seven clean days: day 1', detail: 'Mikvah night: Thu, Dec 3, after 5:16 PM.' });
-    expect(lines([flow, hefsek], at(2026, 11, 29, 10))).toEqual({ headline: 'Seven clean days: day 3', detail: 'Mikvah night: Thu, Dec 3, after 5:16 PM.' });
-    expect(lines([flow, hefsek], at(2026, 11, 29, 10), 'he')).toEqual({ headline: 'שבעה נקיים: day 3', detail: 'ליל טבילה: Thu, Dec 3, after 5:16 PM.' });
+    expect(lines([flow, hefsek], at(2026, 11, 26, 20))).toEqual({ headline: 'Seven clean days: day 1', detail: 'Mikvah night: Thursday night, Dec 3, after 5:16 PM.' });
+    expect(lines([flow, hefsek], at(2026, 11, 29, 10))).toEqual({ headline: 'Seven clean days: day 3', detail: 'Mikvah night: Thursday night, after 5:16 PM.' });
+    expect(lines([flow, hefsek], at(2026, 11, 29, 10), 'he')).toEqual({ headline: 'שבעה נקיים: day 3', detail: 'ליל טבילה: Thursday night, after 5:16 PM.' });
     expect(lines([flow, hefsek], at(2026, 12, 3, 19))).toEqual({ headline: 'Mikvah night', detail: 'Immersion after 5:16 PM.' });
     expect(lines([flow, hefsek], at(2026, 12, 3, 19), 'he')).toEqual({ headline: 'ליל טבילה', detail: 'טבילה after 5:16 PM.' });
     // the morning after the mikvah night, with no immersion recorded: tehorah
@@ -252,15 +246,18 @@ describe('wording for the dashboard', () => {
   });
 
   it('describes each kind of entry', () => {
-    expect(entryText(flow, 'en')).toBe('Flow: Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
-    expect(entryText({ id: 'x', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: false }, 'en')).toBe(
-      'Flow: Saturday evening, Nov 21, 2026 (the night of 12 Kislev 5787) (not counted for vesatot)',
+    expect(entryText(flow, 'en', 'both')).toBe('Flow: Sunday, Nov 22, 2026 (12 Kislev 5787), by day');
+    expect(entryText({ id: 'x', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: false }, 'en', 'both')).toBe(
+      'Flow: Saturday night, Nov 21, 2026 (eve of 12 Kislev 5787) (not counted for vesatot)',
     );
-    expect(entryText({ id: 'x', kind: 'stain', onah: { abs: SUN, part: 'day' } }, 'he')).toBe('כתם: Sunday, י״ב כסלו תשפ״ז (Nov 22, 2026), by day');
-    expect(entryText({ id: 'x', kind: 'broken', onah: { abs: SUN, part: 'day' } }, 'en')).toBe('Count broken: Sunday, 12 Kislev 5787 (Nov 22, 2026), by day');
-    expect(entryText(hefsek, 'en')).toBe('Hefsek taharah: Thursday, 16 Kislev 5787 (Nov 26, 2026)');
+    expect(entryText({ id: 'x', kind: 'stain', onah: { abs: SUN, part: 'day' } }, 'he', 'both')).toBe('כתם: Sunday, Nov 22, 2026 (י״ב כסלו תשפ״ז), by day');
+    expect(entryText({ id: 'x', kind: 'broken', onah: { abs: SUN, part: 'day' } }, 'en', 'hebrew')).toBe('Count broken: Sunday, 12 Kislev 5787, by day');
+    expect(entryText(hefsek, 'en', 'hebrew')).toBe('Hefsek taharah: Thursday, 16 Kislev 5787');
+    expect(entryText(hefsek, 'en', 'civil')).toBe('Hefsek taharah: Thursday, Nov 26, 2026');
     // an immersion is stored under the Hebrew date of its night, and shown by the evening
-    expect(entryText({ id: 'm', kind: 'mikvah', abs: SUN + 12 }, 'en')).toBe('Immersion: Thursday evening, Dec 3, 2026 (the night of 24 Kislev 5787)');
+    expect(entryText({ id: 'm', kind: 'mikvah', abs: SUN + 12 }, 'en', 'both')).toBe('Immersion: Thursday night, Dec 3, 2026 (eve of 24 Kislev 5787)');
+    // Shabbat by day
+    expect(entryText({ id: 'x', kind: 'stain', onah: { abs: SUN + 6, part: 'day' } }, 'en', 'civil')).toBe('Stain: Shabbat, Nov 28, 2026, by day');
   });
 
   it('has a sentence for every warning, pattern and note, in both forms, with nothing left unfilled', () => {

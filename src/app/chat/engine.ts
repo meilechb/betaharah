@@ -36,6 +36,7 @@
  * sent to a number that has not texted in.
  */
 import { localAbs, absToCivil } from '../../engine/civil';
+import { dayWords, type DateStyle, type DateWords } from '../../engine/dates';
 import { statusMessage, type TextMessage } from '../../engine/present';
 import { onahAt } from '../../engine/zmanim';
 import { parseDayWords, parseOnahWords, resolveHefsekDay, resolveMikvahNight, resolveWhen, whenTokens, type ResolveContext, type ResolvedOnah, type WhenSpec } from '../commands';
@@ -89,11 +90,20 @@ export function inviteCode(random: () => string): string {
   return code.padEnd(8, 'A');
 }
 
-/** "flow Sun Nov 22 night", with ", 2025" when not this year. */
-function entryWithYear(e: Parameters<typeof entryEnglish>[0], thisYear: number): string {
+/**
+ * How the texts write dates: in English letters, as the household chooses,
+ * as of now ("last night", "Thu", "Sun night, Nov 22").
+ */
+function dateWords(r: Reply): DateWords {
+  const where = whereOf(r.input.data);
+  const w: DateWords = { dates: r.input.data.app.dates, lang: 'en' };
+  return where ? { ...w, today: localAbs(r.input.now, where.place.timeZone) } : w;
+}
+
+/** "flow last night", "flow Sun night, Nov 22", with the year when it is not this year. */
+function entryWithYear(r: Reply, e: Parameters<typeof entryEnglish>[0], thisYear: number): string {
   const abs = 'onah' in e ? (e.onah.part === 'day' ? e.onah.abs : e.onah.abs - 1) : e.kind === 'mikvah' ? e.abs - 1 : e.abs;
-  const y = absToCivil(abs).y;
-  return y === thisYear ? entryEnglish(e) : `${entryEnglish(e)}, ${y}`;
+  return entryEnglish(e, { ...dateWords(r), year: absToCivil(abs).y !== thisYear });
 }
 
 const ORDINAL_IDS = ['first', 'second', 'third', 'fourth', 'fifth'] as const;
@@ -232,7 +242,7 @@ function kindLists(r: Reply): { on: string; off: string } {
 // ---------- status ----------
 
 function statusOf(r: Reply, computed: Computed): { key: string; vars: Vars } {
-  return statusMessage(computed.timeline, computed.place.timeZone);
+  return statusMessage(computed.timeline, computed.place.timeZone, computed.dates);
 }
 
 function statusBody(r: Reply, computed: Computed | null): string {
@@ -350,8 +360,9 @@ function saveDated(r: Reply, kind: RecordKind, o: DatedOutcome, ctx: ChatContext
     // recordDated changed the data only for a phone that may record (readWhen checks before it is called).
     r.changed = true;
     r.computed = o.result.computed;
-    const parts = confirmationParts(o.result, o.resolved);
-    r.say(RECORD_KEY[kind], { entry: `${parts.entry}, ${o.year}`, details: parts.details });
+    // The date as it was read, in full with its year, so that a year taken as last year is never a surprise.
+    const parts = confirmationParts(o.result, o.resolved, true);
+    r.say(RECORD_KEY[kind], parts);
     if (ctx.setup) setupNext(r, kind, true);
     return;
   }
@@ -370,6 +381,10 @@ function saveDated(r: Reply, kind: RecordKind, o: DatedOutcome, ctx: ChatContext
   }
   if (o.reason === 'no_such_date') {
     r.say('date.no_such', { date: o.date }).ask({ ...ctx, kind }, 'date');
+    return;
+  }
+  if (o.reason === 'adar') {
+    r.say('date.adar').ask({ ...ctx, kind }, 'date');
     return;
   }
   refusal(r, o.reason, o.computed);
@@ -398,7 +413,7 @@ function record(r: Reply, kind: RecordKind, tokens: readonly string[], ctx: Chat
 /** Records from words, if they say when. 'unread' when they do not (nothing is changed). */
 function readWhen(r: Reply, kind: RecordKind, tokens: readonly string[], ctx: ChatContext): 'done' | 'unread' {
   const t = whenTokens(tokens);
-  if (looksLikeDate(t[0])) {
+  if (looksLikeDate(t[0], t[1])) {
     const p = parseDated(kind, t);
     if (p.kind === 'error') {
       r.say(p.problem.key, 'vars' in p.problem ? p.problem.vars : {}).ask({ ...ctx, kind }, 'date');
@@ -540,7 +555,7 @@ function undo(r: Reply): void {
   r.changed = true;
   const after = compute(data, now);
   if (after) r.computed = after;
-  r.say('undo.done', { entry: entryEnglish(last.entry), status: statusBody(r, after) });
+  r.say('undo.done', { entry: entryEnglish(last.entry, dateWords(r)), status: statusBody(r, after) });
 }
 
 // ---------- history ----------
@@ -565,7 +580,7 @@ function history(r: Reply): void {
     })
     .slice(0, 5);
   const names = ordinals(r, 'history.list');
-  const list = sorted.map((e, i) => `${names[i]}: ${entryWithYear(e.entry, year)}`).join('; ');
+  const list = sorted.map((e, i) => `${names[i]}: ${entryWithYear(r, e.entry, year)}`).join('; ');
   r.say('history.list', { list }, [...ORDINAL_IDS.slice(0, sorted.length), 'menu']).ask({ ids: sorted.map(e => e.entry.id) });
 }
 
@@ -579,7 +594,7 @@ function eraseAsk(r: Reply, id: string): void {
     r.say('refuse.read_only');
     return;
   }
-  r.say('history.erase_ask', { entry: entryWithYear(stored.entry, thisYear(r)) }).ask({ action: { type: 'erase', id } });
+  r.say('history.erase_ask', { entry: entryWithYear(r, stored.entry, thisYear(r)) }).ask({ action: { type: 'erase', id } });
 }
 
 // ---------- setup ----------
@@ -947,6 +962,30 @@ function setTerms(r: Reply, lang: 'en' | 'he'): void {
   r.say('terms.changed', { lang: name });
 }
 
+const DATE_NAMES: Record<DateStyle, string> = { hebrew: 'Hebrew', civil: 'civil', both: 'Hebrew and civil' };
+
+function dates(r: Reply, rest: readonly string[]): void {
+  const words = new Set(rest.map(w => w.toLowerCase()));
+  if (words.has('hebrew')) return setDates(r, 'hebrew');
+  if (words.has('civil')) return setDates(r, 'civil');
+  if (words.has('both')) return setDates(r, 'both');
+  r.say('dates.show', { dates: DATE_NAMES[r.input.data.app.dates] });
+}
+
+function setDates(r: Reply, style: DateStyle): void {
+  const app = r.input.data.app;
+  if (app.dates === style) {
+    r.say('dates.same', { dates: DATE_NAMES[style] });
+    return;
+  }
+  app.dates = style;
+  r.input.data.sync.dirty = true;
+  r.changed = true;
+  // Today's date, written in full the new way.
+  const today = dateWords(r).today ?? localAbs(r.input.now, 'UTC');
+  r.say('dates.changed', { dates: DATE_NAMES[style], example: dayWords(today, { dates: style, lang: 'en' }) });
+}
+
 // ---------- YES and NO ----------
 
 function confirmAnswer(r: Reply, ctx: ChatContext, id: 'yes' | 'no'): void {
@@ -976,7 +1015,7 @@ function confirmAnswer(r: Reply, ctx: ChatContext, id: 'yes' | 'no'): void {
       r.changed = true;
       const after = compute(data, r.input.now);
       if (after) r.computed = after;
-      r.say('history.erased', { entry: entryWithYear(stored.entry, year), status: statusBody(r, after) });
+      r.say('history.erased', { entry: entryWithYear(r, stored.entry, year), status: statusBody(r, after) });
       return;
     }
     case 'remove_phone': {
@@ -1099,6 +1138,8 @@ function act(r: Reply, action: string, rest: readonly string[]): void {
       return calendar(r, rest);
     case 'terms':
       return terms(r, rest);
+    case 'dates':
+      return dates(r, rest);
     case 'web':
       r.effects.push({ type: 'web_link', number: r.input.from, text: '', ifFailed: r.failed('web.failed') });
       r.say('web.link', { link: LINK_MARK });
@@ -1163,6 +1204,12 @@ function choose(r: Reply, chat: ChatState, id: string, rest: readonly string[]):
       return setTerms(r, 'he');
     case 'english':
       return setTerms(r, 'en');
+    case 'dates_hebrew':
+      return setDates(r, 'hebrew');
+    case 'dates_civil':
+      return setDates(r, 'civil');
+    case 'dates_both':
+      return setDates(r, 'both');
     case 'create_link':
     case 'show_link':
       return calendarLink(r);
@@ -1185,6 +1232,7 @@ const KEY_FAMILY: Record<string, string[]> = {
   phones: ['phones', 'add', 'leave'],
   history: ['history'],
   terms: ['terms'],
+  dates: ['dates'],
   delete: ['delete'],
   location: ['location'],
   setup: ['location', 'customs'],

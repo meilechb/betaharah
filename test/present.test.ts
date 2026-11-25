@@ -24,7 +24,8 @@ import { BASIC, M, hd, withSettings } from './helpers';
 const LAKEWOOD: GeoPoint = { latitude: 40.0821, longitude: -74.2097, timeZone: 'America/New_York', elevation: 16 };
 const TZ = LAKEWOOD.timeZone;
 const ZOPTS = { useElevation: false, tzeit: BASIC.tzeit };
-const CTX: ReminderContext = { place: LAKEWOOD, zopts: ZOPTS, yomTov: 'diaspora' };
+// Civil dates; the three settings are tested in test/dates.test.ts.
+const CTX: ReminderContext = { place: LAKEWOOD, zopts: ZOPTS, yomTov: 'diaspora', dates: 'civil' };
 const at = (y: number, m: number, d: number, hh: number, mi = 0): number => localToInstant({ y, m, d, hh, mi, ss: 0 }, TZ);
 const SUN = civilToAbs({ y: 2026, m: 11, d: 22 });
 const SAT = SUN + 6;
@@ -113,7 +114,7 @@ describe('reminders', () => {
     expect(r).toHaveLength(1);
     expect(r[0]!.key).toBe(`hefsek:f:${SUN + 4}`);
     expect(r[0]!.at).toBe(dayTimes(SUN + 4, LAKEWOOD, ZOPTS).sunset - 120 * 60_000);
-    expect(r[0]!.text).toMatch(/^Hefsek tahara: Thu Nov 26, before sunset at 4:3\d PM\.$/);
+    expect(r[0]!.text).toMatch(/^Hefsek tahara: today, before sunset at 4:3\d PM\.$/);
   });
 
   it('each later day gets its own hefsek reminder, up to the limit', () => {
@@ -129,18 +130,18 @@ describe('reminders', () => {
     expect(r.filter(x => x.kind === 'hefsek')).toEqual([]);
     const mornings = r.filter(x => x.kind === 'bedikah_morning');
     expect(mornings).toHaveLength(7);
-    expect(mornings[0]!.text).toMatch(/^Clean day 1 of 7 is Fri Nov 27: bedikah in the morning and again before sunset at 4:3\d PM\. Required on this day\.$/);
+    expect(mornings[0]!.text).toMatch(/^Clean day 1 of 7 is today: bedikah in the morning and again before sunset at 4:3\d PM\. Required on this day\.$/);
     expect(mornings[2]!.text).not.toContain('Required');
     expect(mornings[6]!.text).toContain('Required on this day.');
     const mikvah = r.filter(x => x.kind === 'mikvah');
     expect(mikvah).toHaveLength(1);
-    expect(mikvah[0]!.text).toMatch(/^Mikvah night: Thu Dec 3, after 5:\d\d PM\.$/);
+    expect(mikvah[0]!.text).toMatch(/^Mikvah night: tonight, after 5:\d\d PM\.$/);
     expect(mikvah[0]!.at).toBe(dayTimes(SUN + 11, LAKEWOOD, ZOPTS).sunset - 180 * 60_000);
     // the morning after the hefsek (recorded on its day): Friday 27 November at 9:00
     const book = r.filter(x => x.kind === 'mikvah_book');
     expect(book).toHaveLength(1);
     expect(book[0]!.key).toBe(`mikvah_book:f:${SUN + 4}`);
-    expect(book[0]!.text).toMatch(/^Book the mikvah: mikvah night is Thu Dec 3, after 5:\d\d PM\.$/);
+    expect(book[0]!.text).toMatch(/^Book the mikvah: mikvah night is Thu night, after 5:\d\d PM\.$/);
     expect(localDateTime(book[0]!.at, TZ)).toMatchObject({ m: 11, d: 27, hh: 9, mi: 0 });
     // nothing asks whether she immersed
     for (const x of r) expect(x.text).not.toMatch(/Reply 4|immersed|recorded/);
@@ -155,7 +156,7 @@ describe('reminders', () => {
     expect(plain).toHaveLength(1);
     expect(localDateTime(plain[0]!.at, TZ)).toMatchObject({ m: 11, d: 29, hh: 10, mi: 30 });
     const discreet = buildReminders(tl, { ...opts, style: 'discreet' }, late).find(x => x.kind === 'mikvah_book')!;
-    expect(discreet.text).toMatch(/^Book M: Thu Dec 3 after 5:\d\d PM\.$/);
+    expect(discreet.text).toMatch(/^Book M: Thu night after 5:\d\d PM\.$/);
     expect(discreet.key).toBe(plain[0]!.key);
     for (const text of [plain[0]!.text, discreet.text]) {
       expect(text).toMatch(/^[A-Za-z0-9 .,:]+$/);
@@ -192,7 +193,7 @@ describe('reminders', () => {
   it('the clean day that falls on Shabbat is announced on Friday, and its afternoon reminder is left out', () => {
     const r = reminders([flow, hefsek], at(2026, 11, 26, 18));
     const day2 = r.find(x => x.key === `bedikah_am:f:${SUN + 4}:2`)!; // Saturday 28 November
-    expect(day2.text).toContain('Clean day 2 of 7 is Sat Nov 28');
+    expect(day2.text).toContain('Clean day 2 of 7 is tomorrow:');
     expect(localDateTime(day2.at, TZ)).toMatchObject({ m: 11, d: 27 });
     expect(day2.at).toBeLessThan(dayTimes(SAT - 1, LAKEWOOD, ZOPTS).sunset - 18 * 60_000);
     expect(r.find(x => x.key === `bedikah_pm:f:${SUN + 4}:2`)).toBeUndefined();
@@ -210,7 +211,7 @@ describe('reminders', () => {
   it('a Saturday-night immersion is announced on Friday', () => {
     const r = reminders([flow, { id: 'h', kind: 'hefsek', abs: SUN + 6 }], at(2026, 11, 30, 10));
     const m = r.find(x => x.kind === 'mikvah')!;
-    expect(m.text).toContain('Mikvah night: Sat Dec 5');
+    expect(m.text).toContain('Mikvah night: tomorrow night,');
     expect(m.text).toContain('after Shabbat or Yom Tov');
     expect(localDateTime(m.at, TZ)).toMatchObject({ m: 12, d: 4 });
   });
@@ -228,7 +229,7 @@ describe('reminders', () => {
       .filter(x => x.kind === 'onah');
     // night and day of day 30, night and day of day 31 (which is also the 12th of Tevet): one stretch
     expect(r).toHaveLength(1);
-    expect(r[0]!.text).toMatch(/^Onah: 4:3\d PM Sun Dec 20 until 4:3\d PM Tue Dec 22\./);
+    expect(r[0]!.text).toMatch(/^Onah: 4:3\d PM tonight until 4:3\d PM Tue\./);
     expect(r[0]!.text).toContain('day 30, day 31, chodesh.');
     expect(r[0]!.text).toContain('Bedikah.');
     expect(r[0]!.at).toBe(dayTimes(SUN + 28, LAKEWOOD, ZOPTS).sunset - 120 * 60_000);
@@ -255,7 +256,7 @@ describe('reminders', () => {
   it('every text fits one SMS in the basic character set, in both styles, across a year of cases', () => {
     const basic = /^[A-Za-z0-9 .,:;()\-\/?!']+$/;
     let checked = 0;
-    for (const style of ['plain', 'discreet'] as const) {
+    for (const [style, dates] of [['plain', 'civil'], ['discreet', 'civil'], ['plain', 'hebrew'], ['plain', 'both'], ['discreet', 'both']] as const) {
       for (let offset = 0; offset < 365; offset += 3) {
         const start = SUN + offset;
         const entries: LogEntry[] = [
@@ -266,17 +267,17 @@ describe('reminders', () => {
         for (const withHefsek of [false, true]) {
           const all = withHefsek ? [...entries, { id: 'h', kind: 'hefsek', abs: start + 4 } as LogEntry] : entries;
           const t = buildTimeline({ entries: all, settings: DEFAULT_HALACHIC_SETTINGS, place: LAKEWOOD, useElevation: false, now: civil + 86_400_000 });
-          for (const r of buildReminders(t, { ...DEFAULT_REMINDER_OPTIONS, style }, CTX)) {
+          for (const r of buildReminders(t, { ...DEFAULT_REMINDER_OPTIONS, style }, { ...CTX, dates })) {
             expect(r.text, r.text).toMatch(basic);
             expect(r.text.length, r.text).toBeLessThanOrEqual(160);
             checked++;
           }
-          expect(statusText(t, TZ)).toMatch(basic);
-          expect(statusText(t, TZ).length).toBeLessThanOrEqual(160);
+          expect(statusText(t, TZ, dates)).toMatch(basic);
+          expect(statusText(t, TZ, dates).length).toBeLessThanOrEqual(160);
         }
       }
     }
-    expect(checked).toBeGreaterThan(2000);
+    expect(checked).toBeGreaterThan(5000);
   });
 
   it('each reminder stops being worth sending three hours after its time, or at the next candle lighting if that is sooner', () => {
@@ -310,16 +311,16 @@ describe('reminders', () => {
 
 describe('status line', () => {
   it('reads sensibly at each stage', () => {
-    expect(statusText(timeline([], at(2026, 11, 23, 10)), TZ)).toBe('Tehorah.');
-    expect(statusText(timeline([flow], at(2026, 11, 23, 10)), TZ)).toMatch(/^Niddah since Sun Nov 22\. Hefsek from Thu Nov 26 before 4:3\d PM\.$/);
+    expect(statusText(timeline([], at(2026, 11, 23, 10)), TZ, 'civil')).toBe('Tehorah.');
+    expect(statusText(timeline([flow], at(2026, 11, 23, 10)), TZ, 'civil')).toMatch(/^Niddah since yesterday\. Hefsek from Thu before 4:3\d PM\.$/);
     // once the first day has passed, it says so
-    expect(statusText(timeline([flow], at(2026, 11, 27, 10)), TZ)).toMatch(/^Niddah since Sun Nov 22\. Hefsek from Thu Nov 26; next possible Fri Nov 27 before 4:3\d PM\.$/);
-    expect(statusText(timeline([flow, hefsek], at(2026, 11, 29, 10)), TZ)).toMatch(/^Clean day 3 of 7\. Mikvah Thu Dec 3 after 5:\d\d PM\.$/);
-    expect(statusText(timeline([flow, hefsek], at(2026, 12, 3, 19)), TZ)).toMatch(/^Mikvah tonight after 5:\d\d PM\.$/);
+    expect(statusText(timeline([flow], at(2026, 11, 27, 10)), TZ, 'civil')).toMatch(/^Niddah since Sun, Nov 22\. Hefsek can be done today before 4:3\d PM\.$/);
+    expect(statusText(timeline([flow, hefsek], at(2026, 11, 29, 10)), TZ, 'civil')).toMatch(/^Clean day 3 of 7\. Mikvah Thu night after 5:\d\d PM\.$/);
+    expect(statusText(timeline([flow, hefsek], at(2026, 12, 3, 19)), TZ, 'civil')).toMatch(/^Mikvah tonight after 5:\d\d PM\.$/);
     // the next morning, with no immersion recorded
-    expect(statusText(timeline([flow, hefsek], at(2026, 12, 4, 10)), TZ)).toMatch(/^Tehorah\./);
-    expect(statusText(timeline([flow, hefsek, { id: 'm', kind: 'mikvah', abs: SUN + 12 }], at(2026, 12, 4, 10)), TZ)).toMatch(
-      /^Tehorah\. Next onah: \d+:\d\d [AP]M \w{3} Dec \d+\.$/,
+    expect(statusText(timeline([flow, hefsek], at(2026, 12, 4, 10)), TZ, 'civil')).toMatch(/^Tehorah\./);
+    expect(statusText(timeline([flow, hefsek, { id: 'm', kind: 'mikvah', abs: SUN + 12 }], at(2026, 12, 4, 10)), TZ, 'civil')).toMatch(
+      /^Tehorah\. Next onah: \d+:\d\d [AP]M (\w{3}( night)?, Dec \d+|\w{3}( night)?)\.$/,
     );
   });
 });

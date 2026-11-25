@@ -118,7 +118,7 @@ async function console_(browser) {
   await step('a period, with one click: recorded; the hefsek taharah is shown as not entered; the next month is marked', async () => {
     await add('2026-11-10', 'flow-day');
     const msg = await page.textContent('.calc-recorded');
-    if (!/^Recorded: flow Tue Nov 10 by day\. Hefsek from Sat Nov 14\./.test(msg)) throw new Error('message: ' + msg);
+    if (!/^Recorded: flow today by day\. Hefsek from Shabbat\./.test(msg)) throw new Error('message: ' + msg);
     await waitHeadline('Niddah, before the hefsek taharah');
     if ((await todayWords()) !== 'Tuesday, November 10, 2026, by day') throw new Error('today: ' + (await todayWords()));
     if (!(await page.textContent('#calc-today-why')).includes('the latest date you entered')) throw new Error('today is not explained');
@@ -173,7 +173,7 @@ async function console_(browser) {
     const before = await logCount();
     await add('2026-11-17', 'mikvah');
     const text = await page.textContent('.calc-refused');
-    if (!/^Not recorded: the count is not complete\. Mikvah night is Sat Nov 21 after \d+:\d\d (AM|PM)\.$/.test(text.trim())) throw new Error('refusal: ' + text);
+    if (!/^Not recorded: the count is not complete\. Mikvah night is Sat night after \d+:\d\d (AM|PM)\.$/.test(text.trim())) throw new Error('refusal: ' + text);
     if ((await logCount()) !== before) throw new Error('the refused date was kept');
     await waitToday('Monday, November 16, 2026, by day');
   });
@@ -271,7 +271,7 @@ async function console_(browser) {
     await page.fill('#calc-time', '21:30');
     await page.click('#calc-add-time');
     await settled();
-    await page.waitForSelector('.calc-recorded:has-text("Recorded: flow Tue Nov 10 night")');
+    await page.waitForSelector('.calc-recorded:has-text("Recorded: flow tonight")');
     await waitToday('Tuesday, November 10, 2026, at night');
   });
 

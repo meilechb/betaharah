@@ -55,7 +55,8 @@ export function whenTokens(tokens: readonly string[]): string[] {
     if ((t === 'am' || t === 'pm') && prev !== undefined && /\d$/.test(prev)) out[out.length - 1] = prev + t;
     else out.push(t);
   }
-  return out.filter(t => !FILLER.has(t));
+  // "adar i", "adar a": the letter after Adar is part of a Hebrew date (chat/dated.ts).
+  return out.filter((t, i) => !FILLER.has(t) || ((t === 'i' || t === 'a') && out[i - 1] === 'adar'));
 }
 
 /** When a period, stain or broken count happened, from words without a date; null if not understood (or nothing said). */

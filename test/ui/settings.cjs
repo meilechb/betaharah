@@ -105,7 +105,7 @@ const H = { 'x-betaharah': '1' };
       phones: '2 phones · reminders on for both',
       reminders: '5 of 5 kinds on · nothing sent on Shabbat or Yom Tov',
       calendar: 'Not connected',
-      language: 'Terms in English letters',
+      language: 'Terms in English letters · Hebrew dates',
       texting: '(888) 555-0100 · ' + s.sms.usedThisMonth + ' of ' + s.sms.monthlyLimit + ' texts this month',
       security: 'A code by text · no password',
     };
@@ -318,7 +318,7 @@ const H = { 'x-betaharah': '1' };
     if ((await state()).app.reminders.beforeRestDays) throw new Error('rest days not saved');
     await page.click('label[for="rem-rest"]');
     await savedIn('reminders');
-    if (!(await page.textContent('#rem-style-group')).includes('M night: Thu Nov 26')) throw new Error('no discreet example');
+    if (!(await page.textContent('#rem-style-group')).includes('M night: Thu night')) throw new Error('no discreet example');
     await page.click('label[for="r-sms-style-discreet"]');
     await savedIn('reminders');
     if ((await state()).app.reminders.style !== 'discreet') throw new Error('wording not saved');
@@ -386,7 +386,7 @@ const H = { 'x-betaharah': '1' };
     await savedIn('language');
     await page.waitForSelector('#r-terms-he:checked');
     await backToHome();
-    if ((await summary('language')) !== 'Terms in Hebrew script') throw new Error('summary: ' + (await summary('language')));
+    if ((await summary('language')) !== 'Terms in Hebrew script · Hebrew dates') throw new Error('summary: ' + (await summary('language')));
     if (!(await summary('reminders')).includes('שבת')) throw new Error('reminders summary not in Hebrew terms: ' + (await summary('reminders')));
     await page.setViewportSize({ width: 360, height: 800 });
     for (const id of ['', 'location', 'phones', 'phones/17325550100', 'phones/add', 'reminders', 'reminders/scheduled', 'calendar', 'language', 'texting', 'security', 'data']) {
@@ -709,6 +709,53 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('#loc-current:has-text("Lakewood, NJ")');
     await backToHome();
     if (await page.locator('#st-nav-location .st-flag').count()) throw new Error('still flagged');
+  });
+
+  await step('new account: Dates is Hebrew by default; Both and Civil change the status line on the home screen, and back', async () => {
+    await openSection('language', 'Language and dates');
+    await page.waitForSelector('#lang-dates');
+    await page.waitForSelector('#r-dates-hebrew:checked');
+    for (const v of ['hebrew', 'civil', 'both']) await page.waitForSelector(`label[for="r-dates-${v}"]`);
+    if ((await state()).app.dates !== 'hebrew') throw new Error('default: ' + (await state()).app.dates);
+    // A period that began six days ago and its hefsek today: the mikvah night is a week away, so its date is written.
+    const today = (await state()).grid.today;
+    const sixDaysAgo = new Date(Date.parse(today + 'T00:00:00Z') - 6 * 86_400_000).toISOString().slice(0, 10);
+    for (const data of [{ kind: 'flow', date: sixDaysAgo, part: 'day' }, { kind: 'hefsek', date: today }]) {
+      const r = await page.request.post(base + '/api/entries', { headers: H, data });
+      if (!r.ok()) throw new Error('entry ' + r.status() + ' ' + (await r.text()));
+    }
+    await page.reload();
+    await page.waitForSelector('nav.tabs button[aria-selected="true"]');
+    const statusLine = async () => {
+      await page.evaluate(() => (location.hash = '#today'));
+      await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Today")');
+      const detail = (await state()).status.detail;
+      await page.waitForFunction(d => document.body.innerText.includes(d), detail);
+      return detail;
+    };
+    const choose = async v => {
+      await page.evaluate(() => (location.hash = '#settings/language'));
+      await page.waitForSelector('#lang-dates');
+      await page.click(`label[for="r-dates-${v}"]`);
+      await savedIn('language');
+      await page.waitForSelector(`#r-dates-${v}:checked`);
+    };
+    const hebrew = await statusLine();
+    if (!/Mikvah night: \w+ night, eve of \d+ \w+/.test(hebrew)) throw new Error('Hebrew: ' + hebrew);
+    await page.screenshot({ path: out + '/dates-home-hebrew-390.png', fullPage: true });
+    await choose('both');
+    const both = await statusLine();
+    if (!/Mikvah night: \w+ night, [A-Z][a-z]{2} \d+ \(eve of \d+ \w+\)/.test(both)) throw new Error('both: ' + both);
+    await choose('civil');
+    const civil = await statusLine();
+    if (!/Mikvah night: \w+ night, [A-Z][a-z]{2} \d+, after/.test(civil) || civil.includes('eve of')) throw new Error('civil: ' + civil);
+    await page.evaluate(() => (location.hash = '#settings'));
+    await page.waitForSelector('.st.at-home');
+    if ((await summary('language')) !== 'Terms in English letters · civil dates') throw new Error('summary: ' + (await summary('language')));
+    await choose('hebrew');
+    if ((await statusLine()) !== hebrew) throw new Error('not back to Hebrew');
+    await page.evaluate(() => (location.hash = '#settings'));
+    await page.waitForSelector('.st.at-home');
   });
 
   await step('new account: disabled controls say why', async () => {

@@ -29,10 +29,27 @@ checks the same texts). They assume Lakewood, NJ, on Tuesday 24 November
 - The main options are `PERIOD, HEFSEK, STATUS, MORE`. `MORE` shows the
   rest in small groups (never more than six options in one text):
   `OTHER ENTRIES` (stain, count broken, immersion), `HISTORY`, `UNDO`,
-  `SETTINGS` (reminders, location, customs, calendar, terms) and `ACCOUNT`
+  `SETTINGS` (reminders, location, customs, calendar, terms, dates) and `ACCOUNT`
   (phones, the sign-in link, setup, deleting the account).
 - Each text fits one SMS segment (160 GSM-7 characters) where it can, and
   never more than two (306). At most two texts go back for one received.
+- Dates are written as the household chooses (DATES, or Settings on the
+  website): Hebrew (the default), civil, or both, always in English
+  letters, from the same helpers as the website (`src/engine/dates.ts`).
+  A time is named in plain words first: `today`, `tonight`, `tomorrow`,
+  `tomorrow night`, `yesterday`, `last night`, a weekday alone within the
+  coming six days (`Thu`, `Shabbat`, `Mon night`); otherwise the weekday and
+  the date: `Tue, 16 Kislev` / `Tue, Nov 26` / `Tue, Nov 26 (16 Kislev)`,
+  and for a night the date of its evening and the Hebrew date it begins:
+  `Mon night, eve of 16 Kislev` / `Mon night, Nov 25` /
+  `Mon night, Nov 25 (eve of 16 Kislev)`. A reminder says "today" or
+  "tomorrow" only when all the time it may be sent falls on one date. A
+  date that was typed is repeated in full with its year. Every default text
+  fits its segments in all three settings (test/texts.test.ts); for that,
+  three defaults were shortened: the confirmation of a hefsek names the
+  first clean day only (`Clean days from ...`), `status.before_first_day`
+  is `Clean days begin ... Mikvah ...`, and `status.before_hefsek_later` is
+  `Niddah since ... Hefsek can be done ... before ...`.
 
 ## How a reply is read
 
@@ -68,7 +85,7 @@ In this order:
    | History, location, customs, nightfall, vesatot | history; location, zip; customs, custom; nightfall; vesatot |
    | Reminders, kinds, wording | reminders, reminder; kinds; wording |
    | Phones, add, leave | phones, phone; add; leave |
-   | Calendar, terms, sign-in link, setup, delete | calendar; terms; web, website; setup; delete |
+   | Calendar, terms, dates, sign-in link, setup, delete | calendar; terms; dates; web, website; setup; delete |
    | Join (already signed up) | join |
    | On the website only | password, download, export, google, times |
 
@@ -76,7 +93,7 @@ In this order:
    `period last night`, `period yesterday 9pm`, `period Nov 22 night`,
    `hefsek yesterday`, `hefsek 11/26`. A few settings take one too:
    `location 08701`, `reminders on`, `reminders off`, `wording discreet`,
-   `terms hebrew`, `calendar link`, `pause vesatot`, `resume vesatot`,
+   `terms hebrew`, `dates both`, `calendar link`, `pause vesatot`, `resume vesatot`,
    `delete account`.
 6. **Otherwise**: `Not understood; nothing was changed.` with the main
    options.
@@ -127,10 +144,10 @@ own limits (4 per number a day, 100 a day for the site).
 < Kept: nightfall: 8.5 degrees. All 12 customs are saved. Step 3 of 3: when did the last period begin? For example: Nov 22 night.
   Reply: SKIP
 > Nov 1 night
-< Recorded: flow Sun Nov 1 night, 2026. Hefsek from Fri Nov 6. Hefsek done? Its date, for example: Nov 27.
+< Recorded: flow Sun night, eve of 22 Cheshvan 5787. Hefsek from Fri, 26 Cheshvan. Hefsek done? Its date, for example: Nov 27.
   Reply: NOT YET
 > 11/6
-< Recorded: hefsek Fri Nov 6, 2026. Clean days Sat Nov 7 - Fri Nov 13. Mikvah Fri Nov 13 after 5:25 PM. Setup is done. Reminders are off for now.
+< Recorded: hefsek Fri, 26 Cheshvan 5787. Clean days from Shabbat, 27 Cheshvan. Mikvah Fri night, eve of 4 Kislev after 5:25 PM. Setup is done. Reminders are off for now.
   Reply: PERIOD, HEFSEK, REMINDERS, MORE
 ```
 
@@ -147,7 +164,7 @@ days are over the calendar takes it that she immersed on the mikvah night.
 < When did it begin?
   Reply: NOW, LAST NIGHT, ANOTHER DAY          (at night: NOW, TODAY BY DAY, ANOTHER DAY)
 > last night
-< Recorded: flow Mon Nov 23 night. Hefsek from Sat Nov 28.
+< Recorded: flow last night. Hefsek from Shabbat.
   Reply: UNDO, STATUS
 > hefsek
 < Hefsek tahara: which day?
@@ -166,10 +183,18 @@ days are over the calendar takes it that she immersed on the mikvah night.
   not after today. A period, stain or broken count needs day, night or a
   time after the date ("night" is the night that begins that evening); a
   hefsek or immersion takes the date alone.
+- A Hebrew date in English letters, day then month, is read too: `15
+  kislev day`, `period 3 teves night`, `hefsek 12 kislev`, with the usual
+  spellings (`cheshvan`/`heshvan`, `tevet`/`teves`, `shevat`/`shvat`,
+  `adar i`/`adar 1`, `adar ii`/`adar2`...). It is the most recent such date
+  that has begun. Its night is the night before its day (`15 kislev
+  night` began on the evening of 14 Kislev), and a clock time is the time
+  within that Hebrew date (after sunset: the evening before). In a leap
+  year, plain `adar` asks which one (`date.adar`).
 - Every website check applies (no period open, before the period began, a
   time to come, already recorded); a refusal for a written date adds the
-  date as it was read: `Not recorded: no period is open. (Read as Thu Nov
-  27, 2025.)`
+  date as it was read: `Not recorded: no period is open. (Read as Thu, 7
+  Kislev 5786.)`
 - A time shortly after sunrise or sunset adds `Counted as night: sunset
   was 4:31 PM.` (information only).
 - `undo` removes the latest entry of the last 48 hours and gives the
@@ -182,7 +207,7 @@ days are over the calendar takes it that she immersed on the mikvah night.
 
 `status` (or `where`) answers in the words of the phase: `Tehorah.` (with
 the next onah when there is one), `Niddah since ... Hefsek from ...`,
-`Hefsek done ...`, `Clean day 3 of 7. Mikvah ... after ...`, `Mikvah
+`Clean days begin ...`, `Clean day 3 of 7. Mikvah ... after ...`, `Mikvah
 tonight after ...`. Its options are PERIOD, HEFSEK, HISTORY, MORE.
 
 ## Reminders
@@ -199,17 +224,17 @@ The hefsek reminder offers `DONE`, which records the hefsek on the day the
 reminder was about; every other reminder offers `STATUS`:
 
 ```
-< Hefsek tahara: Thu Nov 26, before sunset at 4:33 PM.
+< Hefsek tahara: today, before sunset at 4:33 PM.
   Reply: DONE, STATUS
 > done
-< Recorded: hefsek Thu Nov 26. Clean days Fri Nov 27 - Thu Dec 3. Mikvah Thu Dec 3 after 5:16 PM.
+< Recorded: hefsek today. Clean days from tomorrow. Mikvah Thu night, eve of 24 Kislev after 5:16 PM.
   Reply: UNDO, STATUS
 ```
 
 `kinds` shows which kinds this phone gets, and each option (TAHARA, AM
 BEDIKAH, PM BEDIKAH, MIKVAH NIGHT, BOOKING, ONAH) turns one on or off.
 `wording` chooses plain or discreet wording for the whole account (the
-discreet hefsek reminder is `H Thu Nov 26 before 4:33 PM.`, with the same
+discreet hefsek reminder is `H today before 4:33 PM.`, with the same
 options). Reminder times are set on the website.
 
 ## Settings, phones and the account
@@ -224,6 +249,10 @@ options). Reminder times are set on the website.
   (YES or NO). Google Calendar is connected on the website.
 - **Terms**: HEBREW or ENGLISH, for the calendar and the website; texts
   are always in English letters.
+- **Dates**: HEBREW, CIVIL or BOTH, for the texts, the calendar and the
+  website (`dates civil` at once). The change is confirmed with today's
+  date written the new way: `Changed: dates are Hebrew and civil, e.g. Tue,
+  Nov 24 (14 Kislev).`
 - **Phones**: `phones` lists them (first, second...); ADD gives an
   eight-letter code that the other phone texts back as `JOIN <code>` within
   7 days (nothing is sent to the other phone); REMOVE asks which, then YES

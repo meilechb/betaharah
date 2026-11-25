@@ -1,12 +1,14 @@
-/* Settings: Language (English letters or Hebrew script for halachic terms, with an example sentence). */
+/* Settings: Language and dates (English letters or Hebrew script for halachic terms; Hebrew, civil or both dates). */
 import { h } from '../../lib.js';
 import { S } from '../../store.js';
 import { blockRow, choiceCards, group, saveApp } from './ui.js';
 
+const DATE_NAMES = { hebrew: 'Hebrew', civil: 'Civil', both: 'Both' };
+
 function view() {
   const value = S.app.terms;
   return {
-    title: 'Language',
+    title: 'Language and dates',
     parent: '',
     statusKey: 'language',
     body: [
@@ -25,6 +27,18 @@ function view() {
           }),
         ),
       ),
+      group(
+        { title: 'Dates', id: 'lang-dates' },
+        blockRow(
+          choiceCards({
+            name: 'dates',
+            legend: 'Dates',
+            value: S.app.dates || 'hebrew',
+            options: ['hebrew', 'civil', 'both'].map(v => ({ value: v, label: DATE_NAMES[v] })),
+            onchange: v => saveDates(v),
+          }),
+        ),
+      ),
     ],
   };
 }
@@ -34,11 +48,18 @@ function saveTerms(v) {
   saveApp('language', a => (a.terms = v), { message: v === 'he' ? 'Saved: Hebrew script' : 'Saved: English letters' });
 }
 
+function saveDates(v) {
+  if ((S.app.dates || 'hebrew') === v) return;
+  saveApp('language', a => (a.dates = v), { message: 'Saved: ' + (v === 'both' ? 'both dates' : DATE_NAMES[v] + ' dates') });
+}
+
+const datesWord = () => ({ hebrew: 'Hebrew dates', civil: 'civil dates', both: 'both dates' })[S.app.dates || 'hebrew'];
+
 export const languageSection = {
   id: 'language',
-  title: 'Language',
+  title: 'Language and dates',
   icon: 'info',
-  summary: () => (S.app.terms === 'he' ? 'Terms in Hebrew script' : 'Terms in English letters'),
+  summary: () => (S.app.terms === 'he' ? 'Terms in Hebrew script' : 'Terms in English letters') + ' · ' + datesWord(),
   flag: () => null,
   view,
 };

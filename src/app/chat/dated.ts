@@ -16,9 +16,22 @@
  * immersion takes nothing more. "Night" means the night that begins on the
  * evening of that date, as on the dashboard's form (dashboard.ts,
  * draftFromForm).
+ *
+ * A Hebrew date in English letters, day then month, is read too:
+ *
+ *   15 kislev day   by day on 15 Kislev
+ *   15 kislev night the night of 15 Kislev (it begins the evening before)
+ *   15 kislev 9pm   9 pm within 15 Kislev (after sunset: the evening before)
+ *   3 adar          hefsek on 3 Adar; in a leap year Adar I or Adar II is named
+ *
+ * A Hebrew date is the most recent such date that has begun (no year is
+ * read). A night of a Hebrew date belongs to it, so "night" here is the
+ * night before its day, unlike a civil date.
  */
 import { absToCivil, civilToAbs, localAbs, localToInstant } from '../../engine/civil';
-import { englishDate } from '../../engine/present';
+import { dayWords } from '../../engine/dates';
+import { absOfHebrew, hebrewOfAbs } from '../../engine/hebrew';
+import { hebrewDate } from '../../engine/terms';
 import { onahAt } from '../../engine/zmanim';
 import { parseClock, type ResolvedOnah } from '../commands';
 import { recordEntry, whereOf, type Computed, type DraftEntry, type RecordResult, type RejectReason } from '../household';
@@ -32,12 +45,18 @@ export interface DateSpec {
   d: number;
   /** null when no year was given */
   y: number | null;
+  /**
+   * Set for a Hebrew date: `m` is then the Hebrew month as the calendar
+   * numbers it (Nisan = 1 ... Adar = 12, Adar II = 13), and `adar` says how
+   * Adar was written ('plain' needs no I or II only outside a leap year).
+   */
+  hebrew?: { adar: 'plain' | 'first' | 'second' | null };
 }
 
 export type DatedWhen = { type: 'part'; part: 'day' | 'night' } | { type: 'time'; minutes: number } | null;
 
 /** Why a written date was not understood: the message key, and its values. */
-export type DateProblem = { key: 'date.form' } | { key: 'date.no_such'; vars: { date: string } } | { key: 'date.year'; vars: { year: string } } | { key: 'date.needs_onah' } | { key: 'date.nothing_more' };
+export type DateProblem = { key: 'date.form' } | { key: 'date.adar' } | { key: 'date.no_such'; vars: { date: string } } | { key: 'date.year'; vars: { year: string } } | { key: 'date.needs_onah' } | { key: 'date.nothing_more' };
 
 export type DatedParse =
   /** Not a date at all. */
@@ -51,14 +70,31 @@ const MONTHS: Record<string, number> = {
   jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
 };
 
+/** The Hebrew months as they are spelled in English letters. Adar is read with what follows it. */
+const HEBREW_MONTHS: Record<string, number> = {
+  nisan: 1, nissan: 1, iyar: 2, iyyar: 2, sivan: 3, tammuz: 4, tamuz: 4, av: 5, ab: 5, elul: 6,
+  tishrei: 7, tishri: 7, tishre: 7, cheshvan: 8, heshvan: 8, chesvan: 8, marcheshvan: 8, kislev: 9, kislef: 9,
+  tevet: 10, teves: 10, teveth: 10, shevat: 11, shvat: 11, shevet: 11, adar: 12,
+};
+const ADAR_FIRST = new Set(['i', '1', 'a', 'aleph', 'alef', 'rishon']);
+const ADAR_SECOND = new Set(['ii', '2', 'b', 'bet', 'beis', 'sheni']);
+
+/** A Hebrew month's name as typed, without apostrophes ("sh'vat" -> "shvat"). */
+const hebrewMonthOf = (token: string | undefined): number | null => {
+  if (token === undefined) return null;
+  const t = token.replace(/['’]/g, '');
+  if (/^adar(i|ii|1|2)$/.test(t)) return 12;
+  return Object.hasOwn(HEBREW_MONTHS, t) ? (HEBREW_MONTHS[t] as number) : null;
+};
+
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MAX_DAY = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-/** Whether a token begins a date: 11/22, 11-22, or a month name. */
-export function looksLikeDate(token: string | undefined): boolean {
+/** Whether a token begins a date: 11/22, 11-22, a month name, or a day and a Hebrew month ("15 kislev"). */
+export function looksLikeDate(token: string | undefined, next?: string): boolean {
   if (token === undefined) return false;
   const t = token.toLowerCase();
-  return /^\d{1,4}[/-]\d/.test(t) || Object.hasOwn(MONTHS, t);
+  return /^\d{1,4}[/-]\d/.test(t) || Object.hasOwn(MONTHS, t) || (/^\d{1,2}$/.test(t) && hebrewMonthOf(next?.toLowerCase()) !== null);
 }
 
 /**
@@ -75,10 +111,27 @@ export function parseDated(code: DatedKind, tokens: readonly string[]): DatedPar
     else joined.push(x);
   }
   const first = joined[0];
-  if (first === undefined || !looksLikeDate(first)) return { kind: 'none' };
+  if (first === undefined || !looksLikeDate(first, joined[1])) return { kind: 'none' };
 
   let date: DateSpec;
   let rest: string[];
+  const hebrewMonth = /^\d{1,2}$/.test(first) ? hebrewMonthOf(joined[1]) : null;
+  if (hebrewMonth !== null) {
+    const name = (joined[1] as string).replace(/['’]/g, '');
+    rest = joined.slice(2);
+    let adar: 'plain' | 'first' | 'second' | null = null;
+    if (hebrewMonth === 12) {
+      const joinedNumber = /^adar(i|ii|1|2)$/.exec(name)?.[1];
+      if (joinedNumber !== undefined) adar = joinedNumber === 'i' || joinedNumber === '1' ? 'first' : 'second';
+      else if (rest[0] !== undefined && ADAR_FIRST.has(rest[0])) adar = 'first';
+      else if (rest[0] !== undefined && ADAR_SECOND.has(rest[0])) adar = 'second';
+      else adar = 'plain';
+      if (joinedNumber === undefined && adar !== 'plain') rest = rest.slice(1);
+    }
+    date = { m: hebrewMonth, d: Number(first), y: null, hebrew: { adar } };
+    if (date.d < 1 || date.d > 30) return { kind: 'error', problem: { key: 'date.no_such', vars: { date: `${date.d} ${name.charAt(0).toUpperCase()}${name.slice(1)}` } } };
+    return afterDate(code, date, rest);
+  }
   const numeric = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/.exec(first);
   if (numeric) {
     const y = numeric[3] === undefined ? null : numeric[3].length === 2 ? 2000 + Number(numeric[3]) : Number(numeric[3]);
@@ -101,7 +154,11 @@ export function parseDated(code: DatedKind, tokens: readonly string[]): DatedPar
     return { kind: 'error', problem: { key: 'date.no_such', vars: { date: `${date.m}/${date.d}` } } };
   }
   if (date.y !== null && (date.y < 2000 || date.y > 2100)) return { kind: 'error', problem: { key: 'date.year', vars: { year: String(date.y) } } };
+  return afterDate(code, date, rest);
+}
 
+/** What follows a date: nothing for a hefsek or an immersion; day, night or a time for the others. */
+function afterDate(code: DatedKind, date: DateSpec, rest: readonly string[]): DatedParse {
   if (code === 'hefsek' || code === 'mikvah') {
     if (rest.length > 0) return { kind: 'error', problem: { key: 'date.nothing_more' } };
     return { kind: 'ok', code, date, when: null };
@@ -124,7 +181,40 @@ function validAbs(y: number, m: number, d: number): number | null {
   }
 }
 
-export type DateResolution = { ok: true; abs: number } | { ok: false; reason: 'future' | 'no_such_date' | 'none_recent' };
+export type DateResolution = { ok: true; abs: number } | { ok: false; reason: 'future' | 'no_such_date' | 'none_recent' | 'adar' };
+
+/**
+ * The Hebrew date meant (as the R.D. number of its daytime): this Hebrew
+ * year's, or if that has not begun by `hebrewToday` (or does not exist),
+ * last year's. Plain "Adar" in a leap year is not guessed.
+ */
+export function resolveHebrewDate(date: DateSpec, hebrewToday: number): DateResolution {
+  const year = hebrewOfAbs(hebrewToday).yy;
+  for (const yy of [year, year - 1]) {
+    const leap = absOfHebrewOrNull(yy, 13, 1) !== null;
+    let mm = date.m;
+    if (mm === 12 && leap) {
+      if (date.hebrew?.adar === 'plain') {
+        // Not guessed, once that year's Adar has begun; before then, last year's Adar is meant.
+        const first = absOfHebrewOrNull(yy, 12, 1);
+        if (first !== null && first <= hebrewToday) return { ok: false, reason: 'adar' };
+        continue;
+      }
+      if (date.hebrew?.adar === 'second') mm = 13;
+    }
+    const abs = absOfHebrewOrNull(yy, mm, date.d);
+    if (abs !== null && abs <= hebrewToday) return { ok: true, abs };
+  }
+  return { ok: false, reason: 'none_recent' };
+}
+
+function absOfHebrewOrNull(yy: number, mm: number, dd: number): number | null {
+  try {
+    return absOfHebrew({ yy, mm, dd });
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The civil date meant. Without a year: this year's, or if that is after
@@ -156,17 +246,22 @@ export function draftFromDated(
 ): { ok: true; draft: DraftEntry; resolved: ResolvedOnah | null } | { ok: false; reason: 'future' | 'no_place' } {
   const where = whereOf(data);
   if (!where) return { ok: false, reason: 'no_place' };
+  // A Hebrew date's night comes before its day: the immersion on the night of 15 Kislev is on that date.
+  const hebrew = p.date.hebrew !== undefined;
   if (p.code === 'hefsek') return { ok: true, draft: { kind: 'hefsek', abs }, resolved: null };
-  if (p.code === 'mikvah') return { ok: true, draft: { kind: 'mikvah', abs: abs + 1 }, resolved: null };
+  if (p.code === 'mikvah') return { ok: true, draft: { kind: 'mikvah', abs: hebrew ? abs : abs + 1 }, resolved: null };
   let onah: { abs: number; part: 'day' | 'night' };
   let resolved: ResolvedOnah | null = null;
   const when = p.when;
   if (when === null) throw new Error('a flow, stain or broken count needs day, night or a time');
   if (when.type === 'part') {
-    onah = when.part === 'day' ? { abs, part: 'day' } : { abs: abs + 1, part: 'night' };
+    onah = when.part === 'day' ? { abs, part: 'day' } : { abs: hebrew ? abs : abs + 1, part: 'night' };
   } else {
-    const c = absToCivil(abs);
-    const ms = localToInstant({ ...c, hh: Math.floor(when.minutes / 60), mi: when.minutes % 60, ss: 0 }, where.place.timeZone);
+    const at = (day: number): number =>
+      localToInstant({ ...absToCivil(day), hh: Math.floor(when.minutes / 60), mi: when.minutes % 60, ss: 0 }, where.place.timeZone);
+    let ms = at(abs);
+    // A time of a Hebrew date that is after sunset on its civil day belongs to the next date: it is the evening before.
+    if (hebrew && onahAt(ms, where.place, where.zopts).onah.abs !== abs) ms = at(abs - 1);
     if (ms > now + FUTURE_TOLERANCE_MS) return { ok: false, reason: 'future' };
     const r = onahAt(ms, where.place, where.zopts);
     onah = r.onah;
@@ -186,16 +281,23 @@ export type DatedOutcome =
   /** Not recorded. `readAs`: the date as it was read, when it was read at all. */
   | { ok: false; reason: RejectReason; computed: Computed | null; readAs?: string }
   | { ok: false; reason: 'none_recent'; month: string; day: number; computed: null }
-  | { ok: false; reason: 'no_such_date'; date: string; computed: null };
+  | { ok: false; reason: 'no_such_date'; date: string; computed: null }
+  | { ok: false; reason: 'adar'; computed: null };
 
 /** Records a parsed date through recordEntry. */
 export function recordDated(data: HouseholdData, p: Extract<DatedParse, { kind: 'ok' }>, now: number): DatedOutcome {
   const where = whereOf(data);
   if (!where) return { ok: false, reason: 'no_place', computed: null };
   const today = localAbs(now, where.place.timeZone);
-  const date = resolveDate(p.date, today);
+  // A Hebrew date: the one it is now (after sunset, tomorrow's civil date) counts as begun.
+  const date = p.date.hebrew ? resolveHebrewDate(p.date, onahAt(now, where.place, where.zopts).onah.abs) : resolveDate(p.date, today);
   if (!date.ok) {
     if (date.reason === 'future') return { ok: false, reason: 'future', computed: null };
+    if (date.reason === 'adar') return { ok: false, reason: 'adar', computed: null };
+    if (p.date.hebrew) {
+      const name = hebrewDate(absOfHebrew({ yy: 5787, mm: p.date.m === 12 && p.date.hebrew.adar === 'second' ? 13 : p.date.m, dd: 1 }), 'en', false).replace(/^1 /, '');
+      return { ok: false, reason: 'no_such_date', date: `${p.date.d} ${name} in the past year`, computed: null };
+    }
     if (date.reason === 'none_recent') return { ok: false, reason: 'none_recent', month: MONTH_NAMES[p.date.m - 1] as string, day: p.date.d, computed: null };
     return { ok: false, reason: 'no_such_date', date: `${p.date.m}/${p.date.d}/${p.date.y}`, computed: null };
   }
@@ -203,7 +305,7 @@ export function recordDated(data: HouseholdData, p: Extract<DatedParse, { kind: 
   if (!made.ok) return { ok: false, reason: made.reason, computed: null };
   const result = recordEntry(data, made.draft, 'sms', null, now);
   // The date as it was read, so that a year taken as last year is never a surprise.
-  if (!result.ok) return { ok: false, reason: result.reason, computed: result.computed, readAs: `${englishDate(date.abs)}, ${absToCivil(date.abs).y}` };
+  if (!result.ok) return { ok: false, reason: result.reason, computed: result.computed, readAs: dayWords(date.abs, { dates: data.app.dates, lang: 'en', year: true }) };
   const d = made.draft;
   const shown = 'onah' in d ? (d.onah.part === 'day' ? d.onah.abs : d.onah.abs - 1) : d.kind === 'mikvah' ? d.abs - 1 : d.abs;
   return { ok: true, result, resolved: made.resolved, year: absToCivil(shown).y };

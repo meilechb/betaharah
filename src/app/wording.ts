@@ -2,63 +2,57 @@
  * Wording for the dashboard. Sentences are English; halachic terms are
  * shown in English letters or in Hebrew script, as the household chooses.
  */
-import { eveningLabel, fullDate, onahLabel } from '../engine/calendar';
-import { absToCivil, dayOfWeek } from '../engine/civil';
+import { localAbs } from '../engine/civil';
 import type { LogEntry, LogWarningCode } from '../engine/cycle';
+import { dayWords, nightWords, onahWords, type DateStyle, type DateWords } from '../engine/dates';
 import type { PatternAlert } from '../engine/patterns';
 import { clock12 } from '../engine/present';
-import { capital, dayOfMonth, fill, hebrewDate, term, type TermLanguage } from '../engine/terms';
+import { capital, dayOfMonth, fill, term, type TermLanguage } from '../engine/terms';
 import type { Timeline } from '../engine/timeline';
 import type { VesatotNote } from '../engine/vesatot';
 
-/** An onah after a colon: "the night of Saturday, Nov 21, 2026 (13 Kislev 5787)" or "Sunday, 13 Kislev 5787 (Nov 22, 2026), by day" */
-function onahText(onah: { abs: number; part: 'night' | 'day' }, lang: TermLanguage): string {
-  if (onah.part === 'day') return onahLabel(onah, lang);
-  return eveningLabel(onah.abs, lang);
-}
-
-export function entryText(e: LogEntry, lang: TermLanguage): string {
+/**
+ * A Log entry. The Log is read on any day, so each date is written in full,
+ * with its year: "Flow: Saturday night, Nov 21, 2026", "Hefsek taharah:
+ * Thursday, 16 Kislev 5787", "Stain: Sunday, Nov 22, 2026 (12 Kislev 5787),
+ * by day".
+ */
+export function entryText(e: LogEntry, lang: TermLanguage, dates: DateStyle): string {
+  const w: DateWords = { dates, lang, long: true, year: true };
+  const onah = (o: { abs: number; part: 'night' | 'day' }): string => onahWords(o, w, ', by day');
   switch (e.kind) {
     case 'flow':
-      return `${capital(term('flow', lang))}: ${onahText(e.onah, lang)}${e.veset ? '' : fill(' (not counted for {vesatot})', lang)}`;
+      return `${capital(term('flow', lang))}: ${onah(e.onah)}${e.veset ? '' : fill(' (not counted for {vesatot})', lang)}`;
     case 'stain':
-      return `${capital(term('stain', lang))}: ${onahText(e.onah, lang)}`;
+      return `${capital(term('stain', lang))}: ${onah(e.onah)}`;
     case 'broken':
-      return `Count broken: ${onahText(e.onah, lang)}`;
+      return `Count broken: ${onah(e.onah)}`;
     case 'hefsek':
-      return `${capital(term('hefsek', lang))}: ${fullDate(e.abs, lang)}`;
+      return `${capital(term('hefsek', lang))}: ${dayWords(e.abs, w)}`;
     case 'mikvah':
-      return `${capital(term('immersion', lang))}: ${onahText({ abs: e.abs, part: 'night' }, lang)}`;
+      return `${capital(term('immersion', lang))}: ${nightWords(e.abs, w)}`;
   }
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-
-/** A date in running text: "Wed, Nov 25". */
-export function shortDate(abs: number): string {
-  const c = absToCivil(abs);
-  return `${DAYS[dayOfWeek(abs)]}, ${MONTHS[c.m - 1]} ${c.d}`;
-}
-
 /** Where things stand: a headline, and one short line with the next date and its time. */
-export function statusLines(t: Timeline, timeZone: string, lang: TermLanguage): { headline: string; detail: string } {
+export function statusLines(t: Timeline, timeZone: string, lang: TermLanguage, dates: DateStyle): { headline: string; detail: string } {
   if (t.status.state === 'tehorah') return { headline: capital(term('tehorah', lang)), detail: '' };
+  const w: DateWords = { dates, lang, long: true, today: localAbs(t.now, timeZone) };
   const p = t.status.period;
   const phase = t.status.phase;
   const m = p.planMikvah;
-  const mikvah = capital(fill(`{mikvah_night}: ${shortDate(m.eveningAbs)}, after ${clock12(m.tzeit, timeZone, 'ceil')}.`, lang));
+  const mikvah = capital(fill(`{mikvah_night}: ${nightWords(m.nightAbs, w)}, after ${clock12(m.tzeit, timeZone, 'ceil')}.`, lang));
   const niddah = capital(term('niddah', lang));
   switch (phase.kind) {
     case 'before_hefsek':
       return {
         headline: fill(`${niddah}, before the {hefsek}`, lang),
-        detail: capital(fill(`{hefsek} from ${shortDate(p.planHefsekAbs)}, before ${clock12(p.hefsekSunset, timeZone, 'floor')}.`, lang)),
+        detail: capital(fill(`{hefsek} from ${dayWords(p.planHefsekAbs, w)}, before ${clock12(p.hefsekSunset, timeZone, 'floor')}.`, lang)),
       };
     case 'before_first_day':
       return {
         headline: fill(`${niddah}, after the {hefsek}`, lang),
-        detail: capital(fill(`The {clean_days} begin ${shortDate(p.planCleanDays[0]!.abs)}. `, lang)) + mikvah,
+        detail: capital(fill(`The {clean_days} begin ${dayWords(p.planCleanDays[0]!.abs, w)}. `, lang)) + mikvah,
       };
     case 'counting':
       return { headline: `${capital(term('clean_days', lang))}: day ${phase.day}`, detail: mikvah };

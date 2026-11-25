@@ -209,7 +209,8 @@ ${
       {
         id: 'terms',
         title: 'English or Hebrew terms',
-        body: `<p>The site is in English. Under Settings you can choose whether halachic terms are written in English letters (hefsek taharah) or in Hebrew (<span lang="he">הפסק טהרה</span>). The choice also applies to the calendar events.</p>`,
+        body: `<p>The site is in English. Under Settings you can choose whether halachic terms are written in English letters (hefsek taharah) or in Hebrew (<span lang="he">הפסק טהרה</span>). The choice also applies to the calendar events.</p>
+<p>Dates are written with the Hebrew date, the civil date, or both (Settings, Language and dates, or <code>DATES</code> by text), after a plain day such as <em>tomorrow</em>, <em>Thursday</em> or <em>Monday night</em>; a night is named by the evening it begins, and a Hebrew date can also be texted, as in <code>period 15 kislev night</code>.</p>`,
       },
       {
         id: 'what-it-is-not',
