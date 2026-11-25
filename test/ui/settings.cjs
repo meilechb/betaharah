@@ -460,7 +460,7 @@ const H = { 'x-betaharah': '1' };
     if (JSON.stringify((await state()).app.calendar.show) !== JSON.stringify({ onot: true, period: true, hefsek: true, niddah: false, cleanDays: false, mikvah: false })) throw new Error('defaults');
     const before = await feed();
     if (before.includes('Niddah')) throw new Error('the niddah days are in the feed by default');
-    if (!before.some(t => t.startsWith('Veset onah'))) throw new Error('no onot in the feed: ' + before.join(' | '));
+    if (!before.some(t => t.startsWith('Onah'))) throw new Error('no onot in the feed: ' + before.join(' | '));
     // the niddah days switched on, and off again
     await page.click('label[for="cal-show-niddah"]');
     await savedIn('calendar');
@@ -481,7 +481,7 @@ const H = { 'x-betaharah': '1' };
     await page.click('label[for="cal-show-onot"]');
     await savedIn('calendar');
     const noOnot = await feed();
-    if (noOnot.some(t => t.startsWith('Veset onah') || t.startsWith('Or Zarua'))) throw new Error('onot still in the feed');
+    if (noOnot.some(t => t.startsWith('Onah'))) throw new Error('onot still in the feed');
     await page.screenshot({ path: out + '/settings-calendar-show-390.png', fullPage: true });
     // back to the defaults
     await page.click('label[for="cal-show-onot"]');

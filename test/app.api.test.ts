@@ -1844,7 +1844,7 @@ describe('Google Calendar', () => {
     const titles = world.google.events().map(e => e.resource.summary);
     // by default: the onot, the start of the period and the hefsek taharah; the niddah days are not shown
     expect(titles).not.toContain('Niddah');
-    expect(titles.some(t => t.startsWith('Veset onah'))).toBe(true);
+    expect(titles.some(t => t.startsWith('Onah: '))).toBe(true);
     expect(titles).toContain('Period began (by day)');
     expect(titles).toContain('Hefsek taharah (by 4:33 PM)');
     expect(titles.filter(t => t.startsWith('Seven clean days') || t.startsWith('Mikvah night'))).toEqual([]);
@@ -2059,7 +2059,7 @@ describe('the calendar subscription link', () => {
     const link = (await c.post('/api/calendar-link')).json.state.calendar.link as string;
     const feed = (await new Client().get(new URL(link).pathname)).text;
     expect(feed).not.toContain('SUMMARY:Niddah');
-    expect(feed).toContain('SUMMARY:Veset onah');
+    expect(feed).toContain('SUMMARY:Onah: ');
     expect(feed).not.toContain('SUMMARY:Seven clean days');
     expect(feed).not.toContain('SUMMARY:Mikvah night');
   });
