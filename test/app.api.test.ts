@@ -242,6 +242,7 @@ describe('pages and request rules', () => {
       expect(r.res.headers.get('referrer-policy')).toBe('no-referrer');
       expect(r.res.headers.get('x-robots-tag')).toBe(path === '/help' ? 'noindex' : null);
       expect(r.res.headers.get('content-security-policy')).toContain("default-src 'none'");
+      expect(r.text).toMatch(/<meta name="description" content="[^"]{40,160}">/);
     }
     const privacy = (await new Client().get('/privacy')).text;
     expect(privacy).toContain('Mr. &lt;b&gt;Test&lt;/b&gt;');
@@ -274,7 +275,13 @@ describe('pages and request rules', () => {
   it('answers 404 for what does not exist, and 401 for the dashboard\'s data without a session', async () => {
     await site();
     const c = new Client();
-    expect((await c.get('/nothing-here')).status).toBe(404);
+    const page = await c.get('/nothing-here');
+    expect(page.status).toBe(404);
+    expect(page.res.headers.get('content-type')).toContain('text/html');
+    expect(page.text).toContain('<h1>Page not found</h1>');
+    expect(page.text).toContain('<meta name="robots" content="noindex">');
+    expect(page.text).toContain('href="/"');
+    expect(page.res.headers.get('content-security-policy')).toContain("default-src 'none'");
     expect((await c.get('/api/state')).status).toBe(401);
     expect((await c.get('/api/export')).status).toBe(401);
     expect((await c.get('/api/nothing')).status).toBe(401);

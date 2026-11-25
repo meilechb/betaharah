@@ -2773,7 +2773,7 @@ body.lp {
 .demo .month-title {
   text-align: center;
 }
-.demo .month-title h3 {
+.demo .month-title :is(h2, h3) {
   margin: 0;
   font-family: var(--font-body);
   font-size: 1.15rem;
@@ -2951,7 +2951,7 @@ body.lp {
   display: flex;
   align-items: center;
   gap: 2px;
-  color: #007aff;
+  color: #1e6ef4;
   font-size: 16px;
 }
 .iphone-back svg { width: 12px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -2960,10 +2960,10 @@ body.lp {
 .iphone-who .avatar {
   width: 34px; height: 34px; border-radius: 50%;
   display: grid; place-items: center;
-  background: #8e8e93; color: #fff; font-weight: 600; font-size: 16px;
+  background: #6c6c70; color: #fff; font-weight: 600; font-size: 16px;
 }
 .iphone-who b { font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 2px; }
-.iphone-who b svg { width: 8px; height: 5px; fill: none; stroke: #8e8e93; stroke-width: 1.6; }
+.iphone-who b svg { width: 8px; height: 5px; fill: none; stroke: #6c6c70; stroke-width: 1.6; }
 .imsg {
   list-style: none;
   margin: 0;
@@ -2976,7 +2976,7 @@ body.lp {
 }
 .imsg .kind, .imsg .stamp, .imsg .delivered {
   align-self: center;
-  color: #8e8e93;
+  color: #6c6c70;
   font-size: 11px;
   margin: 6px 0 4px;
 }
@@ -2991,7 +2991,7 @@ body.lp {
 }
 .imsg .out {
   align-self: flex-end;
-  background: #34c759;
+  background: #008932;
   color: #fff;
   border-radius: 16px;
 }
@@ -3000,7 +3000,7 @@ body.lp {
   position: absolute;
   right: -4px; bottom: 0;
   border: 7px solid transparent;
-  border-left-color: #34c759;
+  border-left-color: #008932;
   border-bottom: 0;
 }
 .imsg .in {
@@ -3027,7 +3027,7 @@ body.lp {
 }
 .iphone-plus, .iphone-mic {
   width: 28px; height: 28px; flex: none;
-  display: grid; place-items: center; color: #8e8e93;
+  display: grid; place-items: center; color: #6c6c70;
 }
 .iphone-plus svg, .iphone-mic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
 .iphone-field {
@@ -3036,7 +3036,7 @@ body.lp {
   border: 1px solid #c7c7cc;
   border-radius: 16px;
   padding: 6px 12px;
-  color: #8e8e93;
+  color: #6c6c70;
   font-size: 15px;
 }
 @media (min-width: 720px) {
@@ -3106,7 +3106,7 @@ body.lp {
   grid-template-columns: 32px minmax(0, 1fr) 32px;
   margin-bottom: 2px;
 }
-#try .month-title h3 {
+#try .month-title h2 {
   font-family: var(--font-display);
   font-size: clamp(1.7rem, 4vw, 2.15rem);
   font-weight: 400;

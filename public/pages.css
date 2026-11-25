@@ -260,3 +260,13 @@ main.doc ul.give-links li {
   margin-top: var(--space-8);
   font-size: var(--text-sm);
 }
+
+/* ---------- the 404 page ---------- */
+
+.not-found-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}

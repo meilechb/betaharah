@@ -221,7 +221,7 @@ async function withoutScript(browser, label = '') {
   for (const p of HOME_PHRASES) if (!main.includes(p)) fail(where, 'missing: ' + p);
   for (const sel of ['#hero-sms', '#offline-note', '#signup-note']) if (await page.locator(sel).isVisible()) fail(where, sel + ' shows an empty line');
   if (!(await page.locator('#hero-start').isVisible())) fail(where, 'no "Start for free"');
-  if (!(await page.locator('.month').isVisible())) fail(where, 'the calendar is not shown');
+  if (!(await page.locator('#try-cal .month').isVisible())) fail(where, 'the calendar is not shown');
   const opacity = await page.locator('#privacy p').evaluate(el => getComputedStyle(el).opacity);
   if (opacity !== '1') fail(where, 'a section is left invisible');
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -358,7 +358,7 @@ async function metaAndHeaders() {
     const tw = /name="twitter:image" content="([^"]+)"/.exec(html);
     if (!tw || tw[1] !== image[1]) fail(where, 'twitter:image differs from og:image');
   }
-  for (const path of ['/app/', '/admin/', '/help', '/site.css']) {
+  for (const path of ['/app/', '/admin/', '/help', '/sms-opt-in-1.png', '/no-such-page']) {
     const tag = (await fetch(base + path)).headers.get('x-robots-tag') || '';
     if (!/noindex/i.test(tag)) fail(where, `${path} is no longer sent with X-Robots-Tag: noindex`);
   }
