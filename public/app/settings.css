@@ -481,6 +481,90 @@ button.st-kind-open:hover .st-edit-word {
   color: var(--muted);
 }
 
+/* The bedikot: seven day buttons that toggle (with "All" and "1 and 7"), and the two parts, each a switch with its time. */
+.st-days {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+.st-days > .st-part-name {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.st-days-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+button.st-day {
+  flex: 1 0 36px;
+  max-width: 48px;
+  min-height: var(--tap);
+  padding: 0;
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+button.st-day[aria-pressed='true'],
+button.st-day[aria-pressed='true']:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.st-days-quick {
+  display: inline-flex;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+}
+button.st-day-quick {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+button.st-day-quick[aria-pressed='true'],
+button.st-day-quick[aria-pressed='true']:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+@media (max-width: 519px) {
+  .st-days-quick {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+.st-part {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: var(--tap);
+  max-width: 26rem;
+  padding: var(--space-1) 0;
+}
+.st-part .st-part-name {
+  flex: 1 1 auto;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.st-part.off .st-part-name {
+  color: var(--muted);
+}
+.st-part input[type='number'] {
+  width: 5.5em;
+}
+.st-part .error,
+.st-rest .error {
+  flex-basis: 100%;
+}
+.st-rest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
 /* ======================= large choices ======================= */
 
 fieldset.st-choices {
