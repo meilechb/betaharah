@@ -199,6 +199,7 @@ ${
   <li><strong>Google Calendar.</strong> Under Settings, connect Google Calendar. That is separate from signing in. The site creates one new calendar and keeps it up to date within about a minute of each change. It can see and change only that one calendar. To share it with your spouse, share that calendar from Google Calendar.</li>
   <li><strong>A subscription link</strong>, for Apple Calendar, Outlook, or Google Calendar without connecting an account. Under Settings, create the link and add it in your calendar app as a subscribed calendar (in Google Calendar: Other calendars, +, From URL). The calendar app decides how often it looks for changes; Google says it can take up to 12 hours. Anyone who has the link can read the calendar, so treat it like a password. You can replace or remove it at any time.</li>
 </ul>
+<p>By default your calendar app shows only the onot, the start of each period and the hefsek taharah; the niddah days, the seven clean days and the mikvah night can be switched on under Settings, Calendar.</p>
 <p>Event titles can be written in words or as symbols only, for a calendar other people may see.</p>`,
       },
       {

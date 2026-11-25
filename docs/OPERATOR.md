@@ -319,15 +319,25 @@ If the reviewer asks for changes, the wording that users see is in
 
 ### Changing the texts
 
-Console → **Texts**. Each text shows when it is sent, how it looks on a
-phone (by SMS with the options on the last line; by RCS with the options
-as buttons) with example values, and its length in characters and SMS
-segments. **Edit** opens the text with its placeholders as buttons that
-insert them, one box per option label, and a live preview and count;
-**Reset to the original** puts back the shipped wording. The search box
-filters by words. Under **Words**: the words people can write at any
-time, one comma-separated list per action, and what comes before the
-options (`Reply:`).
+Console → **Texts**. The page opens on **Important**: the 20 or so texts
+most people ever get. The categories (Reminders, Recording, Status,
+Sign-up and setup, Menu and not understood, Settings by text, Phones and
+account, Carrier words and sign-in) show how many texts each has; **All**
+shows every one, **Changed** only the ones you edited, and the search box
+looks in the names, "sent when" and the wording. Each row is one text: its
+name, when it is sent, and the wording as sent with example values and
+its options as small chips (the length shows only when it takes more than
+one SMS). A reminder's plain and discreet wording share one row, and the
+twelve customs questions are one row that opens to them.
+
+Click a row (or Enter) to edit it in place: the wording with its
+placeholders as buttons that insert them (each shows its example), one box
+per option label, and a live SMS and RCS preview with the count. Escape or
+**Cancel** closes it; **Reset to the original** puts back the shipped
+wording. The address keeps the category, filters, search and open text,
+so a reload or Back returns to the same place. **Words people can write**
+(last in the categories): the words for each action as chips to add or
+remove, and what comes before the options (`Reply:`).
 
 A change is refused, with the reason beside the field, when a required
 placeholder is missing or an unknown one is used, a character is not in

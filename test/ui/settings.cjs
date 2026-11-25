@@ -384,6 +384,74 @@ const H = { 'x-betaharah': '1' };
     await noSideways('calendar');
   });
 
+  await step('calendar: what the calendar app shows, six switches; the feed follows them', async () => {
+    await openSection('calendar', 'Calendar');
+    await page.click('#link-create');
+    await savedIn('calendar');
+    // the link names the site's own address; here it is read from the local server
+    const link = base + new URL((await page.textContent('#cal-link code.copy')).trim()).pathname;
+    const feed = async () => {
+      const r = await page.request.get(link);
+      if (!r.ok()) throw new Error('feed ' + r.status());
+      return (await r.text()).split('\r\n').filter(l => l.startsWith('SUMMARY:')).map(l => l.slice(8));
+    };
+    const want = [
+      ['onot', 'Onot', '', true],
+      ['period', 'Period start', '', true],
+      ['hefsek', 'Hefsek taharah', '', true],
+      ['niddah', 'Niddah days', '', false],
+      ['cleanDays', 'Seven clean days', '', false],
+      ['mikvah', 'Mikvah night', '', false],
+    ];
+    const rows = await page.$$eval('#cal-show .st-switch-row', ls =>
+      ls.map(l => [l.querySelector('input').id, l.querySelector('.st-title').textContent, (l.querySelector('.st-summary') || { textContent: '' }).textContent, l.querySelector('input').checked]),
+    );
+    const expected = want.map(([k, label, help, on]) => ['cal-show-' + k, label, help, on]);
+    if (JSON.stringify(rows) !== JSON.stringify(expected)) throw new Error('switches: ' + JSON.stringify(rows));
+    if ((await page.textContent('#cal-show-title')) !== 'Shown in your calendar app') throw new Error('group title');
+    if (JSON.stringify((await state()).app.calendar.show) !== JSON.stringify({ onot: true, period: true, hefsek: true, niddah: false, cleanDays: false, mikvah: false })) throw new Error('defaults');
+    const before = await feed();
+    if (before.includes('Niddah')) throw new Error('the niddah days are in the feed by default');
+    if (!before.some(t => t.startsWith('Veset onah'))) throw new Error('no onot in the feed: ' + before.join(' | '));
+    // the niddah days switched on, and off again
+    await page.click('label[for="cal-show-niddah"]');
+    await savedIn('calendar');
+    if (!(await feed()).includes('Niddah')) throw new Error('no niddah event once switched on');
+    await page.click('label[for="cal-show-niddah"]');
+    await savedIn('calendar');
+    if ((await feed()).includes('Niddah')) throw new Error('the niddah event stayed after switching off');
+    if (before.some(t => t.startsWith('Seven clean days') || t.startsWith('Mikvah night'))) throw new Error('clean days or mikvah night in the feed by default');
+    // switching the clean days on
+    await page.click('label[for="cal-show-cleanDays"]');
+    await savedIn('calendar');
+    if (!(await state()).app.calendar.show.cleanDays) throw new Error('clean days not saved');
+    await page.waitForSelector('#cal-show-cleanDays:checked');
+    const on = await feed();
+    if (!on.some(t => t.startsWith('Seven clean days'))) throw new Error('no clean days in the feed once switched on');
+    if (on.length <= before.length) throw new Error('the feed did not grow');
+    // and the onot off
+    await page.click('label[for="cal-show-onot"]');
+    await savedIn('calendar');
+    const noOnot = await feed();
+    if (noOnot.some(t => t.startsWith('Veset onah') || t.startsWith('Or Zarua'))) throw new Error('onot still in the feed');
+    await page.screenshot({ path: out + '/settings-calendar-show-390.png', fullPage: true });
+    // back to the defaults
+    await page.click('label[for="cal-show-onot"]');
+    await savedIn('calendar');
+    await page.click('label[for="cal-show-cleanDays"]');
+    await savedIn('calendar');
+    if (JSON.stringify(await feed()) !== JSON.stringify(before)) throw new Error('the feed is not as it was');
+    await backToHome();
+    if ((await summary('calendar')) !== 'Subscription link · in words') throw new Error('summary: ' + (await summary('calendar')));
+    await openSection('calendar', 'Calendar');
+    await page.click('#cal-more summary');
+    await page.click('#link-remove');
+    await page.click('dialog button:has-text("Remove link")');
+    await savedIn('calendar');
+    await page.waitForSelector('#link-create');
+    await noSideways('calendar');
+  });
+
   // ----- Language -----
 
   await step('language: Hebrew terms, with the summaries following', async () => {
