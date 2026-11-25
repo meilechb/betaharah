@@ -36,12 +36,11 @@ const fail = (where, message) => failures.push(`${where}: ${message}`);
 
 const HOME_PHRASES = [
   'Your mikvah calendar, worked out for you',
-  'When did your period start?',
-  'Or just text it',
-  'period started today',
-  'When did it begin?',
-  'Reminders when you want them',
-  'Nothing is sent on Shabbat or Yom Tov',
+  'Tap any day to try it.',
+  'Prefer texting?',
+  'period now',
+  'Hefsek from Sat Nov 28',
+  'Text reminders, your way',
   'Signing in with Google',
 ];
 // The home page says what it does for a person; how it is built is on /privacy.
@@ -199,7 +198,8 @@ async function keyboard(browser) {
   await page.keyboard.press('Tab');
   const first = await page.evaluate(() => document.activeElement && document.activeElement.className);
   if (!/skip/.test(first || '')) fail(where, 'the first Tab does not reach the skip link');
-  const field = page.locator('#try-start');
+  await page.waitForSelector('#try-cal button.day');
+  const field = page.locator('#try-cal button.day').first();
   await field.focus();
   const focusRing = await field.evaluate(el => {
     el.focus();

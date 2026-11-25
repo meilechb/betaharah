@@ -315,44 +315,28 @@ async function home(browser) {
       if (r.url().includes('/api/try') && r.status() !== 200) refused.push(r.status());
     });
     const step = (name, fn) => run(`home ${width}px: ${name}`, page, fn);
-    await step('a date and a zip fill the month, with no place list', async () => {
+    await step('the sample month is filled, and a day opens the add sheet', async () => {
       await page.goto(base + '/#try');
-      await page.waitForSelector('#try-start');
-      if (await page.locator('#try-place, select').count()) throw new Error('a place list is on the page');
+      if (await page.locator('#try-place, #try-zip, select').count()) throw new Error('a place or zip field is on the page');
       await page.waitForSelector('#try-cal .mk.flow');
-      const today = await page.getAttribute('#try-start', 'max');
-      const start = new Date(Date.parse(today + 'T00:00:00Z') - 8 * 86400000).toISOString().slice(0, 10);
-      await page.fill('#try-start', start);
-      await page.dispatchEvent('#try-start', 'change');
-      await page.waitForSelector(`#try-day-${start} .mk.flow`);
-      let sawHefsek = (await page.locator('#try-cal .mk.hefsek').count()) > 0;
-      let sawClean = (await page.locator('#try-cal .mk.clean').count()) > 0;
-      if ((!sawHefsek || !sawClean) && !(await page.locator('#try-next').isDisabled())) {
-        await page.click('#try-next');
-        sawHefsek = sawHefsek || (await page.locator('#try-cal .mk.hefsek').count()) > 0;
-        sawClean = sawClean || (await page.locator('#try-cal .mk.clean').count()) > 0;
+      await page.waitForSelector('#try-cal .mk.hefsek');
+      const today = await page.locator('#try-cal .day.today').getAttribute('id').catch(() => null);
+      const target = today || (await page.locator('#try-cal button.day').first().getAttribute('id'));
+      await page.click('#' + target);
+      await page.waitForSelector('#try-sheet[open], #try-sheet:visible');
+      if (!(await page.locator('#try-add-hefsek').isVisible()) && !(await page.locator('text=Hefsek taharah').count())) {
+        if (!(await page.getByText('Hefsek taharah').count())) throw new Error('the sheet is missing the hefsek');
       }
-      if (!sawHefsek) throw new Error('no hefsek on the calendar');
-      if (!sawClean) throw new Error('no clean days on the calendar');
-      await page.fill('#try-zip', '10001');
-      await page.dispatchEvent('#try-zip', 'input');
-      await page.waitForFunction(() => {
-        const err = document.getElementById('try-error');
-        return document.querySelector('#try-cal .mk.flow') && (!err || err.hidden);
-      });
+      await page.click('#try-add-flow-day');
+      await page.waitForSelector('#' + target + ' .mk.flow', { timeout: 8000 });
       if (!(await page.isVisible('#hero-start'))) throw new Error('no button to start');
       const text = await page.textContent('#try');
       for (const word of [/\bserver\b/i, /\bengine\b/i, /\bAPI\b/, /algorithm/i]) if (word.test(text)) throw new Error('technical wording: ' + word);
-      if (!text.includes('Nothing you type here is saved.')) throw new Error('does not say nothing is saved');
+      if (/when did your period start/i.test(text)) throw new Error('asks when the period started');
       const wide = await sideways(page);
       if (wide > 0) throw new Error('scrolls sideways by ' + wide + 'px');
       if (refused.length) throw new Error('a real date and zip code were refused: ' + refused.join(', '));
       if (out) await page.locator('#try').screenshot({ path: `${out}/home-try-${width}-${scheme}.png` });
-    });
-    await step('a zip code that is not real is refused in plain words', async () => {
-      await page.fill('#try-zip', '00000');
-      await page.dispatchEvent('#try-zip', 'input');
-      await page.waitForSelector('#try-error:has-text("We don\'t know that zip code.")');
     });
     if (errors.length) {
       failures.push(`home ${width}px: errors`);
@@ -368,15 +352,8 @@ async function home(browser) {
     const errors = watch(page);
     await run('home: by keyboard alone', page, async () => {
       await page.goto(base + '/#try');
-      await page.waitForSelector('#try-cal .mk.flow');
-      await page.focus('#try-start');
-      // a date box has several parts (month, day, year, picker); Tab walks through them first
-      for (let i = 0; i < 5; i++) {
-        await page.keyboard.press('Tab');
-        if ((await page.evaluate(() => document.activeElement.id)) !== 'try-start') break;
-      }
-      if ((await page.evaluate(() => document.activeElement.id)) !== 'try-zip') throw new Error('Tab does not reach the zip code');
-      const first = await page.evaluate(() => document.querySelector('#try .month .day[tabindex="0"]').id);
+      await page.waitForSelector('#try-cal button.day');
+      const first = await page.evaluate(() => document.querySelector('#try .month button.day[tabindex="0"]').id);
       await page.focus('#' + first);
       await page.keyboard.press('ArrowRight');
       const next = await page.evaluate(() => document.activeElement.id);

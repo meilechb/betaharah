@@ -25,7 +25,7 @@ import { calculationState, draftFromForm, kindLabels } from './dashboard';
 import { addEntries, compute, confirmationText, rejectionText, whereOf, type AddResult, type DraftEntry, type Where } from './household';
 import { newHousehold, type HouseholdData } from './model';
 import { assertSunTimesExist, DEFAULT_APP_SETTINGS, parseAppSettings, PLACES, ValidationError, type PlaceSetting } from './settings';
-import { lookupPostal } from './zip';
+import { lookupPostal, nearestPostal } from './zip';
 
 const MINUTE = 60_000;
 
@@ -246,7 +246,7 @@ export function sandboxChoices(terms: 'en' | 'he') {
 }
 
 /** "Try it" on the home page: at most this many dates, of these kinds, with the defaults of a new account except these customs. */
-export const TRY_LIMITS: SandboxLimits = { maxEntries: 12, kinds: ['flow', 'hefsek', 'mikvah'] };
+export const TRY_LIMITS: SandboxLimits = { maxEntries: 12, kinds: ['flow', 'hefsek', 'mikvah', 'stain', 'broken'] };
 export const TRY_CUSTOMS = ['minWaitDays', 'beinonitDays', 'orZarua'] as const;
 /** "Try it": at most this many calculations per network address in ten minutes. */
 export const TRY_PER_ADDRESS = 60;
@@ -265,11 +265,20 @@ export function tryCustoms(input: unknown): HalachicSettings {
   return settings as unknown as HalachicSettings;
 }
 
-/** "Try it": only a place of the list or a postal code. */
+/**
+ * "Try it": a place of the list, a postal code, or a point from the
+ * browser's location, snapped to the nearest known postal area.
+ */
 export function tryPlace(input: unknown): unknown {
   const o = object(input, 'place');
+  if (typeof o.latitude === 'number' && typeof o.longitude === 'number') {
+    const found = nearestPostal(o.latitude, o.longitude);
+    if (!found) throw new ValidationError('No place was found near that location.');
+    const { name, latitude, longitude, timeZone, elevation } = found;
+    return { name, latitude, longitude, timeZone, elevation };
+  }
   if (typeof o.postal === 'string') return { postal: o.postal };
-  if (typeof o.name === 'string') return { name: o.name };
+  if (typeof o.name === 'string' && o.latitude === undefined) return { name: o.name };
   throw new ValidationError('place: choose a place from the list, or enter a ZIP code');
 }
 
