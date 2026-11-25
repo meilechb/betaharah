@@ -3261,8 +3261,10 @@ body.lp {
 .try-sheet .sheet-x .ic { width: 16px; height: 16px; }
 .try-sheet h3 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 400; margin: 0 28px 4px 0; }
 .try-sheet .sheet-when { margin: 0 0 14px; display: flex; flex-direction: column; gap: 2px; }
+.try-sheet .sheet-when b,
+.try-sheet .sheet-when span { display: block; }
 .try-sheet .sheet-when b { color: var(--ink); font-size: 0.95rem; }
-.try-sheet .sheet-when span { color: var(--muted); font-size: 0.85rem; }
+.try-sheet .sheet-when span { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
 .try-sheet .addgrid { grid-template-columns: 1fr; gap: 8px; }
 .try-sheet .addbtn {
   min-height: 56px;
