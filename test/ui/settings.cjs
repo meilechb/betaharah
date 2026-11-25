@@ -365,7 +365,7 @@ const H = { 'x-betaharah': '1' };
 
   await step('reminders: the text before Shabbat and Yom Tov, wording, and the advanced options', async () => {
     if ((await page.inputValue('#rem-rest-eve')) !== '09:00') throw new Error('rest eve: ' + (await page.inputValue('#rem-rest-eve')));
-    if (!(await page.textContent('label[for="rem-rest-eve"]')).includes('Before Shabbat and Yom Tov')) throw new Error('no label');
+    if (!(await page.textContent('label[for="rem-rest-eve"]')).includes('Before Shabbos and Yom Tov')) throw new Error('no label');
     await page.fill('#rem-rest-eve', '08:15');
     await page.press('#rem-rest-eve', 'Tab');
     await savedIn('reminders');
@@ -444,7 +444,7 @@ const H = { 'x-betaharah': '1' };
       return (await r.text()).split('\r\n').filter(l => l.startsWith('SUMMARY:')).map(l => l.slice(8));
     };
     const want = [
-      ['onot', 'Onot', '', true],
+      ['onot', 'Onos', '', true],
       ['period', 'Period start', '', true],
       ['hefsek', 'Hefsek taharah', '', true],
       ['niddah', 'Niddah days', '', false],
@@ -510,7 +510,7 @@ const H = { 'x-betaharah': '1' };
     await backToHome();
     if ((await summary('language')) !== 'Terms in Hebrew script · Hebrew dates') throw new Error('summary: ' + (await summary('language')));
     await openSection('reminders', 'Reminders');
-    if (!(await page.textContent('label[for="rem-rest-eve"]')).includes('שבת')) throw new Error('the text before Shabbat not in Hebrew terms: ' + (await page.textContent('label[for="rem-rest-eve"]')));
+    if (!(await page.textContent('label[for="rem-rest-eve"]')).includes('שבת')) throw new Error('the text before Shabbos not in Hebrew terms: ' + (await page.textContent('label[for="rem-rest-eve"]')));
     await backToHome();
     await page.setViewportSize({ width: 360, height: 800 });
     for (const id of ['', 'location', 'phones', 'phones/17325550100', 'phones/add', 'reminders', 'reminders/scheduled', 'calendar', 'language', 'texting', 'security', 'data']) {

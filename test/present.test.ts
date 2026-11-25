@@ -64,7 +64,7 @@ describe('formatting', () => {
       ]),
     ).toBe('day 30, chodesh, haflagah 28d');
     const many = [27, 28, 29, 31, 33, 35].map(length => ({ kind: 'haflagah' as const, unit: 'onot' as const, length, latest: false }));
-    expect(reasonsEnglish(many)).toBe('haflagah 27 onot, haflagah 28 onot, haflagah 29 onot, haflagah 31 onot +2 more');
+    expect(reasonsEnglish(many)).toBe('haflagah 27 onos, haflagah 28 onos, haflagah 29 onos, haflagah 31 onos +2 more');
   });
 });
 
@@ -115,7 +115,7 @@ describe('reminders', () => {
     expect(r).toHaveLength(1);
     expect(r[0]!.key).toBe(`hefsek:f:${SUN + 4}`);
     expect(r[0]!.at).toBe(dayTimes(SUN + 4, LAKEWOOD, ZOPTS).sunset - 120 * 60_000);
-    expect(r[0]!.text).toMatch(/^Hefsek tahara: today, before sunset at 4:3\d PM\.$/);
+    expect(r[0]!.text).toMatch(/^Hefsek taharah: today, before sunset at 4:3\d PM\.$/);
   });
 
   it('each later day gets its own hefsek reminder, up to the limit', () => {
@@ -205,13 +205,13 @@ describe('reminders', () => {
     expect(rest[0]!.key).toBe(`rest:${SAT}`);
     expect(localDateTime(rest[0]!.at, TZ)).toMatchObject({ m: 11, d: 27, hh: 9, mi: 0 });
     expect(rest[0]!.until).toBe(dayTimes(SAT - 1, LAKEWOOD, ZOPTS).sunset - 18 * 60_000);
-    expect(rest[0]!.text).toMatch(/^Over Shabbat\. Tomorrow: clean day 2, bedikah morning and before 4:3\d PM\.$/);
+    expect(rest[0]!.text).toMatch(/^Over Shabbos\. Tomorrow: clean day 2, bedikah morning and before 4:3\d PM\.$/);
     // Friday's own reminders are before candle lighting and stay
     expect(r.find(x => x.key === `bedikah_am:f:${SUN + 4}:1`)).toBeDefined();
     expect(r.find(x => x.key === `bedikah_pm:f:${SUN + 4}:1`)).toBeDefined();
     expect(r.filter(x => x.kind === 'bedikah_afternoon')).toHaveLength(6);
     const discreet = buildReminders(timeline([flow, hefsek], at(2026, 11, 26, 18)), { ...DEFAULT_REMINDER_OPTIONS, style: 'discreet' }, CTX).find(x => x.kind === 'rest')!;
-    expect(discreet.text).toMatch(/^Over Shabbat\. Tomorrow: day 2\/7, AM and before 4:3\d PM\.$/);
+    expect(discreet.text).toMatch(/^Over Shabbos\. Tomorrow: day 2\/7, AM and before 4:3\d PM\.$/);
     expect(discreet.key).toBe(rest[0]!.key);
   });
 
@@ -220,7 +220,7 @@ describe('reminders', () => {
     expect(r.find(x => x.kind === 'mikvah')).toBeUndefined();
     const rest = r.find(x => x.key === `rest:${SAT + 7}`)!;
     expect(localDateTime(rest.at, TZ)).toMatchObject({ m: 12, d: 4, hh: 9 });
-    expect(rest.text).toMatch(/Tomorrow night: mikvah night, after 5:\d\d PM \(after Shabbat or Yom Tov\)\.$/);
+    expect(rest.text).toMatch(/Tomorrow night: mikvah night, after 5:\d\d PM \(after Shabbos or Yom Tov\)\.$/);
     expect(rest.rest!.after.text.items.map(i => i.kind)).toEqual(['mikvah']);
   });
 
@@ -229,7 +229,7 @@ describe('reminders', () => {
     expect(r.find(x => x.kind === 'mikvah')).toBeUndefined();
     const rest = r.find(x => x.key === `rest:${SAT + 7}`)!;
     expect(localDateTime(rest.at, TZ)).toMatchObject({ m: 12, d: 4, hh: 9 });
-    expect(rest.text).toMatch(/^Over Shabbat\. Tonight: mikvah night, after 5:\d\d PM \(Shabbat or Yom Tov night\)\.$/);
+    expect(rest.text).toMatch(/^Over Shabbos\. Tonight: mikvah night, after 5:\d\d PM \(Shabbos or Yom Tov night\)\.$/);
   });
 
   it('consecutive onot are announced once, with the whole stretch', () => {
@@ -347,11 +347,11 @@ describe('bedikah reminders: which days, morning and before sunset', () => {
     const morning = run({ beforeSunset: false });
     expect(days(morning, 'bedikah_afternoon')).toEqual([]);
     expect(days(morning, 'bedikah_morning')).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect(morning.find(x => x.kind === 'rest')!.text).toBe('Over Shabbat. Tomorrow: clean day 2, bedikah in the morning.');
+    expect(morning.find(x => x.kind === 'rest')!.text).toBe('Over Shabbos. Tomorrow: clean day 2, bedikah in the morning.');
     const sunset = run({ morning: false });
     expect(days(sunset, 'bedikah_morning')).toEqual([]);
     expect(days(sunset, 'bedikah_afternoon')).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect(sunset.find(x => x.kind === 'rest')!.text).toMatch(/^Over Shabbat\. Tomorrow: clean day 2, bedikah before 4:3\d PM\.$/);
+    expect(sunset.find(x => x.kind === 'rest')!.text).toMatch(/^Over Shabbos\. Tomorrow: clean day 2, bedikah before 4:3\d PM\.$/);
     // the switch for the bedikot as a whole still turns them all off
     expect(days(run({ on: false }), 'bedikah_morning')).toEqual([]);
   });
@@ -384,7 +384,7 @@ describe('Shabbat and Yom Tov: one text the morning before', () => {
     expect(rest[0]!.key).toBe(`rest:${P1}`);
     expect(localDateTime(rest[0]!.at, TZ)).toMatchObject({ m: 4, d: 21, hh: 9, mi: 0 });
     expect(rest[0]!.text).toMatch(
-      /^Over Yom Tov and Shabbat\. Tomorrow: clean day 3, bedikah morning and before 7:4\d PM\. Fri: clean day 4, bedikah morning and before 7:4\d PM\. Shabbat: clean day 5, bedikah morning and before 7:4\d PM\.$/,
+      /^Over Yom Tov and Shabbos\. Tomorrow: clean day 3, bedikah morning and before 7:4\d PM\. Fri: clean day 4, bedikah morning and before 7:4\d PM\. Shabbos: clean day 5, bedikah morning and before 7:4\d PM\.$/,
     );
     // nothing of those days is sent on its own, and nothing at all is sent during them
     for (const x of r) {

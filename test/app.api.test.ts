@@ -1520,7 +1520,7 @@ describe('reminders', () => {
     world.clock.now = at(11, 26, 14, 34);
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
-    expect(reminders(WIFE)[0]).toBe('Hefsek tahara: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
+    expect(reminders(WIFE)[0]).toBe('Hefsek taharah: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
     expect(reminders(HUSBAND)).toEqual([]); // he did not turn reminders on
     world.clock.now += MINUTE;
     await run();
@@ -1535,7 +1535,7 @@ describe('reminders', () => {
     await c.post('/api/entries', { kind: 'flow', date: '2026-11-22', part: 'day' });
     world.clock.now = at(11, 26, 15, 34);
     await run();
-    expect(reminders(WIFE).at(-1)).toBe('Hefsek tahara: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
+    expect(reminders(WIFE).at(-1)).toBe('Hefsek taharah: today, before sunset at 4:33 PM.\nReply: DONE, STATUS');
     // DONE, written in words, an hour later
     world.clock.now = at(11, 26, 15, 40);
     await text(WIFE, 'Done.', 'ev-done');
@@ -1715,7 +1715,7 @@ describe('reminders', () => {
     world.clock.now += 6 * MINUTE;
     await run();
     expect(reminders(WIFE)).toHaveLength(1);
-    expect(reminders(WIFE)[0]).toMatch(/^Hefsek tahara: today/);
+    expect(reminders(WIFE)[0]).toMatch(/^Hefsek taharah: today/);
   });
 
   it('while texting stays off, a due reminder is dropped once its time is over', async () => {
@@ -1754,7 +1754,7 @@ describe('reminders', () => {
     expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual([]);
     world.clock.now = at(11, 27, 9, 1);
     await run();
-    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual(['Over Shabbat. Tomorrow: clean day 2, bedikah in the morning.\nReply: STATUS']);
+    expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual(['Over Shabbos. Tomorrow: clean day 2, bedikah in the morning.\nReply: STATUS']);
     // the six-hourly refresh, and more runs: nothing again
     await testDb.db.prepare('UPDATE households SET refresh_at = 0').run();
     world.clock.now = at(11, 27, 11);
@@ -1766,8 +1766,8 @@ describe('reminders', () => {
     await textsOn(c, WIFE, ['bedikah_morning', 'bedikah_afternoon', 'mikvah']);
     await run();
     expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual([
-      'Over Shabbat. Tomorrow: clean day 2, bedikah in the morning.\nReply: STATUS',
-      expect.stringMatching(/^Over Shabbat\. Tomorrow: clean day 2, bedikah before 4:3\d PM\.\nReply: STATUS$/),
+      'Over Shabbos. Tomorrow: clean day 2, bedikah in the morning.\nReply: STATUS',
+      expect.stringMatching(/^Over Shabbos\. Tomorrow: clean day 2, bedikah before 4:3\d PM\.\nReply: STATUS$/),
     ]);
     // nothing during Shabbat, nothing after it (all of it was brought), and Sunday as usual
     for (const t of [at(11, 27, 17), at(11, 28, 9), at(11, 28, 18), at(11, 28, 20)]) {
@@ -1792,7 +1792,7 @@ describe('reminders', () => {
     world.clock.now = at(11, 27, 13, 1);
     await run();
     expect(reminders(WIFE).filter(t => t.startsWith('Over'))).toEqual([
-      expect.stringMatching(/^Over Shabbat\. Tomorrow: clean day 1, bedikah morning and before 4:3\d PM \(required\)\. Book the mikvah for Fri night, eve of 25 Kislev, after 5:1\d PM\.\nReply: STATUS$/),
+      expect.stringMatching(/^Over Shabbos\. Tomorrow: clean day 1, bedikah morning and before 4:3\d PM \(required\)\. Book the mikvah for Fri night, eve of 25 Kislev, after 5:1\d PM\.\nReply: STATUS$/),
     ]);
   });
 
@@ -2762,8 +2762,8 @@ describe('the month calendar on the dashboard', () => {
     expect(grid.days.filter((d: any) => d.monthStart).map((d: any) => `${d.date} ${d.hebrewMonth}`)).toEqual([
       '2026-10-12 Cheshvan',
       '2026-11-11 Kislev',
-      '2026-12-11 Tevet',
-      '2027-01-09 Shevat',
+      '2026-12-11 Teves',
+      '2027-01-09 Shvat',
       '2027-02-08 Adar I',
       '2027-03-10 Adar II',
     ]);

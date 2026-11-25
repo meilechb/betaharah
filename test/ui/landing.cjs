@@ -44,7 +44,7 @@ const HOME_PHRASES = [
   'Signing in with Google',
 ];
 // The home page says what it does for a person; how it is built is on /privacy.
-const TECHNICAL = [/AES/, /decrypt/i, /encrypt/i, /Telnyx/, /cookie/i, /\bserver\b/i, /night of Shabbat/];
+const TECHNICAL = [/AES/, /decrypt/i, /encrypt/i, /Telnyx/, /cookie/i, /\bserver\b/i, /night of Shabbat/, /night of Shabbos/];
 const FOOTER_PHRASES = ['Message frequency varies', 'Message and data rates may apply', 'Reply STOP to stop, HELP for help', 'It does not give halachic rulings or medical advice'];
 const DOCS = [
   { path: '/help', h1: 'Help', phrases: ['On this page', 'Recording by text message', 'Using it by text only', 'Reply: PERIOD, HEFSEK, STATUS, MORE', 'The main options', 'period last night', 'It does not give halachic rulings'] },

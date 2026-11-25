@@ -227,31 +227,31 @@ describe('the one text before Shabbat or Yom Tov', () => {
     item('hefsek:p:1', 'hefsek', 1 * H, { day: 'Tomorrow', sunset: '7:42 PM' }),
     item('bedikah_am:p:1:1', 'bedikah_morning', 20 * H, { day: 'Fri', n: '1', sunset: '7:43 PM', required: ' (required)' }),
     item('bedikah_pm:p:1:1', 'bedikah_afternoon', 30 * H, { day: 'Fri', n: '1', sunset: '7:43 PM', required: ' (required)' }),
-    item('bedikah_am:p:1:2', 'bedikah_morning', 44 * H, { day: 'Shabbat', n: '2', sunset: '7:44 PM', required: '' }),
-    item('bedikah_pm:p:1:2', 'bedikah_afternoon', 54 * H, { day: 'Shabbat', n: '2', sunset: '7:44 PM', required: '' }),
+    item('bedikah_am:p:1:2', 'bedikah_morning', 44 * H, { day: 'Shabbos', n: '2', sunset: '7:44 PM', required: '' }),
+    item('bedikah_pm:p:1:2', 'bedikah_afternoon', 54 * H, { day: 'Shabbos', n: '2', sunset: '7:44 PM', required: '' }),
     item('mikvah_book:p:1', 'mikvah_book', 45 * H, { day: 'Thu night, eve of 28 Nisan', time: '8:31 PM' }),
-    item('mikvah:p:1:2', 'mikvah', 55 * H, { day: 'Shabbat night', time: '8:31 PM', notes: ' (moved past the fast; after Shabbat or Yom Tov; also an onah)' }),
+    item('mikvah:p:1:2', 'mikvah', 55 * H, { day: 'Shabbos night', time: '8:31 PM', notes: ' (moved past the fast; after Shabbos or Yom Tov; also an onah)' }),
   ];
   const ONAH = item('onah:1:2', 'onah', 56 * H, {
-    from: '8:05 PM Shabbat night',
+    from: '8:05 PM Shabbos night',
     to: '7:46 AM Sun',
-    why: 'Or Zarua of day 30, chodesh, haflagah 28d, haflagah 29 onot +2 more',
+    why: 'Or Zarua of day 30, chodesh, haflagah 28d, haflagah 29 onos +2 more',
     bedikah: ' Bedikah.',
     mark: 'OZ',
   });
-  const send = (style: 'plain' | 'discreet', items: RestItem[]) => restOut(NO_TEXTS, { rest: 'Yom Tov and Shabbat', style, items }, NOW);
+  const send = (style: 'plain' | 'discreet', items: RestItem[]) => restOut(NO_TEXTS, { rest: 'Yom Tov and Shabbos', style, items }, NOW);
 
   it('reads as one short list: its days in order, both bedikot of a day on one line, in both wordings', () => {
     const plain = send('plain', WORST.slice(0, 5));
     expect(plain.outs.map(o => o.text)).toEqual([
-      'Over Yom Tov and Shabbat. Tomorrow: hefsek tahara before 7:42 PM. Fri: clean day 1, bedikah morning and before 7:43 PM (required). Shabbat: clean day 2, bedikah morning and before 7:44 PM.\nReply: STATUS',
+      'Over Yom Tov and Shabbos. Tomorrow: hefsek taharah before 7:42 PM. Fri: clean day 1, bedikah morning and before 7:43 PM (required). Shabbos: clean day 2, bedikah morning and before 7:44 PM.\nReply: STATUS',
     ]);
     expect(plain.chat).toMatchObject({ key: 'reminder.rest.bedikot', opts: [['status', 'STATUS']] });
     const discreet = send('discreet', WORST.slice(0, 5));
-    expect(discreet.outs.map(o => o.text)).toEqual(['Over Yom Tov and Shabbat. Tomorrow: H before 7:42 PM. Fri: day 1/7, AM and before 7:43 PM. Shabbat: day 2/7, AM and before 7:44 PM.\nReply: STATUS']);
+    expect(discreet.outs.map(o => o.text)).toEqual(['Over Yom Tov and Shabbos. Tomorrow: H before 7:42 PM. Fri: day 1/7, AM and before 7:43 PM. Shabbos: day 2/7, AM and before 7:44 PM.\nReply: STATUS']);
     // one part of a day alone
-    expect(send('plain', [WORST[2]!]).outs[0]!.body).toBe('Over Yom Tov and Shabbat. Fri: clean day 1, bedikah before 7:43 PM (required).');
-    expect(send('plain', [WORST[1]!]).outs[0]!.body).toBe('Over Yom Tov and Shabbat. Fri: clean day 1, bedikah in the morning (required).');
+    expect(send('plain', [WORST[2]!]).outs[0]!.body).toBe('Over Yom Tov and Shabbos. Fri: clean day 1, bedikah before 7:43 PM (required).');
+    expect(send('plain', [WORST[1]!]).outs[0]!.body).toBe('Over Yom Tov and Shabbos. Fri: clean day 1, bedikah in the morning (required).');
   });
 
   it('the worst case is at most two texts of two segments each, split between lines, each with its options', () => {
@@ -264,7 +264,7 @@ describe('the one text before Shabbat or Yom Tov', () => {
           expect(isGsmBasic(o.text), o.text).toBe(true);
           expect(o.text).toMatch(/\.\nReply: STATUS$/); // whole lines only, nothing cut short
         }
-        expect(outs[0]!.text.startsWith('Over Yom Tov and Shabbat. Tomorrow: ')).toBe(true);
+        expect(outs[0]!.text.startsWith('Over Yom Tov and Shabbos. Tomorrow: ')).toBe(true);
       }
     }
     expect(send('plain', WORST).outs).toHaveLength(2);

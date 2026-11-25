@@ -57,7 +57,7 @@ describe('the customs as texted', () => {
     expect(q('minWaitDays')).toMatch(/five \(Ashkenazi, some Sephardi\) or four \(some Sephardi\)/);
     expect(q('beinonitDays')).toMatch(/day 30, day 31, or both/);
     expect(q('beinonitLength')).toMatch(/the onah of the flow, or the full day/);
-    expect(q('haflagahMethod')).toMatch(/onot, hefsek to flow \(Chabad\)/);
+    expect(q('haflagahMethod')).toMatch(/onos, hefsek to flow \(Chabad\)/);
     expect(q('chodesh30')).toMatch(/the 1st of the month after, the 29th, both, or none/);
     expect(q('longCycle')).toMatch(/not until a shorter cycle/);
     expect(q('tzeit')).toMatch(/72 minutes \(Rabbeinu Tam\)/);
@@ -93,7 +93,7 @@ describe('the customs as texted', () => {
           const pausing = c.key === 'vesatot' && o.value === 'paused';
           if (pausing) {
             // Pausing vesatot asks first.
-            expect(out.out[0]!.body).toMatch(/^Pause vesatot\?/);
+            expect(out.out[0]!.body).toMatch(/^Pause vestos\?/);
             expect(p.options()).toEqual(['YES', 'NO']);
             p.send('YES');
           }
@@ -184,22 +184,22 @@ describe('the customs as texted', () => {
     open(p, 'beinonitDays');
     p.say('day 30');
     open(p, 'beinonitDays');
-    expect(p.say('both of them')).toBe('Changed: onah beinonit day: both.');
+    expect(p.say('both of them')).toBe('Changed: onah beinonis day: both.');
   });
 
   it('VESATOT PAUSE needs YES; VESATOT RESUME turns them back on', () => {
     const data = household();
     const p = new Phone(data);
-    expect(p.say('pause vesatot')).toBe('Pause vesatot? No onot perishah are shown while they are paused.');
+    expect(p.say('pause vesatot')).toBe('Pause vestos? No onos perishah are shown while they are paused.');
     expect(p.options()).toEqual(['YES', 'NO']);
     expect(data.halachic.vesatot).toBe('active');
     expect(p.say('NO')).toBe('Nothing was changed.');
     expect(data.halachic.vesatot).toBe('active');
     p.say('PAUSE VESATOT');
-    expect(p.say('YES')).toBe('Changed: vesatot are paused.');
+    expect(p.say('YES')).toBe('Changed: vestos are paused.');
     expect(data.halachic.vesatot).toBe('paused');
-    expect(p.say('PAUSE VESATOT')).toBe('Vesatot are already paused.');
-    expect(p.say('resume vesatot')).toBe('Changed: vesatot are calculated again.');
+    expect(p.say('PAUSE VESATOT')).toBe('Vestos are already paused.');
+    expect(p.say('resume vesatot')).toBe('Changed: vestos are calculated again.');
     expect(data.halachic.vesatot).toBe('active');
     expect(p.say('RESUME VESATOT')).toMatch(/already calculated/);
   });

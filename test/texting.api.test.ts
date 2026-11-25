@@ -277,7 +277,7 @@ describe('the whole life of an account, by text message alone', () => {
     const reminder = world.telnyx.sent.slice(beforeTick);
     expect(reminder).toHaveLength(1);
     expect(reminder[0]).toMatchObject({ to: WIFE, endpoint: 'sms' });
-    expect(reminder[0]!.text).toMatch(/^Hefsek tahara: today, before sunset at 4:3\d PM\.\nReply: DONE, STATUS$/);
+    expect(reminder[0]!.text).toMatch(/^Hefsek taharah: today, before sunset at 4:3\d PM\.\nReply: DONE, STATUS$/);
 
     // ADD: the person who asks gets a code; nothing is sent to anyone else.
     const added = await sms(WIFE, 'ADD');
@@ -745,10 +745,10 @@ describe('carrier words in the middle of a conversation', () => {
     expect(await sms(WIFE, 'DAY 30')).toEqual([]); // not acted on while opted out
     expect(await sms(WIFE, 'START', { autoresponseType: 'START' })).toEqual([START_REPLY]);
     expect((await householdOf(WIFE))!.data.phones[0]!.optedOut).toBe(false);
-    expect((await sms(WIFE, 'DAY 30'))[0]).toMatch(/^Saved: onah beinonit day: day 30\. Custom 3 of 12: /);
+    expect((await sms(WIFE, 'DAY 30'))[0]).toMatch(/^Saved: onah beinonis day: day 30\. Custom 3 of 12: /);
     expect(await sms(WIFE, 'unsubscribe')).toEqual([]);
     expect(await sms(WIFE, 'unstop')).toEqual([START_REPLY]);
-    expect((await sms(WIFE, 'KEEP'))[0]).toMatch(/^Kept: onah beinonit length: /);
+    expect((await sms(WIFE, 'KEEP'))[0]).toMatch(/^Kept: onah beinonis length: /);
   });
 
   it('a phone the carrier says opted out is noted, in a conversation as in a reply', async () => {

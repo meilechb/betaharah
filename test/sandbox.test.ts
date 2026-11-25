@@ -270,9 +270,9 @@ describe('the same picture as an account', () => {
     expect(before.state.alerts).toEqual([]);
     const r = run(entries);
     expect(r.outcomes.every(o => o.ok)).toBe(true);
-    expect(r.message).toBe('Recorded: flow today by day. Hefsek from Shabbat.');
+    expect(r.message).toBe('Recorded: flow today by day. Hefsek from Shabbos.');
     expect(r.state.status!.headline).toBe('Niddah, before the hefsek taharah');
-    expect(r.state.status!.detail).toBe('Hefsek taharah from Shabbat, before 4:32 PM.');
+    expect(r.state.status!.detail).toBe('Hefsek taharah from Shabbos, before 4:32 PM.');
     expect(r.state.alerts).toEqual([]);
     const events = r.state.grid!.events;
     const on = (date: string) => events.filter(e => e.startDate === date).map(e => e.title);
@@ -288,7 +288,7 @@ describe('the same picture as an account', () => {
       ['2026-11-28', true],
     ]);
     // the veset haflagah is counted from the first period to the second
-    expect(events.some(e => e.kind === 'onah' && /Veset haflagah \(33 days\)/.test(e.description))).toBe(true);
+    expect(events.some(e => e.kind === 'onah' && /Vest haflagah \(33 days\)/.test(e.description))).toBe(true);
     // with the immersion recorded, the picture is the same and nothing is left to say
     const withMikvah = run([...entries, { kind: 'mikvah', date: '2026-11-04' }]);
     expect(withMikvah.outcomes.every(o => o.ok)).toBe(true);
@@ -309,9 +309,9 @@ describe('the same picture as an account', () => {
       { kind: 'flow', date: '2026-11-24', part: 'day' },
     ]);
     expect(r.outcomes.every(o => o.ok)).toBe(true);
-    expect(r.message).toBe('Recorded: flow today by day. No hefsek was recorded before it, so it is a new period. Hefsek from Shabbat.');
+    expect(r.message).toBe('Recorded: flow today by day. No hefsek was recorded before it, so it is a new period. Hefsek from Shabbos.');
     expect(r.state.alerts.map(a => a.text)).toEqual(['No hefsek taharah was recorded for the period before; this is counted as a new period.']);
-    expect(r.state.status!.detail).toBe('Hefsek taharah from Shabbat, before 4:32 PM.');
+    expect(r.state.status!.detail).toBe('Hefsek taharah from Shabbos, before 4:32 PM.');
   });
 
   it('the histories show what they were made for', () => {

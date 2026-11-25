@@ -272,7 +272,7 @@ describe('the one text before Shabbat or Yom Tov', () => {
     kind,
     at,
     end,
-    vars: { day: 'Shabbat', n: '2', sunset: '4:31 PM', required: '', time: '5:16 PM', notes: '' },
+    vars: { day: 'Shabbos', n: '2', sunset: '4:31 PM', required: '', time: '5:16 PM', notes: '' },
   });
   const HEFSEK = item('hefsek:1', 'hefsek', START + 20 * HOUR);
   const MIKVAH = item('mikvah:1', 'mikvah', START + 24 * HOUR, AFTER + 6 * HOUR);
@@ -283,9 +283,9 @@ describe('the one text before Shabbat or Yom Tov', () => {
     at: EVE,
     until: START,
     text: '',
-    msg: { key: 'reminder.rest', vars: { rest: 'Shabbat' } },
+    msg: { key: 'reminder.rest', vars: { rest: 'Shabbos' } },
     rest: {
-      eve: { rest: 'Shabbat', style: 'plain', items },
+      eve: { rest: 'Shabbos', style: 'plain', items },
       after: { at: AFTER, until: AFTER + 3 * HOUR, text: { rest: null, style: 'plain', items: items.filter(i => i.end > AFTER) } },
     },
   });
@@ -301,10 +301,10 @@ describe('the one text before Shabbat or Yom Tov', () => {
     expect(pending(data)).toEqual(['rest:100>1']); // B does not get the hefsek kind
     rebuildQueue(data, [rest([HEFSEK, MIKVAH])], NOW + HOUR);
     expect(pending(data)).toEqual(['rest:100>1', 'rest:100:after>1', 'rest:100>2', 'rest:100:after>2']);
-    expect(data.queue.find(q => q.key === 'rest:100' && q.to === A)!.text).toBe(restText({ rest: 'Shabbat', style: 'plain', items: [HEFSEK, MIKVAH] }));
+    expect(data.queue.find(q => q.key === 'rest:100' && q.to === A)!.text).toBe(restText({ rest: 'Shabbos', style: 'plain', items: [HEFSEK, MIKVAH] }));
     expect(sendAll(data, EVE)).toEqual([
-      'rest:100>1: Over Shabbat. Shabbat: hefsek tahara before 4:31 PM. Shabbat: mikvah night, after 5:16 PM.',
-      'rest:100>2: Over Shabbat. Shabbat: mikvah night, after 5:16 PM.',
+      'rest:100>1: Over Shabbos. Shabbos: hefsek taharah before 4:31 PM. Shabbos: mikvah night, after 5:16 PM.',
+      'rest:100>2: Over Shabbos. Shabbos: mikvah night, after 5:16 PM.',
     ]);
     expect(data.queue.find(q => q.key === 'rest:100' && q.to === A)).toMatchObject({ status: 'sent', text: '', covered: ['hefsek:1', 'mikvah:1'] });
   });
@@ -319,8 +319,8 @@ describe('the one text before Shabbat or Yom Tov', () => {
     // something recorded at noon on Friday: only it, at once, in a text of its own
     rebuildQueue(data, [rest([HEFSEK, LATE, MIKVAH])], EVE + 2 * HOUR);
     expect(sendAll(data, EVE + 2 * HOUR)).toEqual([
-      'rest:100:more:1>1: Over Shabbat. Shabbat: mikvah night, after 5:16 PM.',
-      'rest:100:more:1>2: Over Shabbat. Shabbat: mikvah night, after 5:16 PM.',
+      'rest:100:more:1>1: Over Shabbos. Shabbos: mikvah night, after 5:16 PM.',
+      'rest:100:more:1>2: Over Shabbos. Shabbos: mikvah night, after 5:16 PM.',
     ]);
     // and again: nothing
     rebuildQueue(data, [rest([HEFSEK, LATE, MIKVAH])], EVE + 3 * HOUR);
@@ -341,14 +341,14 @@ describe('the one text before Shabbat or Yom Tov', () => {
     rebuildQueue(data, [rest([HEFSEK, MIKVAH, item('bedikah:x', 'hefsek', START + 12 * HOUR)])], START + HOUR);
     expect(sendAll(data, START + 2 * HOUR)).toEqual([]);
     // after it: the mikvah night (still ahead), not the hefsek (brought, and over) nor the line whose day is over
-    expect(sendAll(data, AFTER)).toEqual(['rest:100:after>1: Shabbat: mikvah night, after 5:16 PM.', 'rest:100:after>2: Shabbat: mikvah night, after 5:16 PM.']);
+    expect(sendAll(data, AFTER)).toEqual(['rest:100:after>1: Shabbos: mikvah night, after 5:16 PM.', 'rest:100:after>2: Shabbos: mikvah night, after 5:16 PM.']);
   });
 
   it('all of it known only after candle lighting: what is still ahead goes after the days', () => {
     const data = household();
     rebuildQueue(data, [rest([HEFSEK, MIKVAH])], START + HOUR);
     expect(pending(data)).toEqual(['rest:100:after>1', 'rest:100:after>2']);
-    expect(sendAll(data, AFTER)).toEqual(['rest:100:after>1: Shabbat: mikvah night, after 5:16 PM.', 'rest:100:after>2: Shabbat: mikvah night, after 5:16 PM.']);
+    expect(sendAll(data, AFTER)).toEqual(['rest:100:after>1: Shabbos: mikvah night, after 5:16 PM.', 'rest:100:after>2: Shabbos: mikvah night, after 5:16 PM.']);
   });
 
   it('a text that went as two texts counts as two', () => {
