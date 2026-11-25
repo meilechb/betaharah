@@ -196,7 +196,9 @@ days are over the calendar takes it that she immersed on the mikvah night.
   date as it was read: `Not recorded: no period is open. (Read as Thu, 7
   Kislev 5786.)`
 - A time shortly after sunrise or sunset adds `Counted as night: sunset
-  was 4:31 PM.` (information only).
+  was 4:31 PM.` (information only). "Shortly" is the account's "Texts close
+  to sunrise or sunset" setting (Reminders, Advanced): 60 minutes for new
+  accounts; an account keeps the number it saved.
 - `undo` removes the latest entry of the last 48 hours and gives the
   status; `history` lists the latest five as FIRST to FIFTH, and erasing
   one asks YES or NO.
@@ -235,7 +237,51 @@ reminder was about; every other reminder offers `STATUS`:
 BEDIKAH, PM BEDIKAH, MIKVAH NIGHT, BOOKING, ONAH) turns one on or off.
 `wording` chooses plain or discreet wording for the whole account (the
 discreet hefsek reminder is `H today before 4:33 PM.`, with the same
-options). Reminder times are set on the website.
+options). The other reminder times are set on the website.
+
+`bedikot` (or BEDIKOT from REMINDERS) sets the bedikah reminders of the
+account; DAYS asks which clean days, and the numbers written in reply are
+data (`1 2 7`, `1,7`, `1-3 7`, or a single `7`):
+
+```
+> bedikot
+< Bedikah reminders are on: clean days all 7; morning on; before sunset on.
+  Reply: DAYS, MORNING OFF, BEFORE SUNSET OFF, MENU
+> days
+< Bedikah reminders on clean days all 7. Other days: their numbers, such as 1 2 7.
+  Reply: ALL DAYS, 1 AND 7, MENU
+> 1 and 7
+< Changed. Bedikah reminders are on: clean days 1 and 7; morning on; before sunset on.
+  Reply: DAYS, MORNING OFF, BEFORE SUNSET OFF, MENU
+```
+
+`shabbat` (or SHABBAT from REMINDERS) shows the time of the text before
+Shabbat and Yom Tov; a time written in reply (`8:30 AM`, `9`, `13:00`)
+changes it.
+
+### Shabbat and Yom Tov
+
+Nothing is sent from candle lighting until nightfall. What would fall in
+that time is one text, the morning the days begin (default 9:00 AM; at the
+latest 90 minutes before candle lighting): a first line, then one line per
+day's reminder in time order, the morning and before-sunset bedikah of a day
+on one line. Each line is its own text in the registry (`reminder.rest.*`,
+plain and discreet), so the operator can word each:
+
+```
+< Over Shabbat. Tomorrow: clean day 2, bedikah morning and before 4:32 PM.
+  Reply: STATUS
+< Over Yom Tov and Shabbat. Tomorrow: clean day 3, bedikah morning and before 7:42 PM. Fri: clean day 4, bedikah morning and before 7:43 PM. Shabbat: clean day 5, bedikah morning and before 7:44 PM.
+  Reply: STATUS
+```
+
+It is one queued item per phone (`rest:<first day>`): a refresh updates it
+until it is sent and never sends it again. Each sent text keeps the keys of
+the reminders it carried (`covered`); what becomes known later, before
+candle lighting, goes at once as `rest:<day>:more:<n>` with only the new
+lines; after the days end, `rest:<day>:after` brings only what is still
+ahead and no text brought. Too long for two segments, it goes as two texts,
+split between lines.
 
 ## Settings, phones and the account
 

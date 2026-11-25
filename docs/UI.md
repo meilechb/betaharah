@@ -197,6 +197,17 @@ Titles never show the server's " (projected)": the page says "not recorded"
 (the hefsek day), "expected" (projected) or "recorded" in a label beside them
 (Coming up, the day's label).
 
+## Settings → Reminders
+
+`settings/reminders.js`: a row per kind (switch, timing in a few words,
+"Change" opens it). The Bedikot row opens to seven day buttons `1` to `7`
+(`aria-pressed`, with `All` and `1 and 7`), then two parts, Morning and
+Before sunset, each a switch with its time beside it
+(`app.reminders.bedikot.days`, `.morning`, `.beforeSunset`). One row,
+"Before Shabbat and Yom Tov", holds the time of the one text sent the
+morning before (`app.reminders.restEve`, default 9:00 AM); there is no switch
+for Shabbat: nothing is ever sent on it. No explanations of halacha.
+
 ## Settings → Calendar
 
 `settings/calendar.js`, top to bottom: Google Calendar, the subscription link,

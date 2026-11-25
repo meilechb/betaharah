@@ -39,9 +39,26 @@ Source: Yoatzot, "Minimum Wait", "Hefsek Taharah", "Seven Clean Days".
   only after the wait, and the entry is marked "ask a rav".
 - **Seven clean days** begin the night after the hefsek. Reminders are for a
   bedikah each morning and each afternoon before sunset; days 1 and 7 are
-  marked as required. The morning after the hefsek is recorded, a reminder
-  to book the mikvah names the mikvah night (none if that morning is already
-  the day of the mikvah night).
+  marked as required. The account chooses which of the seven days get
+  them (default all seven) and whether the morning one, the one before
+  sunset, or both are sent (default both); a day not chosen gets none. The
+  morning after the hefsek is recorded, a reminder to book the mikvah names
+  the mikvah night (none if that morning is already the day of the mikvah
+  night).
+- **Reminder times** (when, not what): the hefsek, the bedikah before
+  sunset and the mikvah night are sent 60 minutes before sunset, and the
+  onah 60 minutes before it begins (at sunset or sunrise), unless the
+  account set another time. Accounts keep the times they saved.
+- **Shabbat and Yom Tov**: nothing is sent from candle lighting (18 minutes
+  before sunset) until nightfall, a run of such days (Yom Tov into Shabbat)
+  counting as one. Every reminder whose time falls in it, and a mikvah night
+  that is a Friday or Yom Tov night, is one line of one text sent the
+  morning the run begins (9:00 AM, or the time set; never later than 90
+  minutes before candle lighting), with its day and time, so a mikvah night
+  on Friday night or right after Shabbat is known beforehand. What becomes
+  known after that text and before candle lighting goes at once in a second
+  text; what becomes known during the days goes after nightfall, if still
+  ahead.
 - **A flow or stain after the hefsek**, while the seven clean days are still
   being counted, or a "count broken" entry, cancels the count. A new hefsek
   is needed. The minimum wait is not started again.
