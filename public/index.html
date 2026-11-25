@@ -44,11 +44,10 @@
       <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></symbol>
       <symbol id="i-phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M11 18h2" /></symbol>
-      <symbol id="i-down" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></symbol>
-      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></symbol>
       <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></symbol>
-      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" /></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" /></symbol>
     </svg>
 
     <a class="skip" href="#main">Skip to the content</a>
@@ -59,6 +58,11 @@
           <img class="mark" src="/favicon.svg" alt="" width="28" height="28" />
           <span>Betaharah</span>
         </a>
+        <nav class="nav-links" aria-label="On this page">
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#questions">Questions</a>
+        </nav>
         <div class="nav-actions">
           <a class="nav-signin" href="/app/" id="nav-sign-in">Sign in</a>
           <a class="btn btn-primary btn-sm" href="/app/" id="nav-start">Get started</a>
@@ -67,220 +71,185 @@
     </header>
 
     <main id="main">
-      <section class="top-hero" aria-labelledby="hero-title">
-        <div class="wrap hero-copy">
-          <h1 id="hero-title">Your mikvah calendar, worked out for you.</h1>
-          <p class="hero-lead">Tap any day to try it.</p>
-        </div>
-        <div class="wrap demo try" id="try">
-          <p class="try-error" id="try-error" role="alert" hidden></p>
-          <div id="try-cal" class="app-cal">
-            <div class="month-nav">
-              <span class="cal-btn" aria-hidden="true"></span>
-              <div class="month-title"><h2>December 2026</h2><p class="hebrew-months">Kislev – Teves</p></div>
-              <span class="cal-btn" aria-hidden="true"></span>
+      <section class="top-hero hp-hero" aria-labelledby="hero-title">
+        <div class="wrap hp-hero-grid">
+          <div class="hp-hero-copy">
+            <p class="hp-kicker">A free mikvah calendar</p>
+            <h1 id="hero-title">Your mikvah calendar, worked out for you.</h1>
+            <p class="hp-lead">Record the day a period began. Betaharah works out the hefsek taharah, the seven clean days, mikvah night and the onos, for where you live and the customs you keep.</p>
+            <div class="hp-actions">
+              <a class="btn btn-primary btn-lg" href="/app/" id="hero-start">Start for free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+              <a class="hp-link" href="#how">See how it works</a>
             </div>
-            <table class="month">
-              <thead>
-                <tr>
-                  <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th class="sat">Sat</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="pad"></td><td class="pad"></td>
-                  <td><span class="day"><span class="cd">1</span><span class="marks"><span class="mk flow"><svg><use href="#i-drop" /></svg></span></span></span></td>
-                  <td><span class="day"><span class="cd">2</span></span></td>
-                  <td><span class="day"><span class="cd">3</span></span></td>
-                  <td><span class="day"><span class="cd">4</span></span></td>
-                  <td><span class="day rest"><span class="cd">5</span><span class="marks"><span class="mk hefsek projected wide">H?</span></span></span></td>
-                </tr>
-                <tr>
-                  <td><span class="day"><span class="cd">6</span><span class="marks"><span class="mk clean projected">1</span></span></span></td>
-                  <td><span class="day"><span class="cd">7</span><span class="marks"><span class="mk clean projected">2</span></span></span></td>
-                  <td><span class="day"><span class="cd">8</span><span class="marks"><span class="mk clean projected">3</span></span></span></td>
-                  <td><span class="day"><span class="cd">9</span><span class="marks"><span class="mk clean projected">4</span></span></span></td>
-                  <td><span class="day"><span class="cd">10</span><span class="marks"><span class="mk clean projected">5</span></span></span></td>
-                  <td><span class="day"><span class="cd">11</span><span class="marks"><span class="mk clean projected">6</span></span></span></td>
-                  <td><span class="day rest"><span class="cd">12</span><span class="marks"><span class="mk clean projected">7</span><span class="mk mikvah projected">M</span></span></span></td>
-                </tr>
-                <tr>
-                  <td><span class="day"><span class="cd">13</span></span></td>
-                  <td><span class="day"><span class="cd">14</span></span></td>
-                  <td><span class="day"><span class="cd">15</span></span></td>
-                  <td><span class="day"><span class="cd">16</span></span></td>
-                  <td><span class="day"><span class="cd">17</span></span></td>
-                  <td><span class="day"><span class="cd">18</span></span></td>
-                  <td><span class="day rest"><span class="cd">19</span></span></td>
-                </tr>
-                <tr>
-                  <td><span class="day"><span class="cd">20</span></span></td>
-                  <td><span class="day"><span class="cd">21</span></span></td>
-                  <td><span class="day"><span class="cd">22</span></span></td>
-                  <td><span class="day"><span class="cd">23</span></span></td>
-                  <td><span class="day"><span class="cd">24</span></span></td>
-                  <td><span class="day"><span class="cd">25</span></span></td>
-                  <td><span class="day rest"><span class="cd">26</span></span></td>
-                </tr>
-                <tr>
-                  <td><span class="day"><span class="cd">27</span></span></td>
-                  <td><span class="day"><span class="cd">28</span></span></td>
-                  <td><span class="day"><span class="cd">29</span></span></td>
-                  <td><span class="day"><span class="cd">30</span></span></td>
-                  <td><span class="day"><span class="cd">31</span></span></td>
-                  <td class="pad"></td>
-                  <td class="pad"></td>
-                </tr>
-              </tbody>
-            </table>
+            <p class="signup-note" id="signup-note" role="status" hidden></p>
+            <ul class="hp-facts">
+              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Free</li>
+              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>On the website or by text</li>
+              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>No app to install</li>
+            </ul>
           </div>
-          <ul class="hero-legend">
-            <li><span class="sw flow"></span>Period</li>
-            <li><span class="sw hefsek"></span>Hefsek</li>
-            <li><span class="sw clean"></span>Clean days</li>
-            <li><span class="sw mikvah"></span>Mikvah night</li>
-            <li><span class="sw onah"></span>Onah</li>
+          <div class="demo try" id="try">
+            <p class="hp-try-label">Tap any day to try it.</p>
+            <p class="try-error" id="try-error" role="alert" hidden></p>
+            <div id="try-cal" class="app-cal">
+              <div class="month-nav">
+                <span class="cal-btn" aria-hidden="true"></span>
+                <div class="month-title"><h2>December 2026</h2><p class="hebrew-months">Kislev – Teves</p></div>
+                <span class="cal-btn" aria-hidden="true"></span>
+              </div>
+              <table class="month">
+                <thead>
+                  <tr>
+                    <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th class="sat">Sat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="pad"></td><td class="pad"></td>
+                    <td><span class="day"><span class="cd">1</span><span class="marks"><span class="mk flow"><svg><use href="#i-drop" /></svg></span></span></span></td>
+                    <td><span class="day"><span class="cd">2</span></span></td>
+                    <td><span class="day"><span class="cd">3</span></span></td>
+                    <td><span class="day"><span class="cd">4</span></span></td>
+                    <td><span class="day rest"><span class="cd">5</span><span class="marks"><span class="mk hefsek projected wide">H?</span></span></span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="day"><span class="cd">6</span><span class="marks"><span class="mk clean projected">1</span></span></span></td>
+                    <td><span class="day"><span class="cd">7</span><span class="marks"><span class="mk clean projected">2</span></span></span></td>
+                    <td><span class="day"><span class="cd">8</span><span class="marks"><span class="mk clean projected">3</span></span></span></td>
+                    <td><span class="day"><span class="cd">9</span><span class="marks"><span class="mk clean projected">4</span></span></span></td>
+                    <td><span class="day"><span class="cd">10</span><span class="marks"><span class="mk clean projected">5</span></span></span></td>
+                    <td><span class="day"><span class="cd">11</span><span class="marks"><span class="mk clean projected">6</span></span></span></td>
+                    <td><span class="day rest"><span class="cd">12</span><span class="marks"><span class="mk clean projected">7</span><span class="mk mikvah projected">M</span></span></span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="day"><span class="cd">13</span></span></td>
+                    <td><span class="day"><span class="cd">14</span></span></td>
+                    <td><span class="day"><span class="cd">15</span></span></td>
+                    <td><span class="day"><span class="cd">16</span></span></td>
+                    <td><span class="day"><span class="cd">17</span></span></td>
+                    <td><span class="day"><span class="cd">18</span></span></td>
+                    <td><span class="day rest"><span class="cd">19</span></span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="day"><span class="cd">20</span></span></td>
+                    <td><span class="day"><span class="cd">21</span></span></td>
+                    <td><span class="day"><span class="cd">22</span></span></td>
+                    <td><span class="day"><span class="cd">23</span></span></td>
+                    <td><span class="day"><span class="cd">24</span></span></td>
+                    <td><span class="day"><span class="cd">25</span></span></td>
+                    <td><span class="day rest"><span class="cd">26</span></span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="day"><span class="cd">27</span></span></td>
+                    <td><span class="day"><span class="cd">28</span></span></td>
+                    <td><span class="day"><span class="cd">29</span></span></td>
+                    <td><span class="day"><span class="cd">30</span></span></td>
+                    <td><span class="day"><span class="cd">31</span></span></td>
+                    <td class="pad"></td>
+                    <td class="pad"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <ul class="hero-legend">
+              <li><span class="sw flow"></span>Period</li>
+              <li><span class="sw hefsek"></span>Hefsek</li>
+              <li><span class="sw clean"></span>Clean days</li>
+              <li><span class="sw mikvah"></span>Mikvah night</li>
+              <li><span class="sw onah"></span>Onah</li>
+            </ul>
+            <ul class="try-sum" id="try-summary" hidden></ul>
+            <dialog class="try-sheet" id="try-sheet" aria-labelledby="try-sheet-title">
+              <form method="dialog">
+                <button type="button" class="sheet-x" id="try-cancel" aria-label="Close">
+                  <svg class="ic" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+                <h3 id="try-sheet-title">What happened?</h3>
+                <p class="sheet-when"><b id="try-sheet-date"></b></p>
+                <div class="addgrid" id="try-sheet-main"></div>
+                <details class="day-more">
+                  <summary>More options</summary>
+                  <div class="addgrid" id="try-sheet-more"></div>
+                </details>
+                <p class="try-error" id="try-sheet-error" role="alert" hidden></p>
+              </form>
+            </dialog>
+          </div>
+        </div>
+      </section>
+
+      <section class="hp-section" id="overview" aria-labelledby="overview-title">
+        <div class="wrap">
+          <div class="hp-head">
+            <div>
+              <p class="hp-kicker">Overview</p>
+              <h2 id="overview-title">You record one date. The rest is worked out.</h2>
+            </div>
+            <p class="hp-head-lead">The calendar counts by the Hebrew date, with sunset and nightfall calculated for your location.</p>
+          </div>
+          <ul class="hp-cards three">
+            <li class="hp-card c-flow">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-msg" /></svg></span>
+              <h3>Record in a few words</h3>
+              <p>Text &ldquo;period last night&rdquo;, or tap the day on the website.</p>
+            </li>
+            <li class="hp-card c-clean">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-cal" /></svg></span>
+              <h3>Every date in order</h3>
+              <p>The hefsek taharah, each of the seven clean days, mikvah night and the onos perishah.</p>
+            </li>
+            <li class="hp-card c-mikvah">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-clock" /></svg></span>
+              <h3>Reminders by text</h3>
+              <p>For the hefsek, each bedikah and mikvah night. You choose which ones, and when.</p>
+            </li>
           </ul>
-          <ul class="try-sum" id="try-summary" hidden></ul>
-          <a class="btn btn-primary btn-lg" href="/app/" id="hero-start">Start for free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
-          <p class="signup-note" id="signup-note" role="status" hidden></p>
-          <dialog class="try-sheet" id="try-sheet" aria-labelledby="try-sheet-title">
-            <form method="dialog">
-              <button type="button" class="sheet-x" id="try-cancel" aria-label="Close">
-                <svg class="ic" aria-hidden="true"><use href="#i-x" /></svg>
-              </button>
-              <h3 id="try-sheet-title">What happened?</h3>
-              <p class="sheet-when"><b id="try-sheet-date"></b></p>
-              <div class="addgrid" id="try-sheet-main"></div>
-              <details class="day-more">
-                <summary>More options</summary>
-                <div class="addgrid" id="try-sheet-more"></div>
-              </details>
-              <p class="try-error" id="try-sheet-error" role="alert" hidden></p>
-            </form>
-          </dialog>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="app-title">
+      <section class="hp-section hp-band" id="how" aria-labelledby="how-title">
         <div class="wrap">
-          <div class="section-head center">
-            <h2 id="app-title">The calendar on the website.</h2>
-            <p class="section-lead">The month, today, and what is coming up.</p>
-          </div>
-        </div>
-        <figure class="wrap-wide hero-figure">
-          <div class="app" aria-hidden="true">
-            <div class="app-chrome">
-              <span class="lights"><i></i><i></i><i></i></span>
-              <span class="url"><svg class="ic"><use href="#i-lock" /></svg>betaharah.com/app/</span>
-              <span class="lights-pad"></span>
+          <div class="hp-head">
+            <div>
+              <p class="hp-kicker">How it works</p>
+              <h2 id="how-title">Three steps to start.</h2>
             </div>
-            <div class="app-body">
-              <div class="app-top">
-                <div class="app-head">
-                  <span class="app-name">Betaharah</span>
-                  <span class="app-date"><b>Thursday, 23 Kislev 5787</b><small><svg class="ic"><use href="#i-sun" /></svg>Day · Dec 3, 2026 · sunset 4:31 PM</small></span>
-                </div>
-                <div class="app-tabs">
-                  <span class="on"><svg class="ic"><use href="#i-cal" /></svg>Today</span>
-                  <span>Log</span>
-                  <span>Customs</span>
-                  <span>Settings</span>
-                </div>
-              </div>
-              <div class="app-grid">
-                <div class="panel cal-panel">
-                  <div class="cal-top">
-                    <span class="cal-btn"><svg class="ic"><use href="#i-left" /></svg></span>
-                    <div class="cal-title"><b>December 2026</b><small>Kislev – Teves</small></div>
-                    <span class="cal-btn"><svg class="ic"><use href="#i-right" /></svg></span>
-                  </div>
-                  <table class="month">
-                    <thead>
-                      <tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th class="sat">Sat</th></tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td class="pad"></td>
-                        <td class="pad"></td>
-                        <td><span class="day past"><span class="cd">1</span><span class="hd">21</span><span class="marks"><span class="mk flow"><svg><use href="#i-drop" /></svg></span></span></span></td>
-                        <td><span class="day past"><span class="cd">2</span><span class="hd">22</span></span></td>
-                        <td><span class="day today"><span class="cd">3</span><span class="hd">23</span></span></td>
-                        <td><span class="day"><span class="cd">4</span><span class="hd">24</span></span></td>
-                        <td><span class="day rest"><span class="cd">5</span><span class="hd">25</span><span class="marks"><span class="mk hefsek projected">H</span></span></span></td>
-                      </tr>
-                      <tr>
-                        <td><span class="day"><span class="cd">6</span><span class="hd">26</span><span class="marks"><span class="mk clean projected">1</span></span></span></td>
-                        <td><span class="day"><span class="cd">7</span><span class="hd">27</span><span class="marks"><span class="mk clean projected">2</span></span></span></td>
-                        <td><span class="day"><span class="cd">8</span><span class="hd">28</span><span class="marks"><span class="mk clean projected">3</span></span></span></td>
-                        <td><span class="day"><span class="cd">9</span><span class="hd">29</span><span class="marks"><span class="mk clean projected">4</span></span></span></td>
-                        <td><span class="day"><span class="cd">10</span><span class="hd">30</span><span class="marks"><span class="mk clean projected">5</span></span></span></td>
-                        <td><span class="day"><span class="cd">11</span><span class="hd">1 <span class="hm">Teves</span></span><span class="marks"><span class="mk clean projected">6</span></span></span></td>
-                        <td><span class="day rest selected"><span class="cd">12</span><span class="hd">2</span><span class="marks"><span class="mk clean projected">7</span><span class="mk mikvah projected">M</span></span></span></td>
-                      </tr>
-                      <tr>
-                        <td><span class="day"><span class="cd">13</span><span class="hd">3</span></span></td>
-                        <td><span class="day"><span class="cd">14</span><span class="hd">4</span></span></td>
-                        <td><span class="day"><span class="cd">15</span><span class="hd">5</span></span></td>
-                        <td><span class="day"><span class="cd">16</span><span class="hd">6</span></span></td>
-                        <td><span class="day"><span class="cd">17</span><span class="hd">7</span></span></td>
-                        <td><span class="day"><span class="cd">18</span><span class="hd">8</span></span></td>
-                        <td><span class="day rest"><span class="cd">19</span><span class="hd">9</span></span></td>
-                      </tr>
-                      <tr>
-                        <td><span class="day"><span class="cd">29</span><span class="hd">19</span><span class="marks"><span class="mk onah"><svg><use href="#i-moon" /></svg></span></span></span></td>
-                        <td><span class="day"><span class="cd">30</span><span class="hd">20</span><span class="marks"><span class="mk onah"><svg><use href="#i-sun" /></svg></span><span class="mk onah"><svg><use href="#i-moon" /></svg></span></span></span></td>
-                        <td><span class="day"><span class="cd">31</span><span class="hd">21</span><span class="marks"><span class="mk onah"><svg><use href="#i-sun" /></svg></span></span></span></td>
-                        <td class="pad"></td><td class="pad"></td><td class="pad"></td><td class="pad"></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div class="side">
-                  <div class="panel st-card">
-                    <p class="headline">Niddah, before the hefsek taharah</p>
-                    <p class="detail">Hefsek taharah from Sat, Dec 5, before 4:31 PM.</p>
-                  </div>
-                  <div class="panel upcoming">
-                    <p class="panel-title"><svg class="ic"><use href="#i-clock" /></svg>Coming up</p>
-                    <ul>
-                      <li><span class="mk hefsek projected">H</span><span><b>Hefsek taharah</b><small>Sat Dec 5, before 4:31 PM</small></span></li>
-                      <li><span class="mk clean projected">1</span><span><b>Seven clean days</b><small>Sun Dec 6 to Sat Dec 12</small></span></li>
-                      <li><span class="mk mikvah projected">M</span><span><b>Mikvah night</b><small>Sat Dec 12, after 5:17 PM</small></span></li>
-                      <li><span class="mk onah"><svg><use href="#i-moon" /></svg></span><span><b>Onas havest</b><small>Tue Dec 29</small></span></li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <p class="hp-head-lead">Setup takes a few minutes. Only your most recent period is needed.</p>
           </div>
-        </figure>
-      </section>
-
-      <section class="section works" id="how" aria-labelledby="works-title">
-        <div class="wrap">
-          <div class="section-head center">
-            <h2 id="works-title">From the day it began.</h2>
-            <p class="section-lead">The hefsek, the clean days, mikvah night, and the onos.</p>
-          </div>
-          <ol class="flow-steps">
-            <li class="fs fs-flow"><span class="fs-mark" aria-hidden="true"><span class="mk flow lg"><svg><use href="#i-drop" /></svg></span></span><h3>Flow</h3></li>
-            <li class="fs fs-hefsek"><span class="fs-mark" aria-hidden="true"><span class="mk hefsek lg">H</span></span><h3>Hefsek taharah</h3></li>
-            <li class="fs fs-clean"><span class="fs-mark" aria-hidden="true"><span class="mk clean lg">7</span></span><h3>Seven clean days</h3></li>
-            <li class="fs fs-mikvah"><span class="fs-mark" aria-hidden="true"><span class="mk mikvah lg">M</span></span><h3>Mikvah night</h3></li>
-            <li class="fs fs-onah"><span class="fs-mark" aria-hidden="true"><span class="mk onah lg"><svg><use href="#i-sun" /></svg></span></span><h3>Onos perishah</h3></li>
+          <ol class="hp-steps">
+            <li>
+              <span class="hp-num" aria-hidden="true">1</span>
+              <h3>Sign up</h3>
+              <p>With your mobile number and a code we text you, or with Google.</p>
+            </li>
+            <li>
+              <span class="hp-num" aria-hidden="true">2</span>
+              <h3>Set your location and customs</h3>
+              <p>Your ZIP code gives the times of sunset. Until you choose your customs, the stricter option of each is used.</p>
+            </li>
+            <li>
+              <span class="hp-num" aria-hidden="true">3</span>
+              <h3>Record a period</h3>
+              <p>The dates that follow appear on your calendar, and reminders go out if you turned them on.</p>
+            </li>
           </ol>
         </div>
       </section>
 
-      <section class="section feature" id="by-text" aria-labelledby="text-title">
+      <section class="hp-section" id="by-text" aria-labelledby="text-title">
         <div class="wrap split">
           <div class="fcopy">
+            <p class="hp-kicker">By text message</p>
             <h2 id="text-title">Prefer texting?</h2>
+            <p>Everything works by text, without the website. Each reply lists what you can answer next.</p>
             <p class="hero-sms" id="hero-sms" hidden></p>
             <p class="offline-note" id="offline-note" hidden></p>
             <p class="offline-note" id="prefix-note" hidden></p>
+            <ul class="hp-ticks">
+              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>&ldquo;period now&rdquo; or &ldquo;hefsek yesterday&rdquo;</li>
+              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>&ldquo;status&rdquo; for where you are in the count</li>
+              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>STOP stops every text</li>
+            </ul>
           </div>
           <figure class="iphone" aria-label="Messages with Betaharah">
             <div class="iphone-bezel">
@@ -325,138 +294,93 @@
         </div>
       </section>
 
-      <section class="section feature alt" id="reminders" aria-labelledby="reminders-title">
-        <div class="wrap split">
-          <div class="fcopy">
-            <h2 id="reminders-title">Text reminders, your way.</h2>
-            <p>Get a text for the hefsek, bedikos and mikvah night. Pick which ones and when.</p>
-          </div>
-          <figure class="visual">
-            <div class="lock">
-              <div class="lock-time" aria-hidden="true"><small>Friday, December 11</small><b>2:44</b></div>
-              <ol class="notes">
-                <li class="note">
-                  <span class="note-head"><span class="app-ic" aria-hidden="true"><svg class="ic"><use href="#i-msg" /></svg></span><b>Betaharah</b><small>now</small></span>
-                  <span class="note-body">Mikvah night: Sat Dec 12, after 5:17 PM.</span>
-                </li>
-                <li class="note">
-                  <span class="note-head"><span class="app-ic" aria-hidden="true"><svg class="ic"><use href="#i-msg" /></svg></span><b>Betaharah</b><small>now</small></span>
-                  <span class="note-body">Clean day 7 of 7 is Sat Dec 12: bedikah before sunset at 4:31 PM.</span>
-                </li>
-                <li class="note older">
-                  <span class="note-head"><span class="app-ic" aria-hidden="true"><svg class="ic"><use href="#i-msg" /></svg></span><b>Betaharah</b><small>8:00 AM</small></span>
-                  <span class="note-body">Clean day 6 of 7 is Fri Dec 11: bedikah in the morning and before sunset.</span>
-                </li>
-              </ol>
-            </div>
-          </figure>
-        </div>
-      </section>
-
-      <section class="section feature" id="together" aria-labelledby="together-title">
-        <div class="wrap split reverse">
-          <div class="fcopy">
-            <h2 id="together-title">One account, two phones.</h2>
-            <p>Each phone has its own reminders.</p>
-          </div>
-          <figure class="visual">
-            <div class="two-phones">
-              <div class="handset small">
-                <div class="phone-bar" aria-hidden="true"><span class="cam"></span></div>
-                <div class="phone-head" aria-hidden="true"><span class="avatar">B</span><b>Betaharah</b></div>
-                <p class="phone-label">Her phone</p>
-                <ol class="thread">
-                  <li class="b out">ADD</li>
-                  <li class="b in">Have that phone text JOIN and the code.</li>
-                </ol>
-              </div>
-              <div class="handset small offset">
-                <div class="phone-bar" aria-hidden="true"><span class="cam"></span></div>
-                <div class="phone-head" aria-hidden="true"><span class="avatar">B</span><b>Betaharah</b></div>
-                <p class="phone-label">His phone</p>
-                <ol class="thread">
-                  <li class="b out">STATUS</li>
-                  <li class="b in">Clean day 3 of 7. Mikvah Sat Dec 12 after 5:17 PM.</li>
-                </ol>
-              </div>
-            </div>
-          </figure>
-        </div>
-      </section>
-
-      <section class="section feature alt" id="customs" aria-labelledby="customs-title">
-        <div class="wrap split reverse">
-          <div class="fcopy">
-            <h2 id="customs-title">Your customs.</h2>
-            <p>Set once, the way you keep them.</p>
-          </div>
-          <figure class="visual">
-            <div class="customs-card">
-              <div class="cc-head"><svg class="ic" aria-hidden="true"><use href="#i-sliders" /></svg><b>Customs</b><span class="cc-saved"><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Saved</span></div>
-              <div class="cc-row">
-                <p class="cc-q">Days to wait before the hefsek taharah</p>
-                <p class="seg"><span class="on">Five days</span><span>Four days</span></p>
-              </div>
-              <div class="cc-row">
-                <p class="cc-q">Onah beinonis</p>
-                <p class="seg"><span>Day 30</span><span>Day 31</span><span class="on">Both</span></p>
-              </div>
-              <div class="cc-row">
-                <p class="cc-q">Vest haflagah</p>
-                <p class="seg"><span class="on">In days</span><span>In onos</span></p>
-              </div>
-              <div class="cc-row">
-                <p class="cc-q">Nightfall</p>
-                <p class="seg"><span class="on">8.5°</span><span>7.083°</span><span>50 min</span><span>72 min</span></p>
-              </div>
-            </div>
-          </figure>
-        </div>
-      </section>
-
-      <section class="section feature" id="calendar" aria-labelledby="calendar-title">
+      <section class="hp-section hp-band" id="features" aria-labelledby="features-title">
         <div class="wrap">
-          <div class="section-head center">
-            <h2 id="calendar-title">On the calendar you already use.</h2>
-            <p class="section-lead">Words, or symbols only.</p>
+          <div class="hp-head">
+            <div>
+              <p class="hp-kicker">Features</p>
+              <h2 id="features-title">Made for how couples keep it.</h2>
+            </div>
+            <p class="hp-head-lead">Each of these is a setting. Turn on what you want and leave the rest.</p>
           </div>
-          <div class="cal-compare">
-            <figure class="agenda">
-              <figcaption><b>December 2026</b><span class="ag-tag">Titles in words</span></figcaption>
-              <ul class="ag-list">
-                <li><span class="ag-date"><b>1</b>Tue</span><span class="ev ev-flow">Flow (day)<small>6:59 AM – 4:32 PM</small></span></li>
-                <li><span class="ag-date"><b>5</b>Sat</span><span class="ev ev-hefsek">Hefsek taharah ✓<small>2:33 – 4:31 PM</small></span></li>
-                <li><span class="ag-date"><b>6</b>Sun</span><span class="ev ev-clean">Seven clean days: day 1<small>All day</small></span></li>
-                <li><span class="ag-date"><b>12</b>Sat</span><span class="ag-stack"><span class="ev ev-clean">Seven clean days: day 7<small>All day</small></span><span class="ev ev-mikvah">Mikvah night<small>after 5:17 PM</small></span></span></li>
-                <li><span class="ag-date"><b>29</b>Tue</span><span class="ev ev-onah">Onas havest (night)<small>4:39 PM – 7:19 AM</small></span></li>
-              </ul>
-            </figure>
-            <figure class="agenda">
-              <figcaption><b>December 2026</b><span class="ag-tag">Symbols only</span></figcaption>
-              <ul class="ag-list">
-                <li><span class="ag-date"><b>1</b>Tue</span><span class="ev ev-plain">•<small>6:59 AM – 4:32 PM</small></span></li>
-                <li><span class="ag-date"><b>5</b>Sat</span><span class="ev ev-plain">H ✓<small>2:33 – 4:31 PM</small></span></li>
-                <li><span class="ag-date"><b>6</b>Sun</span><span class="ev ev-plain">1/7<small>All day</small></span></li>
-                <li><span class="ag-date"><b>12</b>Sat</span><span class="ag-stack"><span class="ev ev-plain">7/7<small>All day</small></span><span class="ev ev-plain">M<small>after 5:17 PM</small></span></span></li>
-                <li><span class="ag-date"><b>29</b>Tue</span><span class="ev ev-plain">◆<small>4:39 PM – 7:19 AM</small></span></li>
-              </ul>
-            </figure>
-          </div>
-        </div>
-      </section>
-
-      <section class="section" id="privacy" aria-labelledby="privacy-title">
-        <div class="wrap">
-          <div class="section-head center">
-            <h2 id="privacy-title">Private.</h2>
-            <p class="section-lead">Signing in with Google, or with your phone.</p>
-          </div>
-          <ul class="priv-grid">
-            <li><span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-phone" /></svg></span><h3>Your phones</h3></li>
-            <li><span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-lock" /></svg></span><h3>Your account</h3></li>
-            <li><span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-eye" /></svg></span><h3>No ads</h3></li>
-            <li><span class="pi" aria-hidden="true"><svg class="ic"><use href="#i-down" /></svg></span><h3>Download or delete</h3></li>
+          <ul class="hp-cards">
+            <li class="hp-card c-mikvah">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-clock" /></svg></span>
+              <h3>Text reminders, your way</h3>
+              <p>Pick which reminders each phone gets, and at what time. None are sent on Shabbos or Yom Tov.</p>
+            </li>
+            <li class="hp-card c-clean">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-phone" /></svg></span>
+              <h3>One account, two phones</h3>
+              <p>Add your husband&rsquo;s phone. Up to four phones share one account, each with its own reminders.</p>
+            </li>
+            <li class="hp-card c-onah">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-cal" /></svg></span>
+              <h3>On the calendar you already use</h3>
+              <p>Google Calendar, or any calendar app through a link. Titles in words, or symbols only.</p>
+            </li>
+            <li class="hp-card c-hefsek">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-sliders" /></svg></span>
+              <h3>Your customs</h3>
+              <p>The wait before the hefsek, onah beinonis, vest haflagah and nightfall. Set once.</p>
+            </li>
+            <li class="hp-card c-flow">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-globe" /></svg></span>
+              <h3>Hebrew or English terms</h3>
+              <p>Write the terms in English letters, or in Hebrew: <bdi lang="he">הפסק טהרה</bdi>.</p>
+            </li>
+            <li class="hp-card c-gold" id="privacy">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-lock" /></svg></span>
+              <h3>Private</h3>
+              <p>Signing in with Google, or with your phone. No ads. Download or delete your data at any time.</p>
+            </li>
           </ul>
+        </div>
+      </section>
+
+      <section class="hp-section" id="questions" aria-labelledby="questions-title">
+        <div class="wrap hp-faq-grid">
+          <div class="hp-faq-side">
+            <p class="hp-kicker">Questions</p>
+            <h2 id="questions-title">Questions and answers.</h2>
+            <p>More is on the <a href="/help">Help page</a>.</p>
+          </div>
+          <div class="hp-faq">
+            <details>
+              <summary>What does it cost?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>Nothing. Betaharah is free. Your carrier&rsquo;s message and data rates may apply to texts.</p></div>
+            </details>
+            <details>
+              <summary>Do I need to install an app?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>No. It works in the browser on any phone or computer, and by text message.</p></div>
+            </details>
+            <details>
+              <summary>How many past periods do I need to enter?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>Only the most recent one. Earlier dates can be added later on the Log page, and the onos that depend on them are then worked out.</p></div>
+            </details>
+            <details>
+              <summary>Which customs does it follow?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>The ones you choose. Each point on which customs differ is a setting. Until you save them, the stricter option of each is used.</p></div>
+            </details>
+            <details>
+              <summary>Does it give halachic rulings?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>No. It works out dates from the Hebrew calendar, the sunset where you live and the customs you set. It does not rule on anything.</p></div>
+            </details>
+            <details>
+              <summary>Who can see my dates?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>The phones on your account. There are no ads, and you can download your data or delete your account at any time. The <a href="/privacy">Privacy page</a> explains how your data is kept.</p></div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing" aria-labelledby="closing-title">
+        <div class="wrap closing-in">
+          <h2 id="closing-title">Start your calendar.</h2>
+          <p>Free, on the website or by text message.</p>
+          <div class="hero-actions">
+            <a class="btn btn-light btn-lg" href="/app/" id="cta-start">Start for free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+          </div>
         </div>
       </section>
     </main>
@@ -465,7 +389,7 @@
       <div class="wrap foot-in">
         <div class="foot-brand">
           <a class="wordmark" href="/"><img class="mark" src="/favicon.svg" alt="" width="24" height="24" /><span>Betaharah</span></a>
-          <p>A mikvah calendar.</p>
+          <p>A free mikvah calendar, on the website and by text.</p>
         </div>
         <nav class="foot-nav" aria-label="Site">
           <a href="/app/">Sign in</a>
