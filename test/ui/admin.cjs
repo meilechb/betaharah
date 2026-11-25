@@ -518,7 +518,7 @@ async function seed() {
     await page.waitForSelector('#tx-reminder-hefsek');
     if ((await page.locator('#tx-reminder-hefsek-discreet').count()) !== 0) throw new Error('the discreet wording has its own row');
     const hefsek = await page.textContent('#tx-reminder-hefsek');
-    if (!hefsek.includes('Hefsek taharah day') || !hefsek.includes('Plain:') || !hefsek.includes('Discreet:') || !hefsek.includes('H Wed Nov 25 before')) throw new Error('reminder row: ' + hefsek);
+    if (!hefsek.includes('Hefsek taharah day') || !hefsek.includes('Plain:') || !hefsek.includes('Discreet:') || !hefsek.includes('H Wed, 15 Kislev before')) throw new Error('reminder row: ' + hefsek);
     if ((await txRows().count()) !== 6) throw new Error((await txRows().count()) + ' reminder rows');
     // the customs questions are one row that opens to twelve
     await page.click('#tx-cat-settings');

@@ -1,6 +1,7 @@
 /** The data the dashboard page shows, prepared on the server. */
 import { civilDate, weekday } from '../engine/calendar';
 import { absToCivil, civilToAbs, localAbs, localToInstant } from '../engine/civil';
+import type { LogEntry } from '../engine/cycle';
 import { dayWords, momentWords, nightWords, onahWords, type DateWords } from '../engine/dates';
 import { clock12 } from '../engine/present';
 import { choicesFor, TZEIT_TITLE, tzeitPresetsFor } from '../engine/settings';
@@ -187,8 +188,27 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
         return pb - pa || b.createdAt - a.createdAt;
       })
       .slice(0, MAX_LISTED_ENTRIES)
-      .map(e => ({ id: e.entry.id, kind: e.entry.kind, text: entryText(e.entry, lang, data.app.dates), source: e.source, note: e.note, createdAt: e.createdAt })),
+      .map(e => ({
+        id: e.entry.id,
+        kind: e.entry.kind,
+        text: entryText(e.entry, lang, data.app.dates),
+        ...entryWhen(e.entry),
+        source: e.source,
+        note: e.note,
+        createdAt: e.createdAt,
+      })),
   };
+}
+
+/**
+ * The civil date an entry is shown on, and 'day' or 'night' for the kinds
+ * that have one: the same date and part that recording it takes (see
+ * draftFromForm). A night, and an immersion, are on the date of the evening.
+ */
+export function entryWhen(e: LogEntry): { date: string; part: 'day' | 'night' | '' } {
+  if (e.kind === 'hefsek') return { date: isoDate(e.abs), part: '' };
+  if (e.kind === 'mikvah') return { date: isoDate(e.abs - 1), part: '' };
+  return { date: isoDate(e.onah.part === 'night' ? e.onah.abs - 1 : e.onah.abs), part: e.onah.part };
 }
 
 /** The names of the kinds of entries, as the Record form and the Log show them. */

@@ -799,10 +799,10 @@ const H = { 'x-betaharah': '1' };
       if (!r.ok()) throw new Error('entry ' + r.status() + ' ' + (await r.text()));
     }
     await page.reload();
-    await page.waitForSelector('nav.tabs button[aria-selected="true"]');
+    await page.waitForSelector('#lang-dates');
     const statusLine = async () => {
       await page.evaluate(() => (location.hash = '#today'));
-      await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Today")');
+      await page.waitForSelector('#status-line');
       const detail = (await state()).status.detail;
       await page.waitForFunction(d => document.body.innerText.includes(d), detail);
       return detail;
