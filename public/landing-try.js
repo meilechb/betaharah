@@ -68,10 +68,10 @@ function mark(e) {
   const kind = e.kind === 'clean_day' ? 'clean' : e.kind === 'broken' ? 'broken' : e.kind;
   const cls = ['mk', kind];
   if (e.projected) cls.push('projected');
-  if (e.kind === 'hefsek' && e.projected) cls.push('wide');
+  if (e.kind === 'hefsek' && e.projected) cls.push('plan');
   let glyph = '•';
   if (e.kind === 'flow' || e.kind === 'stain') glyph = svgIcon('i-drop');
-  else if (e.kind === 'hefsek') glyph = e.projected ? 'H?' : 'H';
+  else if (e.kind === 'hefsek') glyph = 'H';
   else if (e.kind === 'mikvah') glyph = 'M';
   else if (e.kind === 'broken') glyph = '×';
   else if (e.kind === 'clean_day') {
@@ -255,35 +255,78 @@ function toneOf(events) {
   return '';
 }
 
-function openSheet(date, button) {
+function samplePlan(today) {
+  const [y, m, d] = today.split('-').map(Number);
+  let year = y;
+  let monthNo = d >= 14 ? m : m - 1;
+  if (monthNo < 1) {
+    monthNo = 12;
+    year -= 1;
+  }
+  const key = year + '-' + String(monthNo).padStart(2, '0');
+  return {
+    month: key,
+    entries: [
+      { kind: 'flow', date: key + '-01', part: 'day' },
+      { kind: 'hefsek', date: key + '-05' },
+    ],
+  };
+}
+
+function openSheet(date) {
   selected = date;
   const day = grid && indexOf(grid).days.get(date);
-  sheetDate.textContent = longDate(date);
+  const hebrew = day && day.hebrewDay ? day.hebrewDay + ' ' + (day.hebrewMonth || '') : '';
+  sheetDate.textContent = longDate(date) + (hebrew ? ' · ' + hebrew : '');
   const heb = document.getElementById('try-sheet-hebrew');
-  if (heb) heb.textContent = day && day.hebrewDay ? day.hebrewDay + ' ' + (day.hebrewMonth || '') : '';
+  if (heb) heb.textContent = '';
   showSheetError('');
   draw();
   const mobile = window.matchMedia('(max-width: 720px)').matches;
   sheet.classList.toggle('sheet-mobile', mobile);
   sheet.classList.toggle('sheet-pop', !mobile);
-  if (!sheet.open) sheet.showModal();
+  if (!sheet.open) sheet.show();
+  sheet.style.margin = '0';
+  sheet.style.inset = 'auto';
+  sheet.style.position = mobile ? 'fixed' : 'absolute';
   if (mobile) {
-    sheet.style.left = '';
-    sheet.style.top = '';
-    sheet.style.width = '';
+    sheet.style.left = '0';
+    sheet.style.right = '0';
+    sheet.style.top = 'auto';
+    sheet.style.bottom = '0';
+    sheet.style.width = '100%';
+    sheet.classList.remove('point-left', 'point-right');
     return;
   }
-  const btn = button || document.getElementById('try-day-' + date);
-  const r = btn ? btn.getBoundingClientRect() : { left: 80, top: 160, width: 40, bottom: 200 };
-  const w = Math.min(360, window.innerWidth - 16);
-  let left = r.left + r.width / 2 - w / 2;
-  left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
-  let top = r.bottom + 10;
-  const h = sheet.offsetHeight || 360;
-  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 10);
+  const host = document.getElementById('try');
+  const btn = document.getElementById('try-day-' + date);
+  const cell = btn.getBoundingClientRect();
+  const hostBox = host.getBoundingClientRect();
+  const margin = 8;
+  const gap = 12;
+  const w = Math.min(340, window.innerWidth - margin * 2);
   sheet.style.width = w + 'px';
+  sheet.style.right = 'auto';
+  sheet.style.bottom = 'auto';
+  const h = sheet.offsetHeight || 360;
+  let left = cell.right - hostBox.left + gap;
+  let point = 'point-left';
+  if (hostBox.left + left + w > window.innerWidth - margin) {
+    left = cell.left - hostBox.left - w - gap;
+    point = 'point-right';
+  }
+  if (hostBox.left + left < margin) left = margin - hostBox.left;
+  let top = cell.top - hostBox.top;
+  if (hostBox.top + top + h > window.innerHeight - margin) {
+    top -= hostBox.top + top + h - (window.innerHeight - margin);
+  }
+  if (hostBox.top + top < margin) top = margin - hostBox.top;
   sheet.style.left = left + 'px';
   sheet.style.top = top + 'px';
+  sheet.classList.remove('point-left', 'point-right');
+  sheet.classList.add(point);
+  const arrow = cell.top + cell.height / 2 - (hostBox.top + top) - 6;
+  sheet.style.setProperty('--arrow', Math.max(18, Math.min(h - 28, arrow)) + 'px');
 }
 
 function closeSheet() {
@@ -340,7 +383,10 @@ function monthTable(i, g) {
             'aria-pressed': String(isSelected),
             'aria-current': today ? 'date' : null,
             'aria-label': dayLabel(g, date, day, events),
-            onclick: e => openSheet(date, e.currentTarget),
+            onclick: e => {
+              e.stopPropagation();
+              openSheet(date);
+            },
           },
           el('span', { class: 'cd' }, String(d)),
           day.hebrewDay ? el('span', { class: 'hd' }, day.hebrewDay, day.monthStart ? el('span', { class: 'hm' }, ' ' + day.hebrewMonth) : null) : null,
@@ -432,9 +478,16 @@ export function startTry() {
     if (e.target === sheet) closeSheet();
   });
   document.getElementById('try-cancel')?.addEventListener('click', closeSheet);
-  const today = browserToday();
-  const start = addDays(today, -12);
-  entries = [{ kind: 'flow', date: start, part: 'day' }];
-  month = start.slice(0, 7);
-  calculate(false);
+  document.addEventListener('click', e => {
+    if (!sheet.open || sheet.contains(e.target)) return;
+    closeSheet();
+  });
+  const plan = samplePlan(browserToday());
+  entries = plan.entries;
+  month = plan.month;
+  calculate(false).then(ok => {
+    if (ok) return;
+    entries = [plan.entries[0]];
+    calculate(false);
+  });
 }

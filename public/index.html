@@ -117,24 +117,23 @@
           <ul class="try-sum" id="try-summary" hidden></ul>
           <a class="btn btn-primary btn-lg" href="/app/" id="hero-start">Start for free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
           <p class="signup-note" id="signup-note" role="status" hidden></p>
+          <dialog class="try-sheet" id="try-sheet" aria-labelledby="try-sheet-title">
+            <form method="dialog">
+              <button type="button" class="sheet-x" id="try-cancel" aria-label="Close">
+                <svg class="ic" aria-hidden="true"><use href="#i-x" /></svg>
+              </button>
+              <h3 id="try-sheet-title">What happened?</h3>
+              <p class="sheet-when"><b id="try-sheet-date"></b></p>
+              <div class="addgrid" id="try-sheet-main"></div>
+              <details class="day-more">
+                <summary>More options</summary>
+                <div class="addgrid" id="try-sheet-more"></div>
+              </details>
+              <p class="try-error" id="try-sheet-error" role="alert" hidden></p>
+            </form>
+          </dialog>
         </div>
       </section>
-
-      <dialog class="try-sheet" id="try-sheet" aria-labelledby="try-sheet-title">
-        <form method="dialog">
-          <button type="button" class="sheet-x" id="try-cancel" aria-label="Close">
-            <svg class="ic" aria-hidden="true"><use href="#i-x" /></svg>
-          </button>
-          <h3 id="try-sheet-title">What happened?</h3>
-          <p class="sheet-when"><b id="try-sheet-date"></b><br /><span id="try-sheet-hebrew"></span></p>
-          <div class="addgrid" id="try-sheet-main"></div>
-          <details class="day-more">
-            <summary>More options</summary>
-            <div class="addgrid" id="try-sheet-more"></div>
-          </details>
-          <p class="try-error" id="try-sheet-error" role="alert" hidden></p>
-        </form>
-      </dialog>
 
       <section class="section" aria-labelledby="app-title">
         <div class="wrap">
@@ -271,7 +270,7 @@
                 <header class="iphone-bar">
                   <span class="iphone-back" aria-hidden="true"><svg viewBox="0 0 12 20"><path d="M10 2 2 10l8 8" /></svg><b>12</b></span>
                   <span class="iphone-who">
-                    <span class="avatar">B</span>
+                    <span class="avatar"><img src="/favicon.svg" alt="" width="28" height="28" /></span>
                     <b>Betaharah <svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" /></svg></b>
                   </span>
                   <span class="iphone-back spacer" aria-hidden="true"></span>
@@ -279,14 +278,14 @@
                 <ol class="imsg">
                   <li class="kind">Text Message</li>
                   <li class="stamp">Today 9:02 AM</li>
-                  <li class="out"><span class="visually-hidden">She sends: </span>JOIN</li>
-                  <li class="in"><span class="visually-hidden">Reply: </span>Welcome to Betaharah. Setup step 1 of 3: your ZIP code (or Canadian postal code), for the times of sunset.</li>
+                  <li class="out tail"><span class="visually-hidden">She sends: </span>JOIN</li>
+                  <li class="in tail"><span class="visually-hidden">Reply: </span>Welcome to Betaharah. Setup step 1 of 3: your ZIP code (or Canadian postal code), for the times of sunset.</li>
                   <li class="stamp">Today 10:14 AM</li>
-                  <li class="out"><span class="visually-hidden">She sends: </span>period now</li>
-                  <li class="in"><span class="visually-hidden">Reply: </span>Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.</li>
-                  <li class="out"><span class="visually-hidden">She sends: </span>status</li>
+                  <li class="out tail"><span class="visually-hidden">She sends: </span>period now</li>
+                  <li class="in tail"><span class="visually-hidden">Reply: </span>Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.</li>
+                  <li class="out tail"><span class="visually-hidden">She sends: </span>status</li>
                   <li class="delivered">Delivered</li>
-                  <li class="in"><span class="visually-hidden">Reply: </span>Niddah since Sun Nov 22. Hefsek from Thu Nov 26 before 4:33 PM.</li>
+                  <li class="in tail"><span class="visually-hidden">Reply: </span>Niddah since Sun Nov 22. Hefsek from Thu Nov 26 before 4:33 PM.</li>
                 </ol>
                 <div class="iphone-compose" aria-hidden="true">
                   <span class="iphone-plus"><svg viewBox="0 0 16 16"><path d="M8 1v14M1 8h14" /></svg></span>
