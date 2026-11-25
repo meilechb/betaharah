@@ -3,22 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Betaharah: your mikvah calendar</title>
-    <meta name="description" content="Your mikvah calendar, worked out for you. Tap any day to try it, or text it in your own words." />
+    <title>Betaharah: your mikvah calendar, by text</title>
+    <meta name="description" content="A free mikvah calendar by text. Text when your period starts and get your hefsek, clean days and mikvah night back by text." />
     <link rel="canonical" href="https://betaharah.com/" />
     <meta name="theme-color" content="#2a3c6e" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Betaharah" />
     <meta property="og:url" content="https://betaharah.com/" />
-    <meta property="og:title" content="Betaharah: your mikvah calendar" />
-    <meta property="og:description" content="Your mikvah calendar, worked out for you. Tap any day to try it, or text it in your own words." />
+    <meta property="og:title" content="Betaharah: your mikvah calendar, by text" />
+    <meta property="og:description" content="A free mikvah calendar by text. Text when your period starts and get your hefsek, clean days and mikvah night back by text." />
     <meta property="og:image" content="https://betaharah.com/brand/og-1200x630.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Betaharah: your mikvah calendar" />
-    <meta name="twitter:description" content="Your mikvah calendar, worked out for you. Tap any day to try it." />
+    <meta name="twitter:title" content="Betaharah: your mikvah calendar, by text" />
+    <meta name="twitter:description" content="A free mikvah calendar by text. Text when your period starts and get your hefsek, clean days and mikvah night back by text." />
     <meta name="twitter:image" content="https://betaharah.com/brand/og-1200x630.png" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -75,8 +75,11 @@
         <div class="wrap hp-hero-grid">
           <div class="hp-hero-copy">
             <p class="hp-kicker">A free mikvah calendar</p>
-            <h1 id="hero-title">Your mikvah calendar, worked out for you.</h1>
-            <p class="hp-lead">Record the day a period began. Betaharah works out the hefsek taharah, the seven clean days, mikvah night and the onos, for where you live and the customs you keep.</p>
+            <h1 id="hero-title">Your mikvah calendar, by text.</h1>
+            <p class="hp-lead">Text us when your period starts. We text you back when to do the hefsek, then your clean days and your mikvah night. Reminders come by text too, if you want them.</p>
+            <p class="hero-sms hp-sms" id="hero-sms" hidden></p>
+            <p class="offline-note" id="offline-note" hidden></p>
+            <p class="offline-note" id="prefix-note" hidden></p>
             <div class="hp-actions">
               <a class="btn btn-primary btn-lg" href="/app/" id="hero-start">Start for free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
               <a class="hp-link" href="#how">See how it works</a>
@@ -84,12 +87,152 @@
             <p class="signup-note" id="signup-note" role="status" hidden></p>
             <ul class="hp-facts">
               <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Free</li>
-              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>On the website or by text</li>
-              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>No app to install</li>
+              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>No app to download</li>
+              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Works on any phone</li>
             </ul>
           </div>
+          <figure class="iphone" aria-label="Messages with Betaharah">
+            <div class="iphone-bezel">
+              <div class="iphone-screen">
+                <div class="iphone-status" aria-hidden="true">
+                  <span class="iphone-time">9:41</span>
+                  <span class="iphone-island"></span>
+                  <span class="iphone-sys">
+                    <svg viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="0.6" /><rect x="4.5" y="5" width="3" height="7" rx="0.6" /><rect x="9" y="2.5" width="3" height="9.5" rx="0.6" /><rect x="13.5" y="0" width="3" height="12" rx="0.6" /></svg>
+                    <svg viewBox="0 0 16 12" aria-hidden="true"><path d="M8 3.2c2 0 3.8.8 5.2 2.1l1-1.1A9 9 0 0 0 8 1.6 9 9 0 0 0 1.8 4.2l1 1.1A7 7 0 0 1 8 3.2Z" /><path d="M8 6.2c1.1 0 2.1.4 2.9 1.2l1-1.1A6 6 0 0 0 8 4.6a6 6 0 0 0-3.9 1.7l1 1.1A4 4 0 0 1 8 6.2Z" /><circle cx="8" cy="10" r="1.3" /></svg>
+                    <svg viewBox="0 0 25 12" aria-hidden="true"><rect x="0.5" y="0.5" width="21" height="11" rx="2.5" /><rect x="2" y="2" width="16" height="8" rx="1" /><path d="M23 4.2v3.6c.8-.3 1.4-1 1.4-1.8s-.6-1.5-1.4-1.8Z" /></svg>
+                  </span>
+                </div>
+                <header class="iphone-bar">
+                  <span class="iphone-back" aria-hidden="true"><svg viewBox="0 0 12 20"><path d="M10 2 2 10l8 8" /></svg><b>12</b></span>
+                  <span class="iphone-who">
+                    <span class="avatar"><img src="/favicon.svg" alt="" width="28" height="28" /></span>
+                    <b>Betaharah <svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" /></svg></b>
+                  </span>
+                  <span class="iphone-back spacer" aria-hidden="true"></span>
+                </header>
+                <ol class="imsg">
+                  <li class="kind">Text Message</li>
+                  <li class="stamp">Sunday 8:10 AM</li>
+                  <li class="out tail"><span class="visually-hidden">She sends: </span>period last night</li>
+                  <li class="in tail"><span class="visually-hidden">Reply: </span>Recorded: flow last night. Hefsek from Thu.<br />Reply: UNDO, STATUS</li>
+                  <li class="stamp">Thursday 3:30 PM</li>
+                  <li class="in tail"><span class="visually-hidden">Reminder: </span>Hefsek taharah: today, before sunset at 4:31 PM.<br />Reply: DONE, STATUS</li>
+                  <li class="out tail"><span class="visually-hidden">She sends: </span>done</li>
+                  <li class="delivered">Delivered</li>
+                  <li class="in tail"><span class="visually-hidden">Reply: </span>Recorded: hefsek today. Clean days from Fri. Mikvah Thu night after 5:17 PM.</li>
+                </ol>
+                <div class="iphone-compose" aria-hidden="true">
+                  <span class="iphone-plus"><svg viewBox="0 0 16 16"><path d="M8 1v14M1 8h14" /></svg></span>
+                  <span class="iphone-field">Text Message</span>
+                  <span class="iphone-mic"><svg viewBox="0 0 12 18"><rect x="3" y="1" width="6" height="10" rx="3" /><path d="M1 8a5 5 0 0 0 10 0M6 13v4" /></svg></span>
+                </div>
+              </div>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <section class="hp-section hp-band" id="how" aria-labelledby="how-title">
+        <div class="wrap">
+          <div class="hp-head">
+            <div>
+              <p class="hp-kicker">How it works</p>
+              <h2 id="how-title">Three steps, all by text.</h2>
+            </div>
+            <p class="hp-head-lead">It takes a few minutes to set up. You only need the date of your last period.</p>
+          </div>
+          <ol class="hp-steps">
+            <li>
+              <span class="hp-num" aria-hidden="true">1</span>
+              <h3>Text JOIN</h3>
+              <p>Then answer three short questions: your ZIP code, your customs, and when your last period began.</p>
+            </li>
+            <li>
+              <span class="hp-num" aria-hidden="true">2</span>
+              <h3>Text what happened</h3>
+              <p>In your own words, like &ldquo;period last night&rdquo; or &ldquo;hefsek today&rdquo;.</p>
+            </li>
+            <li>
+              <span class="hp-num" aria-hidden="true">3</span>
+              <h3>Get your dates by text</h3>
+              <p>We text back your hefsek day, your clean days and your mikvah night, and remind you if you want.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="hp-section" id="by-text" aria-labelledby="text-title">
+        <div class="wrap hp-words-grid">
+          <div>
+            <p class="hp-kicker">What you can text</p>
+            <h2 id="text-title">A few words. No codes to learn.</h2>
+            <p class="hp-side-lead">Every text we send ends with the words you can reply. If we don&rsquo;t understand a text, we say so and nothing changes.</p>
+          </div>
+          <ul class="hp-words">
+            <li><code>period last night</code><span>Your period started last night.</span></li>
+            <li><code>hefsek today</code><span>You did the hefsek today.</span></li>
+            <li><code>status</code><span>Where you are now, and when the mikvah is.</span></li>
+            <li><code>reminders on</code><span>Turn on reminders for this phone.</span></li>
+            <li><code>undo</code><span>Take back the last thing you sent.</span></li>
+            <li><code>menu</code><span>See what else you can text.</span></li>
+            <li><code>STOP</code><span>Stop all texts.</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="hp-section hp-band" id="features" aria-labelledby="features-title">
+        <div class="wrap">
+          <div class="hp-head">
+            <div>
+              <p class="hp-kicker">Features</p>
+              <h2 id="features-title">Everything you need, nothing you don&rsquo;t.</h2>
+            </div>
+            <p class="hp-head-lead">Turn on what you want and leave the rest off.</p>
+          </div>
+          <ul class="hp-cards">
+            <li class="hp-card c-mikvah">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-clock" /></svg></span>
+              <h3>Text reminders, your way</h3>
+              <p>For the hefsek, each bedikah and the mikvah. You pick which ones and when. None on Shabbos or Yom Tov.</p>
+            </li>
+            <li class="hp-card c-clean">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-phone" /></svg></span>
+              <h3>His phone too</h3>
+              <p>Add your husband&rsquo;s phone by text. Each phone gets its own reminders.</p>
+            </li>
+            <li class="hp-card c-hefsek">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-sliders" /></svg></span>
+              <h3>Your customs</h3>
+              <p>Set them by text or on the website. Until you do, the stricter option is used.</p>
+            </li>
+            <li class="hp-card c-onah">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-cal" /></svg></span>
+              <h3>Your own calendar</h3>
+              <p>If you like, see the dates in Google Calendar or any calendar app.</p>
+            </li>
+            <li class="hp-card c-flow">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-msg" /></svg></span>
+              <h3>Any phone</h3>
+              <p>Any phone that can send a text. No app, and no internet needed.</p>
+            </li>
+            <li class="hp-card c-gold" id="privacy">
+              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-lock" /></svg></span>
+              <h3>Private</h3>
+              <p>No ads. Sign in with your phone or with Google. Download or delete your data any time.</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="hp-section hp-web" id="website" aria-labelledby="web-title">
+        <div class="wrap">
+          <div class="hp-head center">
+            <p class="hp-kicker">Prefer a screen?</p>
+            <h2 id="web-title">Use the website too.</h2>
+            <p class="hp-head-lead">Everything you can text, you can also do on the website. Tap any day to try it.</p>
+          </div>
           <div class="demo try" id="try">
-            <p class="hp-try-label">Tap any day to try it.</p>
             <p class="try-error" id="try-error" role="alert" hidden></p>
             <div id="try-cal" class="app-cal">
               <div class="month-nav">
@@ -178,167 +321,7 @@
         </div>
       </section>
 
-      <section class="hp-section" id="overview" aria-labelledby="overview-title">
-        <div class="wrap">
-          <div class="hp-head">
-            <div>
-              <p class="hp-kicker">Overview</p>
-              <h2 id="overview-title">You record one date. The rest is worked out.</h2>
-            </div>
-            <p class="hp-head-lead">The calendar counts by the Hebrew date, with sunset and nightfall calculated for your location.</p>
-          </div>
-          <ul class="hp-cards three">
-            <li class="hp-card c-flow">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-msg" /></svg></span>
-              <h3>Record in a few words</h3>
-              <p>Text &ldquo;period last night&rdquo;, or tap the day on the website.</p>
-            </li>
-            <li class="hp-card c-clean">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-cal" /></svg></span>
-              <h3>Every date in order</h3>
-              <p>The hefsek taharah, each of the seven clean days, mikvah night and the onos perishah.</p>
-            </li>
-            <li class="hp-card c-mikvah">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-clock" /></svg></span>
-              <h3>Reminders by text</h3>
-              <p>For the hefsek, each bedikah and mikvah night. You choose which ones, and when.</p>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="hp-section hp-band" id="how" aria-labelledby="how-title">
-        <div class="wrap">
-          <div class="hp-head">
-            <div>
-              <p class="hp-kicker">How it works</p>
-              <h2 id="how-title">Three steps to start.</h2>
-            </div>
-            <p class="hp-head-lead">Setup takes a few minutes. Only your most recent period is needed.</p>
-          </div>
-          <ol class="hp-steps">
-            <li>
-              <span class="hp-num" aria-hidden="true">1</span>
-              <h3>Sign up</h3>
-              <p>With your mobile number and a code we text you, or with Google.</p>
-            </li>
-            <li>
-              <span class="hp-num" aria-hidden="true">2</span>
-              <h3>Set your location and customs</h3>
-              <p>Your ZIP code gives the times of sunset. Until you choose your customs, the stricter option of each is used.</p>
-            </li>
-            <li>
-              <span class="hp-num" aria-hidden="true">3</span>
-              <h3>Record a period</h3>
-              <p>The dates that follow appear on your calendar, and reminders go out if you turned them on.</p>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section class="hp-section" id="by-text" aria-labelledby="text-title">
-        <div class="wrap split">
-          <div class="fcopy">
-            <p class="hp-kicker">By text message</p>
-            <h2 id="text-title">Prefer texting?</h2>
-            <p>Everything works by text, without the website. Each reply lists what you can answer next.</p>
-            <p class="hero-sms" id="hero-sms" hidden></p>
-            <p class="offline-note" id="offline-note" hidden></p>
-            <p class="offline-note" id="prefix-note" hidden></p>
-            <ul class="hp-ticks">
-              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>&ldquo;period now&rdquo; or &ldquo;hefsek yesterday&rdquo;</li>
-              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>&ldquo;status&rdquo; for where you are in the count</li>
-              <li><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>STOP stops every text</li>
-            </ul>
-          </div>
-          <figure class="iphone" aria-label="Messages with Betaharah">
-            <div class="iphone-bezel">
-              <div class="iphone-screen">
-                <div class="iphone-status" aria-hidden="true">
-                  <span class="iphone-time">9:41</span>
-                  <span class="iphone-island"></span>
-                  <span class="iphone-sys">
-                    <svg viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="0.6" /><rect x="4.5" y="5" width="3" height="7" rx="0.6" /><rect x="9" y="2.5" width="3" height="9.5" rx="0.6" /><rect x="13.5" y="0" width="3" height="12" rx="0.6" /></svg>
-                    <svg viewBox="0 0 16 12" aria-hidden="true"><path d="M8 3.2c2 0 3.8.8 5.2 2.1l1-1.1A9 9 0 0 0 8 1.6 9 9 0 0 0 1.8 4.2l1 1.1A7 7 0 0 1 8 3.2Z" /><path d="M8 6.2c1.1 0 2.1.4 2.9 1.2l1-1.1A6 6 0 0 0 8 4.6a6 6 0 0 0-3.9 1.7l1 1.1A4 4 0 0 1 8 6.2Z" /><circle cx="8" cy="10" r="1.3" /></svg>
-                    <svg viewBox="0 0 25 12" aria-hidden="true"><rect x="0.5" y="0.5" width="21" height="11" rx="2.5" /><rect x="2" y="2" width="16" height="8" rx="1" /><path d="M23 4.2v3.6c.8-.3 1.4-1 1.4-1.8s-.6-1.5-1.4-1.8Z" /></svg>
-                  </span>
-                </div>
-                <header class="iphone-bar">
-                  <span class="iphone-back" aria-hidden="true"><svg viewBox="0 0 12 20"><path d="M10 2 2 10l8 8" /></svg><b>12</b></span>
-                  <span class="iphone-who">
-                    <span class="avatar"><img src="/favicon.svg" alt="" width="28" height="28" /></span>
-                    <b>Betaharah <svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" /></svg></b>
-                  </span>
-                  <span class="iphone-back spacer" aria-hidden="true"></span>
-                </header>
-                <ol class="imsg">
-                  <li class="kind">Text Message</li>
-                  <li class="stamp">Today 9:02 AM</li>
-                  <li class="out tail"><span class="visually-hidden">She sends: </span>JOIN</li>
-                  <li class="in tail"><span class="visually-hidden">Reply: </span>Welcome to Betaharah. Setup step 1 of 3: your ZIP code (or Canadian postal code), for the times of sunset.</li>
-                  <li class="stamp">Today 10:14 AM</li>
-                  <li class="out tail"><span class="visually-hidden">She sends: </span>period now</li>
-                  <li class="in tail"><span class="visually-hidden">Reply: </span>Recorded: flow Tue Nov 24 by day. Hefsek from Sat Nov 28.</li>
-                  <li class="out tail"><span class="visually-hidden">She sends: </span>status</li>
-                  <li class="delivered">Delivered</li>
-                  <li class="in tail"><span class="visually-hidden">Reply: </span>Niddah since Sun Nov 22. Hefsek from Thu Nov 26 before 4:33 PM.</li>
-                </ol>
-                <div class="iphone-compose" aria-hidden="true">
-                  <span class="iphone-plus"><svg viewBox="0 0 16 16"><path d="M8 1v14M1 8h14" /></svg></span>
-                  <span class="iphone-field">Text Message</span>
-                  <span class="iphone-mic"><svg viewBox="0 0 12 18"><rect x="3" y="1" width="6" height="10" rx="3" /><path d="M1 8a5 5 0 0 0 10 0M6 13v4" /></svg></span>
-                </div>
-              </div>
-            </div>
-          </figure>
-        </div>
-      </section>
-
-      <section class="hp-section hp-band" id="features" aria-labelledby="features-title">
-        <div class="wrap">
-          <div class="hp-head">
-            <div>
-              <p class="hp-kicker">Features</p>
-              <h2 id="features-title">Made for how couples keep it.</h2>
-            </div>
-            <p class="hp-head-lead">Each of these is a setting. Turn on what you want and leave the rest.</p>
-          </div>
-          <ul class="hp-cards">
-            <li class="hp-card c-mikvah">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-clock" /></svg></span>
-              <h3>Text reminders, your way</h3>
-              <p>Pick which reminders each phone gets, and at what time. None are sent on Shabbos or Yom Tov.</p>
-            </li>
-            <li class="hp-card c-clean">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-phone" /></svg></span>
-              <h3>One account, two phones</h3>
-              <p>Add your husband&rsquo;s phone. Up to four phones share one account, each with its own reminders.</p>
-            </li>
-            <li class="hp-card c-onah">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-cal" /></svg></span>
-              <h3>On the calendar you already use</h3>
-              <p>Google Calendar, or any calendar app through a link. Titles in words, or symbols only.</p>
-            </li>
-            <li class="hp-card c-hefsek">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-sliders" /></svg></span>
-              <h3>Your customs</h3>
-              <p>The wait before the hefsek, onah beinonis, vest haflagah and nightfall. Set once.</p>
-            </li>
-            <li class="hp-card c-flow">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-globe" /></svg></span>
-              <h3>Hebrew or English terms</h3>
-              <p>Write the terms in English letters, or in Hebrew: <bdi lang="he">הפסק טהרה</bdi>.</p>
-            </li>
-            <li class="hp-card c-gold" id="privacy">
-              <span class="hp-chip" aria-hidden="true"><svg class="ic"><use href="#i-lock" /></svg></span>
-              <h3>Private</h3>
-              <p>Signing in with Google, or with your phone. No ads. Download or delete your data at any time.</p>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="hp-section" id="questions" aria-labelledby="questions-title">
+      <section class="hp-section hp-band" id="questions" aria-labelledby="questions-title">
         <div class="wrap hp-faq-grid">
           <div class="hp-faq-side">
             <p class="hp-kicker">Questions</p>
@@ -348,27 +331,35 @@
           <div class="hp-faq">
             <details>
               <summary>What does it cost?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
-              <div class="hp-ans"><p>Nothing. Betaharah is free. Your carrier&rsquo;s message and data rates may apply to texts.</p></div>
+              <div class="hp-ans"><p>Nothing. Betaharah is free. Your phone company&rsquo;s usual texting rates apply.</p></div>
             </details>
             <details>
-              <summary>Do I need to install an app?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
-              <div class="hp-ans"><p>No. It works in the browser on any phone or computer, and by text message.</p></div>
+              <summary>Does it work on any phone?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>Yes. Any phone that can send and get texts, with a US or Canadian number.</p></div>
             </details>
             <details>
-              <summary>How many past periods do I need to enter?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
-              <div class="hp-ans"><p>Only the most recent one. Earlier dates can be added later on the Log page, and the onos that depend on them are then worked out.</p></div>
+              <summary>What if I text something it doesn&rsquo;t understand?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>It tells you, changes nothing, and lists what you can reply.</p></div>
+            </details>
+            <details>
+              <summary>Do I need to enter past periods?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>No. Only the last one. You can add earlier dates later on the website.</p></div>
+            </details>
+            <details>
+              <summary>Can my husband get the texts too?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>Yes. Text ADD from your phone and you get a code. He texts JOIN and the code from his phone.</p></div>
             </details>
             <details>
               <summary>Which customs does it follow?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
-              <div class="hp-ans"><p>The ones you choose. Each point on which customs differ is a setting. Until you save them, the stricter option of each is used.</p></div>
+              <div class="hp-ans"><p>The ones you choose. Until you choose, the stricter option of each is used.</p></div>
+            </details>
+            <details>
+              <summary>How do I stop the texts?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
+              <div class="hp-ans"><p>Text STOP. To stop only the reminders, text &ldquo;reminders off&rdquo;.</p></div>
             </details>
             <details>
               <summary>Does it give halachic rulings?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
-              <div class="hp-ans"><p>No. It works out dates from the Hebrew calendar, the sunset where you live and the customs you set. It does not rule on anything.</p></div>
-            </details>
-            <details>
-              <summary>Who can see my dates?<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></summary>
-              <div class="hp-ans"><p>The phones on your account. There are no ads, and you can download your data or delete your account at any time. The <a href="/privacy">Privacy page</a> explains how your data is kept.</p></div>
+              <div class="hp-ans"><p>No. It counts the days from the Hebrew calendar, the sunset where you live and your customs.</p></div>
             </details>
           </div>
         </div>
@@ -376,8 +367,9 @@
 
       <section class="closing" aria-labelledby="closing-title">
         <div class="wrap closing-in">
-          <h2 id="closing-title">Start your calendar.</h2>
-          <p>Free, on the website or by text message.</p>
+          <h2 id="closing-title">Start by text.</h2>
+          <p class="closing-sms" id="closing-sms" hidden></p>
+          <p>Free. By text, or on the website.</p>
           <div class="hero-actions">
             <a class="btn btn-light btn-lg" href="/app/" id="cta-start">Start for free<svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></a>
           </div>
@@ -389,7 +381,7 @@
       <div class="wrap foot-in">
         <div class="foot-brand">
           <a class="wordmark" href="/"><img class="mark" src="/favicon.svg" alt="" width="24" height="24" /><span>Betaharah</span></a>
-          <p>A free mikvah calendar, on the website and by text.</p>
+          <p>A free mikvah calendar by text.</p>
         </div>
         <nav class="foot-nav" aria-label="Site">
           <a href="/app/">Sign in</a>

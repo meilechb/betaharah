@@ -3477,26 +3477,133 @@ body.lp {
   color: var(--mikvah);
   stroke-width: 2.6;
 }
-.hp-hero .demo {
-  margin: 0;
-  max-width: 640px;
-  width: 100%;
+.hp-hero .iphone {
+  width: min(100%, 300px);
   justify-self: center;
-  border-radius: 24px;
-}
-.hp-try-label {
-  margin: 0 0 var(--space-3);
-  text-align: center;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--muted);
 }
 @media (min-width: 1040px) {
   .hp-hero-grid {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   }
-  .hp-hero .demo {
-    justify-self: end;
+}
+
+/* "To start, text JOIN to (number)": the main way in, so it is large */
+.hp-sms {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-6) 0 0 !important;
+  padding: var(--space-4) var(--space-6);
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--lp-shadow-card);
+  color: var(--ink) !important;
+}
+.hp-sms-label {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.hp-sms-line {
+  font-size: clamp(1.25rem, 1rem + 1.2vw, 1.6rem);
+  font-weight: var(--weight-bold);
+  line-height: 1.3;
+}
+.hp-sms code {
+  font-size: 0.9em;
+  padding: 0.05em 0.35em;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.hp-sms a {
+  color: var(--accent);
+  white-space: nowrap;
+}
+.hp-hero .offline-note {
+  margin: var(--space-5) 0 0;
+}
+
+/* the website calendar, lower on the page */
+.hp-web {
+  position: relative;
+  z-index: 2;
+}
+.hp-head.center {
+  display: block;
+  text-align: center;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.hp-head.center .hp-kicker {
+  justify-content: center;
+}
+.hp-head.center h2 {
+  max-width: none;
+}
+.hp-head.center .hp-head-lead {
+  margin: var(--space-4) auto 0;
+}
+.hp-web .demo {
+  margin: 0 auto;
+  max-width: 680px;
+  border-radius: 24px;
+}
+
+/* what you can text */
+.hp-words-grid {
+  display: grid;
+  gap: var(--space-8) clamp(32px, 6vw, 96px);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .hp-words-grid {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+}
+.hp-words-grid h2 {
+  font-size: var(--lp-h2);
+  line-height: 1.1;
+}
+.hp-side-lead {
+  margin: var(--space-4) 0 0;
+  font-size: var(--lp-lead);
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 460px;
+}
+.hp-words {
+  display: grid;
+  gap: var(--space-2);
+}
+.hp-words li {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.hp-words code {
+  justify-self: start;
+  white-space: normal;
+  font-family: var(--font);
+  font-weight: var(--weight-bold);
+  font-size: 0.95rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+}
+.hp-words span {
+  color: var(--muted);
+}
+@media (max-width: 479px) {
+  .hp-words li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
   }
 }
 
