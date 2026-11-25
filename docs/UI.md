@@ -10,17 +10,20 @@ code; it is the only other document you need.
 | `public/site.css` | Tokens and every shared component. Linked first on every page. | Frozen |
 | `public/app/lib.js` | DOM helper `h()`, `api()`, icons and the component builders below. | Frozen |
 | `public/app/store.js` | Shared state of the signed-in page (`P`, `S`, `draft`), `adopt()`, `t()`, `run()`, `saved()`, dates. | Frozen (ask before changing) |
-| `public/app/main.js` | Boot (`start()`), sign-in or dashboard, tab bar, hash routing, focus kept across redraws. | Dashboard agent |
+| `public/app/main.js` | Boot (`start()`), sign-in or dashboard, the header and the menu, the pages and hash routing, focus kept across redraws. | Dashboard agent |
 | `public/app/auth.js` | Every sign-in, sign-up and invitation view. | Sign-up agent |
 | `public/app/onboarding.js` | The "Getting started" card (`onboardingCard()`), to become the guided setup. | Sign-up agent |
 | `public/app/auth.css` | Styles for the sign-in views and the guided setup. | Sign-up agent |
-| `public/app/views/today.js`, `log.js`, `customs.js`, `shared.js` | The tabs, and pieces two tabs use (`alertsBlock`, `termsToggle`, `saveApp`). | Dashboard agent |
-| `public/app/views/calendar.js` | Today's month calendar: the month, the legend (always shown, in two groups), and the chosen day with its one-click buttons and what is marked on it. | Dashboard agent |
-| `public/app/views/record.js` | Recording, in one place: `recordNow(body, button, where)` for one-click entries (the next step, a day's buttons), `notice(where)` for the server's confirmation with Undo or its refusal, `openRecord(preset, openerId)` and `recordPanel()` for the full form on Today, `recordCard()` for "Add a past entry" on the Log. | Dashboard agent |
+| `public/app/views/today.js`, `log.js`, `customs.js`, `shared.js` | The pages: the home (`viewHome`), Coming up, Texting and Try a text (`today.js`), the Log, Customs; and pieces two pages use (`alertsBlock`, `termsToggle`, `saveApp`). | Dashboard agent |
+| `public/app/views/calendar.js` | The home's month: pages by Hebrew or civil month, the tinted niddah days, the marks, the keyboard, "Key" (the legend in a sheet), and where a day's popup opens. | Dashboard agent |
+| `public/app/views/daypop.js` | The small popup of a day: what is expected, what is recorded (Edit, Delete), what can be added, the likeliest first. | Dashboard agent |
+| `public/app/views/dates.js` | How the page writes a date: the Dates setting (`datesMode()`), "Today" / "Monday night" (`dayWord()`), the date as the setting has it (`dateText()`). | Dashboard agent |
+| `public/app/views/sheet.js` | `openSheet()`: a native modal dialog outside the root, a bottom sheet on a phone (the menu, the Key). | Dashboard agent |
+| `public/app/views/record.js` | Recording, in one place: `recordNow(body, button, where, before)` for one-tap entries (a day's popup), `notice(where)` for the server's confirmation with Undo or its refusal, `openRecord(preset, openerId)` and `recordPage()` for the full form (`#record`), `recordCard()` for "Add a past entry" on the Log. | Dashboard agent |
 | `public/app/views/marks.js` | The marks of the kinds of days, used by the dashboard and the console's calculation test: `mark()` (H✓ a recorded hefsek, M✓ a recorded immersion, H? the hefsek day not recorded, outlined M a mikvah night whether ahead or past, dashed expected), `entryMark(kind)`, `legend()`, and the words beside a title: `plainTitle()` (no " (projected)"), `stateTag()` ("recorded", "not recorded", "expected"), `spoken()`, `describe()`, `assumption()`. | Dashboard agent |
-| `public/app/views/settings/*.js`, `public/app/settings.css` | The Settings tab: `index.js` draws the list of sections (each row with a one-line summary) and the open section; one module per section; `route.js` keeps the open section in the address (`#settings/phones`); `ui.js` has the rows and switches. | Settings |
+| `public/app/views/settings/*.js`, `public/app/settings.css` | The Settings page: `index.js` draws the list of sections (each row with a one-line summary) and the open section; one module per section; `route.js` keeps the open section in the address (`#settings/phones`); `ui.js` has the rows and switches. | Settings |
 | `test/ui/settings.cjs` | The browser run of every Settings section, on the test account and on a new account. | Settings |
-| `public/app/dashboard.css` | Styles for the signed-in tabs. | Dashboard agent |
+| `public/app/dashboard.css` | Styles for the signed-in pages. | Dashboard agent |
 | `public/index.html`, `public/landing.css` | The public landing page. | Console and landing agent |
 | `public/landing-try.js` | "Try it" on the home page (`#try`): a visitor's dates worked out by `POST /api/try`, with the same marks as the dashboard; without JavaScript the section is a sentence and a link. | Console and landing agent |
 | `public/admin/sections/calc.js` | The console's "Calculation test" (`#calc`), from `POST /api/admin/sandbox`. It imports `mark()` (with the H✓, M✓, H? and outlined M marks) from `public/app/views/marks.js`; its calendar styles repeat the dashboard's under `.calc` in `admin.css`. | Console and landing agent |
@@ -107,47 +110,92 @@ so in your report; do not edit the frozen files.
 - `render()` keeps the focus on the control that had it, **by id**. Give every
   control that triggers a redraw a fixed id (`radioRow` does this for you from
   `name` and `value`).
-- Views get `render`, `go(tab)`, `restart()` and `currentTab()` from `store.js`;
+- Views get `render`, `go(page)`, `restart()` and `currentTab()` (the page shown) from `store.js`;
   they never import `main.js`.
 - `S` and `P` are live bindings: `import { S } from '../store.js'` and read
   `S.x`. Change them only through `adopt()`, `setPublic()`, `signOutLocally()`.
 - The shape of `S` is `dashboardState()` in `src/app/dashboard.ts`.
 
-## The Today tab
+## The shell, the home, the menu and the day popup
 
-Top to bottom on a phone; from 960 px the calendar is the left column and the
-rest stays in this order on the right (`.today-layout` in `dashboard.css`).
+The signed-in home is the calendar and nothing else.
 
-1. **Where things stand** (`statusCard` in `today.js`): the server's headline
-   and sentence, then the one thing to record next as one primary button
-   (`#next-step`), chosen from `S.status.phase`: "A period began" (tehorah);
-   "The hefsek taharah was done today" (before the hefsek, by day, once the
-   grid's projected hefsek day has come). The clean days, a postponed
-   immersion and the mikvah night have no button: nothing asks about the
-   immersion (once the mikvah night is over she is tehorah). Links open the
-   full form preset: "It began earlier", "Record something else". Then
-   today's items, the next onat perishah while tehorah, and the alerts
-   (today's sunset is in the header).
-2. **The full form** (`recordPanel` in `record.js`), only after a link opened
-   it, with Close. It keeps every choice: any kind, another date, by day, at
-   night or a clock time, a note, the vesatot switch.
-3. **Calendar** (`calendar.js`): the month, the chosen day, and the legend
-   (one short line per mark; how a day is drawn under a closed "More"). The
-   day's header is one line: date, Hebrew date, sunrise and sunset. For today
-   or an earlier day, "What happened on this day?" records with one click
-   (`POST /api/entries` with `{ kind, date, part }`): flow by day, flow at
-   night, hefsek taharah; stain, count broken and the (optional) immersion
-   are under "Other things to add"; then "On this day".
-4. **Coming up**: "Until the mikvah night" (the hefsek day, the clean days as one
-   row, the mikvah night, with the server's assumption when they are
-   projected), then "Onot of separation", one row each, with the reasons shown.
-   The calendar button on a row shows that day on the calendar.
-5. "Text this number", or on the test account "Try a text", last.
+1. **Header, one row** (`header()` in `main.js`): the mark and name at the left
+   (a link home, `#home-link`), "Test account" beside the name on the
+   operator's test account (`#demo-tag`), and one button at the right, "Menu"
+   (`#menu-button`). With alerts (`S.alerts`) the button carries their count
+   (`.menu-count`, and "Menu, 1 alert" as its name). No date line, no tabs, no
+   banner.
+2. **The status line** (`viewHome` in `today.js`): `S.status.headline`, then,
+   smaller, `S.status.detail`. Plain text, no card, no buttons.
+3. **The month** (`homeCalendar` in `calendar.js`) fills the rest of the
+   screen: the title in the middle with previous and next beside it, "Today"
+   only when another month is shown; large cells; under the month one quiet
+   line, "Tap a day" (touch screens) or "Choose a day", and "Key", which opens
+   the legend (`legend()` in `marks.js`) in a sheet (`sheet.js`).
+   - The Dates setting (`S.app.dates`, read by `datesMode()` in `dates.js`):
+     `hebrew` (the default, also when the field is absent) pages by Hebrew
+     month (title "Kislev 5787", the civil span small under it), the large
+     number is the Hebrew day and the small one the civil day (with the
+     month's short name on the 1st); `civil` pages by civil month with the
+     civil day only; `both` pages by civil month with the civil day large and
+     the Hebrew day small. Hebrew months are grouped by the grid's
+     `hebrewMonthId` (and `hebrewYear`) when it sends them, otherwise by
+     `monthStart`; the year is `hebrewYear` or worked out from the civil year.
+   - The days of a niddah period (from the day it began through the date of
+     its mikvah night) are tinted (`.day.niddah`: the flow colour mixed into
+     the surface, and a bar along the bottom); their label says "Niddah day".
+   - Inside the cells the marks of `marks.js`; from 700 px a word beside each
+     ("Period", "Hefsek", "Clean 3", "Mikvah", "Onah", through the terms).
+   - Arrow keys move between days and across months; Page Up and Page Down
+     move by month (by Hebrew month when the month is a Hebrew one).
+   - Without a location the home is the one sentence "Nothing can be
+     calculated until a location is chosen." and a button to Settings,
+     Location.
+4. **The popup of a day** (`daypop.js`): tapping or choosing a day (Enter or
+   Space) opens a small popup beside it, under the day or above it when there
+   is no room below, always inside the screen. It closes on Escape, a tap
+   outside, or tapping the day again; the focus goes back to the day. Up and
+   Down move between its buttons. Top to bottom:
+   - the day in plain words and its date as the setting has it ("Tuesday
+     14 Kislev", "Yesterday Nov 23 · 13 Kislev"; `dateText()` and `dayWord()`
+     in `dates.js`; a night is "Monday night", its Hebrew date "eve of ...");
+   - one short line of what is expected that day (the titles of the events
+     that are worked out, not recorded);
+   - what is recorded on that day, one row each ("Stain, by day") with Edit
+     and Delete. Delete asks once in the popup. Edit changes the date and day
+     or night in place: the entry is recorded again with
+     `POST /api/entries` (its note kept) and the old one removed with
+     `DELETE /api/entries/:id`;
+   - for today or an earlier day, what can be added, the likeliest first:
+     "Hefsek taharah done" on a day it can be done (a niddah period with no
+     hefsek taharah recorded, from the last day of the customs' wait), then
+     "A period began" (today: now; an earlier day: "By day" / "At night"),
+     then "More" (the full form, `#record`, preset to that date). A future day
+     has nothing to add. One tap records; the popup closes and the server's
+     sentence with Undo is shown under the month (`notice('day')`).
+5. **Everything else is behind Menu**: a sheet on a phone, a list under the
+   button on a wide screen (`openMenu()` in `main.js`, a native `<dialog>`, so
+   it keeps the focus and closes on Escape). One or two words each: Calendar,
+   Coming up (with the alert count), Log, Customs, Settings, Texting, "Try a
+   text" (test account only), Help (`/help`), Sign out. Each page has
+   "Calendar" at its top (`#back-home`); the header's name goes home too.
+   - Addresses: `#today` (also an empty hash and `#calendar`), `#coming`,
+     `#log`, `#customs`, `#settings/...`, `#texting`, `#try`, `#record`. Each
+     page is a step in the browser's history.
+   - **Coming up** (`viewComing`): the alerts first, then "Getting started"
+     while it is not done, then "Until mikvah night" and "Onot of separation"
+     (the calendar button on a row opens that day's popup on the calendar).
+   - **Texting** (`viewTexting`): "Text this number" when texting works and
+     the account has a phone, otherwise a short note and a link to Settings,
+     Texting. **Try a text** (`viewTry`): the test account's chat.
+   - **The full form** (`recordPage` in `record.js`): any kind, any date, a
+     clock time, a note and the vesatot switch; Cancel goes back to the
+     calendar.
 
 Titles never show the server's " (projected)": the page says "not recorded"
-(the hefsek day), "expected" (projected) or "recorded" in a label beside them.
-A confirmation (with Undo) or a refusal is shown where the entry was recorded
-from: the status card, the chosen day, or the form.
+(the hefsek day), "expected" (projected) or "recorded" in a label beside them
+(Coming up, the day's label).
 
 ## Settings → Calendar
 

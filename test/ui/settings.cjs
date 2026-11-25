@@ -83,6 +83,13 @@ const H = { 'x-betaharah': '1' };
   const context = await browser.newContext({ viewport: { width: 390, height: 860 } });
   page = await context.newPage();
   watch(page);
+  /** The pages are opened from the menu; each is a main.page-<id>. */
+  const pageIs = id => page.waitForSelector('main.page-' + id);
+  const menuTo = async id => {
+    await page.click('#menu-button');
+    await page.click('dialog#menu #menu-' + id);
+    await pageIs(id);
+  };
 
   await step('open the test account on Settings', async () => {
     const r1 = await page.request.post(base + '/api/admin/login', { headers: H, data: { password: ADMIN_PASSWORD } });
@@ -90,7 +97,7 @@ const H = { 'x-betaharah': '1' };
     const r2 = await page.request.post(base + '/api/admin/demo', { headers: H });
     if (!r2.ok()) throw new Error('demo ' + r2.status());
     await page.goto(base + '/app/#settings');
-    await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Settings")');
+    await pageIs('settings');
     await page.waitForSelector('.st.at-home');
   });
 
@@ -194,11 +201,10 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('#st-title:has-text("Spouse (example)")');
   });
 
-  await step('phones: Back from another tab returns to the open phone', async () => {
-    await page.click('nav.tabs button:has-text("Today")');
-    await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Today")');
+  await step('phones: Back from another page returns to the open phone', async () => {
+    await menuTo('today');
     await page.goBack();
-    await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Settings")');
+    await pageIs('settings');
     await page.waitForSelector('#st-title:has-text("Spouse (example)")');
     await expectHash('#settings/phones/17325550199');
   });
@@ -522,7 +528,7 @@ const H = { 'x-betaharah': '1' };
     await page.click('#setup-leave');
     await page.waitForTimeout(300);
     if (await page.locator('dialog').count()) await page.click('dialog button[type=submit]');
-    await page.waitForSelector('nav.tabs');
+    await page.waitForSelector('main.page');
   });
 
   // ----- wide screens -----
@@ -531,7 +537,7 @@ const H = { 'x-betaharah': '1' };
     await step(`wide (1280 px, ${scheme}): the list stays beside the open section`, async () => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.emulateMedia({ colorScheme: scheme });
-      await page.click('nav.tabs button:has-text("Settings")');
+      await menuTo('settings');
       await page.evaluate(() => (location.hash = '#settings'));
       await page.waitForSelector('.st.at-home');
       if (!(await page.isVisible('#st-title:has-text("Location")'))) throw new Error('no section beside the list');
@@ -764,8 +770,8 @@ const H = { 'x-betaharah': '1' };
 
   await step('new account: the customs link goes to the Customs tab', async () => {
     await page.click('#st-go-customs');
-    await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Customs")');
-    await page.click('nav.tabs button:has-text("Settings")');
+    await pageIs('customs');
+    await menuTo('settings');
     await page.waitForSelector('.st.at-home');
   });
 
