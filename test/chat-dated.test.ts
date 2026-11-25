@@ -121,7 +121,7 @@ describe('recording with a date, by words and by ANOTHER DAY', () => {
     expect(p.options()).toEqual(['NOW', 'LAST NIGHT', 'ANOTHER DAY']);
     expect(p.say('another day')).toBe('Which date, and day or night? For example: Nov 22 night.');
     expect(p.options()).toEqual(['MENU']);
-    expect(p.say('Nov 22 night')).toBe('Recorded: flow Sun Nov 22 night, 2026. Hefsek from Fri Nov 27.');
+    expect(p.say('Nov 22 night')).toBe('Recorded: flow Sun night, Nov 22, 2026. Hefsek from Fri.');
     expect(p.options()).toEqual(['UNDO', 'STATUS']);
     expect(data.entries[0]!.entry).toMatchObject({ kind: 'flow', onah: { abs: abs(2026, 11, 23), part: 'night' } });
   });
@@ -129,13 +129,13 @@ describe('recording with a date, by words and by ANOTHER DAY', () => {
   it('a hefsek and an immersion by date, as the form does (the immersion: the evening she immersed)', () => {
     const data = household();
     const p = new Phone(data);
-    expect(p.say('period 11/1 day')).toMatch(/^Recorded: flow Sun Nov 1 by day, 2026\./);
-    expect(p.say('hefsek 11/6')).toMatch(/^Recorded: hefsek Fri Nov 6, 2026\. Clean days Sat Nov 7 - Fri Nov 13\. Mikvah Fri Nov 13 after/);
+    expect(p.say('period 11/1 day')).toMatch(/^Recorded: flow Sun, Nov 1, 2026 by day\./);
+    expect(p.say('hefsek 11/6')).toMatch(/^Recorded: hefsek Fri, Nov 6, 2026\. Clean days from Shabbat, Nov 7\. Mikvah Fri night, Nov 13 after/);
     p.send('MORE');
     p.send('OTHER ENTRIES');
     expect(p.say('IMMERSION')).toBe('Immersion: which night?');
     p.send('ANOTHER DAY');
-    expect(p.say('11/13')).toMatch(/^Recorded: mikvah Fri Nov 13 night, 2026\./);
+    expect(p.say('11/13')).toMatch(/^Recorded: mikvah Fri night, Nov 13, 2026\./);
     const where = whereOf(data)!;
     const strip = (e: object) => {
       const { id: _id, ...rest } = e as { id: string };
@@ -148,36 +148,36 @@ describe('recording with a date, by words and by ANOTHER DAY', () => {
   it('the existing validations apply, and the date as read is added', () => {
     const data = household();
     const p = new Phone(data);
-    expect(p.say('hefsek 11/20')).toBe('Not recorded: no period is open. (Read as Fri Nov 20, 2026.)');
+    expect(p.say('hefsek 11/20')).toBe('Not recorded: no period is open. (Read as Fri, Nov 20, 2026.)');
     p.say('period 11/1 day');
     p.send('MORE');
     p.send('OTHER ENTRIES');
     p.send('IMMERSION');
     p.send('ANOTHER DAY');
-    expect(p.say('11/10')).toBe('Not recorded: no hefsek is recorded. (Read as Tue Nov 10, 2026.)');
+    expect(p.say('11/10')).toBe('Not recorded: no hefsek is recorded. (Read as Tue, Nov 10, 2026.)');
     p.say('hefsek 11/6');
     p.send('MORE');
     p.send('OTHER ENTRIES');
     p.send('IMMERSION');
     p.send('ANOTHER DAY');
-    expect(p.say('11/10')).toMatch(/^Not recorded: the count is not complete\. Mikvah night is Fri Nov 13 after \d+:\d\d PM\. \(Read as Tue Nov 10, 2026\.\)$/);
-    expect(p.say('period 11/1 day')).toBe('Already recorded. (Read as Sun Nov 1, 2026.)');
+    expect(p.say('11/10')).toMatch(/^Not recorded: the count is not complete\. Mikvah night is Fri night, Nov 13 after \d+:\d\d PM\. \(Read as Tue, Nov 10, 2026\.\)$/);
+    expect(p.say('period 11/1 day')).toBe('Already recorded. (Read as Sun, Nov 1, 2026.)');
     expect(data.entries).toHaveLength(2);
   });
 
   it('a date this year that is still to come is read as last year, and the reply says so', () => {
     const p = new Phone(household());
-    expect(p.say('hefsek 11/27')).toBe('Not recorded: no period is open. (Read as Thu Nov 27, 2025.)');
-    expect(p.say('period 11/30 day')).toBe('Recorded: flow Sun Nov 30 by day, 2025. Hefsek from Thu Dec 4.');
+    expect(p.say('hefsek 11/27')).toBe('Not recorded: no period is open. (Read as Thu, Nov 27, 2025.)');
+    expect(p.say('period 11/30 day')).toBe('Recorded: flow Sun, Nov 30, 2025 by day. Hefsek from Thu, Dec 4.');
   });
 
   it('never records a time that has not come', () => {
     const data = household();
     const morning = at(2026, 11, 24, 9);
     const p = new Phone(data, morning);
-    expect(p.say('period 11/24 night')).toBe('Not recorded: that time has not come yet. (Read as Tue Nov 24, 2026.)');
+    expect(p.say('period 11/24 night')).toBe('Not recorded: that time has not come yet. (Read as Tue, Nov 24, 2026.)');
     expect(p.say('period 11/24 3pm')).toBe('Not recorded: that time has not come yet.');
-    expect(p.say('period 11/24/2026 day')).toMatch(/^Recorded: flow Tue Nov 24 by day, 2026\./); // the day onah has begun
+    expect(p.say('period 11/24/2026 day')).toMatch(/^Recorded: flow Tue, Nov 24, 2026 by day\./); // the day onah has begun
     expect(p.say('hefsek 12/1/2026')).toBe('Not recorded: that time has not come yet.');
     expect(data.entries).toHaveLength(1);
   });
@@ -188,7 +188,7 @@ describe('recording with a date, by words and by ANOTHER DAY', () => {
     expect(p.say('period 2/29 day')).toBe('There was no Feb 29 in the past year. With the year it works, e.g. 2/29/2024. Nothing was changed.');
     expect(p.say('period 2/29/2025 day')).toBe('There is no date 2/29/2025. Nothing was changed.');
     expect(p.say('period 2/30 day')).toBe('There is no date 2/30. Nothing was changed.');
-    expect(p.say('period 2/29/2024 day')).toMatch(/^Recorded: flow Thu Feb 29 by day, 2024\./);
+    expect(p.say('period 2/29/2024 day')).toMatch(/^Recorded: flow Thu, Feb 29, 2024 by day\./);
     expect(data.entries).toHaveLength(1);
   });
 
@@ -198,14 +198,14 @@ describe('recording with a date, by words and by ANOTHER DAY', () => {
     const sunset = dayTimes(abs(2026, 11, 22), whereOf(data)!.place, whereOf(data)!.zopts).sunset;
     const after = new Date(sunset + 10 * 60_000).toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true });
     const typed = after.replace(' ', '').toLowerCase();
-    expect(p.say(`period 11/22 ${typed}`)).toMatch(/^Recorded: flow Sun Nov 22 night, 2026\..* Counted as night: sunset was \d+:\d\d PM\.$/);
+    expect(p.say(`period 11/22 ${typed}`)).toMatch(/^Recorded: flow Sun night, Nov 22, 2026\..* Counted as night: sunset was \d+:\d\d PM\.$/);
   });
 
   it('UNDO undoes a dated entry like any other', () => {
     const data = household();
     const p = new Phone(data);
     p.say('period 11/22 night');
-    expect(p.say('UNDO')).toMatch(/^Removed: flow Sun Nov 22 night\./);
+    expect(p.say('UNDO')).toMatch(/^Removed: flow Sun night, Nov 22\./);
     expect(data.entries).toHaveLength(0);
   });
 

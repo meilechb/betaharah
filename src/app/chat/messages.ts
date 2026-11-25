@@ -17,6 +17,8 @@
  * toll-free verification (`filed`): the sign-in code, the reply to HELP and
  * the reply to START. They carry no options line.
  */
+import { civilToAbs } from '../../engine/civil';
+import { dayWords, nightWords, type DateStyle, type DateWords } from '../../engine/dates';
 import { REMINDER_TEXTS, STATUS_TEXTS } from '../../engine/present';
 import { SMS_CUSTOMS } from './customs';
 
@@ -77,6 +79,7 @@ export const GENERAL_ACTIONS: Array<{ action: string; name: string; words: strin
   { action: 'leave', name: 'Leave the account', words: ['leave'] },
   { action: 'calendar', name: 'Calendar link', words: ['calendar'] },
   { action: 'terms', name: 'Terms (Hebrew, English)', words: ['terms'] },
+  { action: 'dates', name: 'Dates (Hebrew, civil, both)', words: ['dates'] },
   { action: 'web', name: 'Sign-in link', words: ['web', 'website'] },
   { action: 'setup', name: 'Setup again', words: ['setup'] },
   { action: 'delete', name: 'Delete the account', words: ['delete'] },
@@ -133,8 +136,43 @@ function add(key: string, group: Group, when: string, body: string, options: Opt
   });
 }
 
-const DATE = 'Wed Nov 25';
-const ENTRY = 'flow Tue Nov 24 night';
+/**
+ * The example values of the dates, as the texts write them for a date more
+ * than six days away (the longest form: nearer dates are a weekday alone or
+ * "today"), in each setting of the household's dates. The registry shows
+ * the default setting's; test/texts.test.ts checks every text in all three.
+ */
+export function dateExamples(dates: DateStyle) {
+  const w: DateWords = { dates, lang: 'en' };
+  const SUN = civilToAbs({ y: 2026, m: 11, d: 22 });
+  const day = (n: number): string => dayWords(SUN + n, w);
+  const night = (n: number): string => nightWords(SUN + n, w);
+  return {
+    day: day(3),
+    mikvahNight: night(12),
+    entry: `flow ${night(2)}`,
+    stain: `stain ${day(2)} by day`,
+    broken: `count broken ${day(2)} by day`,
+    hefsek: `hefsek ${day(7)}`,
+    immersion: `mikvah ${night(15)}`,
+    flowDetails: ` Hefsek from ${day(7)}.`,
+    hefsekDetails: ` Clean days from ${day(8)}. Mikvah ${night(15)} after 5:16 PM.`,
+    readAs: dayWords(SUN - 360, { ...w, year: true }),
+    history: `first: hefsek ${day(-16)}; second: flow ${day(-21)} by day`,
+    historyEntry: `flow ${day(-21)} by day`,
+    from: `4:31 PM ${night(29)}`,
+    to: `4:32 PM ${day(30)}`,
+    nextDay: night(29),
+    start: night(0),
+    hefsekDay: day(4),
+    firstDay: day(5),
+    example: day(2),
+  };
+}
+
+const EX = dateExamples('hebrew');
+const DATE = EX.day;
+const ENTRY = EX.entry;
 
 // ---------- carrier words (filed) ----------
 
@@ -202,6 +240,7 @@ add('menu.settings', 'Settings', 'The option SETTINGS.', 'Settings:', [
   ['customs', 'CUSTOMS'],
   ['calendar', 'CALENDAR'],
   ['terms', 'TERMS'],
+  ['dates', 'DATES'],
 ]);
 add('menu.account', 'Settings', 'The option ACCOUNT.', 'Account:', [
   ['phones', 'PHONES'],
@@ -240,15 +279,15 @@ const AFTER_RECORD: Opt[] = [
   ['undo', 'UNDO'],
   ['status', 'STATUS'],
 ];
-const DETAILS = { 'details?': ' Hefsek from Sun Nov 29.' };
+const DETAILS = { 'details?': EX.flowDetails };
 add('record.flow', 'Recording', 'A period was recorded.', 'Recorded: {entry}.{details}', AFTER_RECORD, { entry: ENTRY, ...DETAILS });
-add('record.stain', 'Recording', 'A stain was recorded.', 'Recorded: {entry}.{details}', AFTER_RECORD, { entry: 'stain Tue Nov 24 by day', ...DETAILS });
-add('record.broken', 'Recording', 'A broken count was recorded.', 'Recorded: {entry}. A new hefsek is needed.{details}', AFTER_RECORD, { entry: 'count broken Tue Nov 24 by day', 'details?': '' });
+add('record.stain', 'Recording', 'A stain was recorded.', 'Recorded: {entry}.{details}', AFTER_RECORD, { entry: EX.stain, ...DETAILS });
+add('record.broken', 'Recording', 'A broken count was recorded.', 'Recorded: {entry}. A new hefsek is needed.{details}', AFTER_RECORD, { entry: EX.broken, 'details?': '' });
 add('record.hefsek', 'Recording', 'A hefsek was recorded (also DONE on the hefsek reminder).', 'Recorded: {entry}.{details}', AFTER_RECORD, {
-  entry: 'hefsek Sun Nov 29',
-  'details?': ' Clean days Mon Nov 30 - Sun Dec 6. Mikvah Sun Dec 6 after 5:16 PM.',
+  entry: EX.hefsek,
+  'details?': EX.hefsekDetails,
 });
-add('record.immersion', 'Recording', 'An immersion was recorded.', 'Recorded: {entry}.{details}', AFTER_RECORD, { entry: 'mikvah Sun Dec 6 night', 'details?': '' });
+add('record.immersion', 'Recording', 'An immersion was recorded.', 'Recorded: {entry}.{details}', AFTER_RECORD, { entry: EX.immersion, 'details?': '' });
 
 add('refuse.duplicate', 'Recording', 'The same entry is already recorded.', 'Already recorded.', MAIN);
 add('refuse.future', 'Recording', 'A time or date that has not come yet.', 'Not recorded: that time has not come yet.', MAIN);
@@ -256,12 +295,12 @@ add('refuse.no_period', 'Recording', 'A hefsek or an immersion with no period op
 add('refuse.before_start', 'Recording', 'A hefsek dated before the period began.', 'Not recorded: that is before the period began.', MAIN);
 add('refuse.no_count', 'Recording', 'COUNT BROKEN with no count of clean days.', 'Not recorded: there is no count in progress.', MAIN);
 add('refuse.no_hefsek', 'Recording', 'An immersion with no hefsek recorded.', 'Not recorded: no hefsek is recorded.', MAIN);
-add('refuse.too_early', 'Recording', 'An immersion before the count is complete.', 'Not recorded: the count is not complete. Mikvah night is {day} after {time}.', MAIN, { day: 'Thu Dec 3', time: '5:16 PM' });
+add('refuse.too_early', 'Recording', 'An immersion before the count is complete.', 'Not recorded: the count is not complete. Mikvah night is {day} after {time}.', MAIN, { day: EX.mikvahNight, time: '5:16 PM' });
 add('refuse.too_early_plain', 'Recording', 'An immersion before the count is complete, when the night is not known.', 'Not recorded: the count is not complete.', MAIN);
 add('refuse.other', 'Recording', 'Any other entry that is not recorded.', 'Not recorded.', MAIN);
 add('refuse.no_place', 'Recording', 'Recording before a location is set.', 'Not recorded: no location is set yet.', [['location', 'LOCATION'], MENU]);
 add('refuse.read_only', 'Recording', 'Recording from a phone that may not record (set on the website).', 'This phone may not record entries. That is set on the website.', [['status', 'STATUS'], MENU]);
-add('date.read_as', 'Recording', 'After a refusal for a written date: the date as it was read.', '(Read as {date}.)', MAIN, { date: 'Thu Nov 27, 2025' });
+add('date.read_as', 'Recording', 'After a refusal for a written date: the date as it was read.', '(Read as {date}.)', MAIN, { date: EX.readAs });
 add('date.form', 'Recording', 'A date that is not written as month and day.', 'Not understood: dates are written like Nov 22 or 11/22. Nothing was changed.', [MENU]);
 add('date.no_such', 'Recording', 'A date that does not exist.', 'There is no date {date}. Nothing was changed.', [MENU], { date: '2/30' });
 add('date.year', 'Recording', 'A year that is not possible.', 'The year {year} is not possible here. Nothing was changed.', [MENU], { year: '1999' });
@@ -269,6 +308,7 @@ add('date.not_recent', 'Recording', 'A date without a year that was not in the p
   date: 'Feb 29',
   example: '2/29/2024',
 });
+add('date.adar', 'Recording', 'A Hebrew date in Adar, in a leap year, without I or II.', 'This year has Adar I and Adar II: which one? E.g. 3 Adar II. Nothing was changed.', [MENU]);
 add('date.needs_onah', 'Recording', 'A date for a period, stain or broken count without day, night or a time.', 'The date needs day, night or a time, e.g. Nov 22 night. Nothing was changed.', [MENU]);
 add('date.nothing_more', 'Recording', 'A date for a hefsek or an immersion with more after it.', 'Not understood: the date alone, e.g. Nov 26. Nothing was changed.', [MENU]);
 add('undo.done', 'Recording', 'UNDO: the latest entry (of the last 48 hours) was removed.', 'Removed: {entry}. {status}', MAIN, { entry: ENTRY, status: 'Tehorah.' });
@@ -288,13 +328,12 @@ const STATUS_WHEN: Record<string, string> = {
 };
 const STATUS_EXAMPLES: Record<string, string> = {
   next_time: '4:31 PM',
-  next_day: 'Sun Dec 20',
-  start: 'Sun Nov 22',
-  hefsek_day: 'Thu Nov 26',
+  next_day: EX.nextDay,
+  start: EX.start,
+  hefsek_day: EX.hefsekDay,
   sunset: '4:33 PM',
-  earliest: 'Thu Nov 26',
-  first_day: 'Fri Nov 27',
-  mikvah_day: 'Thu Dec 3',
+  first_day: EX.firstDay,
+  mikvah_day: EX.mikvahNight,
   mikvah_time: '5:16 PM',
   day: '3',
 };
@@ -313,10 +352,10 @@ const ORDINALS: Opt[] = [
   ['fourth', 'FOURTH'],
   ['fifth', 'FIFTH'],
 ];
-add('history.list', 'Recording', 'HISTORY: the latest five entries, to erase one.', 'Latest: {list}. Erase one?', [...ORDINALS, MENU], { list: 'first: hefsek Fri Nov 6; second: flow Sun Nov 1 by day' });
+add('history.list', 'Recording', 'HISTORY: the latest five entries, to erase one.', 'Latest: {list}. Erase one?', [...ORDINALS, MENU], { list: EX.history });
 add('history.empty', 'Recording', 'HISTORY with no entries.', 'No entries yet.', MAIN);
-add('history.erase_ask', 'Recording', 'An entry was chosen from HISTORY.', 'Erase {entry}?', [['yes', 'YES'], ['no', 'NO']], { entry: 'flow Sun Nov 1 by day' });
-add('history.erased', 'Recording', 'YES: the entry was erased.', 'Erased: {entry}. {status}', MAIN, { entry: 'flow Sun Nov 1 by day', status: 'Tehorah.' });
+add('history.erase_ask', 'Recording', 'An entry was chosen from HISTORY.', 'Erase {entry}?', [['yes', 'YES'], ['no', 'NO']], { entry: EX.historyEntry });
+add('history.erased', 'Recording', 'YES: the entry was erased.', 'Erased: {entry}. {status}', MAIN, { entry: EX.historyEntry, status: 'Tehorah.' });
 add('history.gone', 'Recording', 'The chosen entry was already removed.', 'That entry is no longer there. Nothing was changed.', [['history', 'HISTORY'], MENU]);
 
 // ---------- reminders ----------
@@ -337,8 +376,8 @@ const REMINDER_EXAMPLES: Record<string, string> = {
   required: ' Required on this day.',
   time: '5:16 PM',
   notes: ' (after Shabbat or Yom Tov)',
-  from: '4:31 PM Sun Dec 20',
-  to: '4:32 PM Tue Dec 22',
+  from: EX.from,
+  to: EX.to,
   why: 'day 30, chodesh',
   bedikah: ' Bedikah.',
   clash: ' Mikvah night too.',
@@ -349,7 +388,9 @@ for (const [key, body] of Object.entries(REMINDER_TEXTS)) {
   const base = key.replace(/\.discreet$/, '');
   const when = (REMINDER_WHEN[base] ?? 'Reminder.') + (key.endsWith('.discreet') ? ' Discreet wording.' : '');
   const options: Opt[] = base === 'reminder.hefsek' ? [['done', 'DONE'], ['status', 'STATUS']] : [['status', 'STATUS']];
-  const vars = Object.fromEntries([...body.matchAll(/\{(\w+)\}/g)].map(m => [`${m[1]}${OPTIONAL_REMINDER_VARS.has(m[1] as string) ? '?' : ''}`, REMINDER_EXAMPLES[m[1] as string] ?? '']));
+  // The mikvah night and the reminder to book it name a night.
+  const examples = base === 'reminder.mikvah' || base === 'reminder.mikvah_book' ? { ...REMINDER_EXAMPLES, day: EX.mikvahNight } : REMINDER_EXAMPLES;
+  const vars = Object.fromEntries([...body.matchAll(/\{(\w+)\}/g)].map(m => [`${m[1]}${OPTIONAL_REMINDER_VARS.has(m[1] as string) ? '?' : ''}`, examples[m[1] as string] ?? '']));
   add(key, 'Reminders', when, body, options, vars);
 }
 
@@ -480,6 +521,13 @@ add('terms.show', 'Settings', 'TERMS.', 'Halachic terms in the calendar and on t
 ], { lang: 'English letters' });
 add('terms.changed', 'Settings', 'The terms were changed.', 'Changed: terms in the calendar and on the website are in {lang}.', MAIN, { lang: 'Hebrew' });
 add('terms.same', 'Settings', 'The terms chosen are the ones already set.', 'The terms are already in {lang}. Nothing was changed.', MAIN, { lang: 'English letters' });
+add('dates.show', 'Settings', 'DATES.', 'Dates in texts, the calendar and on the website: {dates}.', [
+  ['dates_hebrew', 'HEBREW'],
+  ['dates_civil', 'CIVIL'],
+  ['dates_both', 'BOTH'],
+], { dates: 'Hebrew' });
+add('dates.changed', 'Settings', 'The dates were changed.', 'Changed: dates are {dates}, e.g. {example}.', MAIN, { dates: 'Hebrew and civil', example: dateExamples('both').example });
+add('dates.same', 'Settings', 'The dates chosen are the ones already set.', 'Dates are already {dates}. Nothing was changed.', MAIN, { dates: 'civil' });
 add('web.link', 'Settings', 'WEB LINK: a one-time sign-in link, sent as a plain SMS.', 'Betaharah sign-in link for this phone. It works once, within 10 minutes: {link}', [MENU], { link: 'https://betaharah.com/app/?k=abcdefghijklmnopqrstuvwxyzABCDEF' });
 add('web.failed', 'Settings', 'WEB LINK when no link can be made.', 'A sign-in link cannot be sent now. Nothing was changed.', [MENU]);
 add('website.only', 'Settings', 'PASSWORD, DOWNLOAD, GOOGLE or TIMES.', 'Passwords, data downloads, Google Calendar and reminder times are on the website, under Settings.', [['web', 'WEB LINK'], MENU]);

@@ -6,7 +6,8 @@
 import { buildCalendar, calendarAppEvents, type CalendarEvent } from '../engine/calendar';
 import { localAbs } from '../engine/civil';
 import { processLog, sortLog, type LogEntry, type LogWarningCode } from '../engine/cycle';
-import { buildReminders, clock12, englishDate, type Reminder, type ReminderContext } from '../engine/present';
+import { dayWords, nightWords, onahWords, type DateStyle, type DateWords } from '../engine/dates';
+import { buildReminders, clock12, type Reminder, type ReminderContext } from '../engine/present';
 import type { GeoPoint } from '../engine/sun';
 import { buildTimeline, type Timeline } from '../engine/timeline';
 import { dayTimes, onahWindow, type ZmanimOptions } from '../engine/zmanim';
@@ -22,6 +23,8 @@ export interface Where {
 }
 
 export interface Computed extends Where {
+  /** Which date follows a weekday in what is written from it (the household's setting). */
+  dates: DateStyle;
   timeline: Timeline;
   events: CalendarEvent[];
   reminders: Reminder[];
@@ -74,16 +77,17 @@ export function compute(data: HouseholdData, now: number): Computed | null {
     // Only what the calendar keeps is worked out in full; the whole log still feeds the calculation.
     since: localAbs(now, place.timeZone) - data.app.calendar.historyDays - WINDOW_MARGIN_DAYS,
   });
-  const events = buildCalendar(timeline, { style: data.app.calendar.style, lang: data.app.terms, timeZone: place.timeZone });
+  const dates = data.app.dates;
+  const events = buildCalendar(timeline, { style: data.app.calendar.style, lang: data.app.terms, timeZone: place.timeZone, dates });
   const recorded = new Map(data.entries.map(e => [e.entry.id, e.createdAt]));
-  const ctx: ReminderContext = { place, zopts, yomTov: data.halachic.yomTov, recordedAt: id => recorded.get(id) };
+  const ctx: ReminderContext = { place, zopts, yomTov: data.halachic.yomTov, recordedAt: id => recorded.get(id), dates };
   const reminders = buildReminders(timeline, data.app.reminders, ctx);
-  return { timeline, events, reminders, place, zopts };
+  return { dates, timeline, events, reminders, place, zopts };
 }
 
 /** The events given to calendar apps (Google Calendar and the subscription feed): the kinds the household shows there. */
 export function publishedEvents(data: HouseholdData, computed: Computed): CalendarEvent[] {
-  const opts = { style: data.app.calendar.style, lang: data.app.terms, timeZone: computed.place.timeZone };
+  const opts = { style: data.app.calendar.style, lang: data.app.terms, timeZone: computed.place.timeZone, dates: data.app.dates };
   return calendarAppEvents(computed.timeline, data.app.calendar.show, opts);
 }
 
@@ -272,23 +276,28 @@ export function removeEntry(data: HouseholdData, id: string, now: number): Store
 
 // ---------- wording of replies ----------
 
-/** e.g. "Sun Nov 22 by day", "Sat Nov 21 night" (a night is named by the evening it begins). */
-export function whenEnglish(onah: { abs: number; part: 'night' | 'day' }): string {
-  return onah.part === 'day' ? `${englishDate(onah.abs)} by day` : `${englishDate(onah.abs - 1)} night`;
+/** How the texts and the website's replies write dates for this picture: in English letters, as of its "now". */
+export function dateWordsOf(computed: Computed): DateWords {
+  return { dates: computed.dates, lang: 'en', today: localAbs(computed.timeline.now, computed.place.timeZone) };
 }
 
-export function entryEnglish(e: DraftEntry | LogEntry): string {
+/** e.g. "yesterday by day", "Sat night, Nov 21" (a night is named by the evening it begins). */
+export function whenEnglish(onah: { abs: number; part: 'night' | 'day' }, w: DateWords): string {
+  return onahWords(onah, w, ' by day');
+}
+
+export function entryEnglish(e: DraftEntry | LogEntry, w: DateWords): string {
   switch (e.kind) {
     case 'flow':
-      return `flow ${whenEnglish(e.onah)}`;
+      return `flow ${whenEnglish(e.onah, w)}`;
     case 'stain':
-      return `stain ${whenEnglish(e.onah)}`;
+      return `stain ${whenEnglish(e.onah, w)}`;
     case 'broken':
-      return `count broken ${whenEnglish(e.onah)}`;
+      return `count broken ${whenEnglish(e.onah, w)}`;
     case 'hefsek':
-      return `hefsek ${englishDate(e.abs)}`;
+      return `hefsek ${dayWords(e.abs, w)}`;
     case 'mikvah':
-      return `mikvah ${englishDate(e.abs - 1)} night`;
+      return `mikvah ${nightWords(e.abs, w)}`;
   }
 }
 
@@ -339,20 +348,21 @@ export function tooEarlyNight(computed: Computed | null): { day: string; time: s
   const last = computed?.timeline.periods.at(-1);
   if (!computed || !last || last.mikvahDoneAbs !== null || last.closedByNextPeriod) return null;
   const m = last.planMikvah;
-  return { day: englishDate(m.eveningAbs), time: clock12(m.tzeit, computed.place.timeZone, 'ceil') };
+  return { day: nightWords(m.nightAbs, dateWordsOf(computed)), time: clock12(m.tzeit, computed.place.timeZone, 'ceil') };
 }
 
 /**
- * What was recorded, in parts: the entry ("flow Tue Nov 24 night") and the
- * details after it (" Hefsek from Sun Nov 29."), each sentence information
+ * What was recorded, in parts: the entry ("flow last night") and the
+ * details after it (" Hefsek from Sunday."), each sentence information
  * only. The texts put them in the registry's wording; the website joins them.
  */
-export function confirmationParts(result: Extract<RecordResult, { ok: true }>, resolved: ResolvedOnah | null): { entry: string; details: string } {
+export function confirmationParts(result: Extract<RecordResult, { ok: true }>, resolved: ResolvedOnah | null, entryInFull = false): { entry: string; details: string } {
   const { entry, computed, notes } = result;
   const tz = computed.place.timeZone;
   const status = computed.timeline.status;
   const period = status.state === 'niddah' ? status.period : null;
   const boundary = resolved ? boundaryNote(resolved, tz) : '';
+  const w = dateWordsOf(computed);
   let details = '';
   switch (entry.kind) {
     case 'flow':
@@ -360,7 +370,7 @@ export function confirmationParts(result: Extract<RecordResult, { ok: true }>, r
       if (notes.includes('count_cancelled_by_flow')) details += ' The count is cancelled; a new hefsek is needed.';
       else {
         if (notes.includes('period_began_without_hefsek')) details += ' No hefsek was recorded before it, so it is a new period.';
-        if (period && period.startId === entry.id) details += ` Hefsek from ${englishDate(period.earliestHefsekAbs)}.`;
+        if (period && period.startId === entry.id) details += ` Hefsek from ${dayWords(period.earliestHefsekAbs, w)}.`;
       }
       details += boundary;
       break;
@@ -372,7 +382,7 @@ export function confirmationParts(result: Extract<RecordResult, { ok: true }>, r
       const own = computed.timeline.periods.find(p => p.hefsekId === entry.id);
       if (own && own.cleanDays) {
         const m = own.planMikvah;
-        details += ` Clean days ${englishDate(own.cleanDays[0] as number)} - ${englishDate(own.cleanDays[6] as number)}. Mikvah ${englishDate(m.eveningAbs)} after ${clock12(m.tzeit, tz, 'ceil')}.`;
+        details += ` Clean days from ${dayWords(own.cleanDays[0] as number, w)}. Mikvah ${nightWords(m.nightAbs, w)} after ${clock12(m.tzeit, tz, 'ceil')}.`;
       }
       if (notes.includes('hefsek_early')) details += ' It was before the wait ended.';
       break;
@@ -381,7 +391,9 @@ export function confirmationParts(result: Extract<RecordResult, { ok: true }>, r
       if (notes.includes('mikvah_on_fast_night')) details += ' Note: that was a fast night.';
       break;
   }
-  return { entry: entryEnglish(entry), details };
+  // A date that was written out is repeated in full, with its year.
+  const entryWords: DateWords = entryInFull ? { dates: w.dates, lang: 'en', year: true } : w;
+  return { entry: entryEnglish(entry, entryWords), details };
 }
 
 /** What was recorded, for the website. */

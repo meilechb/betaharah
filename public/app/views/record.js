@@ -1,17 +1,17 @@
 /*
  * Recording an entry, in three ways that share one request and one answer:
- *   - one click: the next step in "Where things stand", and the buttons of a
- *     day of the calendar (recordNow);
+ *   - one tap: the items of a day's popup on the calendar (recordNow);
  *   - the full form, for any kind, any date, a clock time, a note and the
- *     vesatot switch: on Today it opens under the status card from a link
- *     (openRecord, recordPanel), on the Log it is "Add a past entry" (recordCard).
+ *     vesatot switch: its own page (#record, recordPage), opened from a day's
+ *     popup ("More", openRecord); on the Log it is "Add a past entry" (recordCard).
  * The server's confirmation is shown where the entry was recorded from, with
  * Undo; a refusal is shown beside the button or in the form (notice()).
  */
 import { alert, api, button, card, checkRow, h, icon, radioRow, textField } from '../lib.js';
-import { S, adopt, go, render, t } from '../store.js';
+import { S, adopt, currentTab, go, render, t } from '../store.js';
 import { entryMark } from './marks.js';
 import { attempt, longDate, refresh, region, today } from './shared.js';
+import { focusDay } from './calendar.js';
 
 const KINDS = ['flow', 'stain', 'hefsek', 'broken', 'mikvah'];
 
@@ -25,7 +25,6 @@ let done = null;
 let refused = null;
 
 const timed = kind => kind === 'flow' || kind === 'stain' || kind === 'broken';
-const smooth = () => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 
 function kindHelp(kind) {
   switch (kind) {
@@ -49,8 +48,9 @@ const nowLabel = kind => (kind === 'hefsek' ? 'Today' : kind === 'mikvah' ? 'Ton
 // ---------- the answer: confirmation with Undo, or the refusal ----------
 
 /** The entry was recorded: adopt the new state, and show the server's sentence where it was recorded from. */
-function succeeded(result, where) {
+function succeeded(result, where, before) {
   adopt(result.state);
+  if (before) before();
   rec = blank();
   refused = null;
   done = { where, message: result.message || 'Recorded.', id: result.entryId || null, undoError: '' };
@@ -60,14 +60,15 @@ function succeeded(result, where) {
 
 /**
  * Records one entry at once (POST /api/entries), from a button: the next step
- * ('status') or a day of the calendar ('day'). btn is shown busy meanwhile.
- *   recordNow({ kind: 'flow', when: 'now' }, e.currentTarget, 'status')
+ * (a day's popup: 'day'). btn is shown busy meanwhile; before() runs after
+ * the new state is adopted and before the page is redrawn (the popup closes).
+ *   recordNow({ kind: 'flow', when: 'now' }, e.currentTarget, 'day', before)
  */
-export function recordNow(body, btn, where) {
+export function recordNow(body, btn, where, before) {
   refused = null;
   attempt(() => api('POST', '/api/entries', body), {
     button: btn,
-    done: result => succeeded(result, where),
+    done: result => succeeded(result, where, before),
     fail: message => {
       done = null;
       refused = { where, message };
@@ -131,26 +132,32 @@ export function notice(where) {
 // ---------- the full form ----------
 
 /**
- * Opens the form on Today, under "Where things stand", preset as asked, and
- * shows it. preset: { kind, mode: 'now' | 'other', date }; opener: the id of
- * the link that opened it (the focus goes back there on Close).
+ * Opens the full form as its own page (#record), preset as asked.
+ * preset: { kind, mode: 'now' | 'other', date }; opener: the id of the
+ * control that opened it (the focus goes back there on Cancel or Close).
  */
-export function openRecord(preset, opener) {
+export async function openRecord(preset, opener) {
   const p = preset || {};
   rec = { ...blank(), open: true, kind: p.kind || null, mode: p.mode || 'now', date: p.date || '', where: 'status', opener: opener || null };
   done = null;
   refused = null;
-  render();
-  const panel = document.getElementById('record-panel');
-  if (panel) panel.scrollIntoView({ block: 'start', behavior: smooth() });
+  if (currentTab() === 'record') render();
+  else await go('record');
+  window.scrollTo(0, 0);
   const first = document.getElementById(rec.kind ? (rec.mode === 'other' ? 'rec-date' : 'rec-kind-' + rec.kind) : 'rec-kind-flow');
   if (first) first.focus({ preventScroll: true });
 }
 
-/** Closes the form; the focus goes back to what opened it. */
-function closeRecord() {
+/** Closes the form. On the Log, the focus goes back to what opened it; the page of the form goes back to the calendar. */
+async function closeRecord() {
   const opener = rec.opener;
+  const where = rec.where;
   rec = blank();
+  if (where === 'status') {
+    await go('today');
+    focusDay(opener);
+    return;
+  }
   render();
   const el = opener && document.getElementById(opener);
   if (el) el.focus({ preventScroll: true });
@@ -334,8 +341,15 @@ function formBody() {
   );
 }
 
-/** Today: the full form, open only after a link asked for it. */
-export function recordPanel() {
+/** The page of the full form (#record): the form, or after recording the server's sentence with Undo. */
+export function recordPage() {
+  const answered = (done && done.where === 'status') || (refused && refused.where === 'status');
+  if ((!rec.open || rec.where !== 'status') && !answered) rec = { ...blank(), open: true, where: 'status' };
+  return h('div', { class: 'narrow record-page' }, notice('status'), recordPanel());
+}
+
+/** The full form, open only after something asked for it. */
+function recordPanel() {
   if (!rec.open || rec.where !== 'status') return null;
   return card(
     {

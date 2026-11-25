@@ -400,13 +400,14 @@ body.lp {
   position: relative;
   padding: clamp(36px, 5.5vw, 72px) 0 clamp(24px, 3vw, 40px);
   isolation: isolate;
-  /* The glow (::before) reaches 10% past each side and is clipped there; the day sheet may still hang below. */
-  overflow: clip visible;
+  /* above the sections that follow: the day sheet opened from the calendar is drawn inside this block */
+  z-index: 2;
+  overflow: visible;
 }
 .top-hero::before {
   content: '';
   position: absolute;
-  inset: -20% -10% auto;
+  inset: -20% 0 auto;
   height: 900px;
   z-index: -1;
   background:

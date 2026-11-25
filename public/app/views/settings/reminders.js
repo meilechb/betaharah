@@ -180,8 +180,8 @@ function kindRow(k) {
 }
 
 const EXAMPLES = {
-  plain: 'Mikvah night: Thu Nov 26, after 5:18 PM.',
-  discreet: 'M night: Thu Nov 26 after 5:18 PM.',
+  plain: 'Mikvah night: Thu night, after 5:18 PM.',
+  discreet: 'M night: Thu night after 5:18 PM.',
 };
 
 function mainView() {

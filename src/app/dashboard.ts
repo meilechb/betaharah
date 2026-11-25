@@ -1,7 +1,9 @@
 /** The data the dashboard page shows, prepared on the server. */
 import { civilDate, weekday } from '../engine/calendar';
-import { absToCivil, civilToAbs, localAbs, localDateTime, localToInstant } from '../engine/civil';
-import { clock12, englishDate } from '../engine/present';
+import { absToCivil, civilToAbs, localAbs, localToInstant } from '../engine/civil';
+import type { LogEntry } from '../engine/cycle';
+import { dayWords, momentWords, nightWords, onahWords, type DateWords } from '../engine/dates';
+import { clock12 } from '../engine/present';
 import { choicesFor, TZEIT_TITLE, tzeitPresetsFor } from '../engine/settings';
 import { allTerms, capital, fill, hebrewDate } from '../engine/terms';
 import { onahAt } from '../engine/zmanim';
@@ -80,12 +82,12 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
   let status: { headline: string; detail: string; phase: StatusPhase; day: number | null } | null = null;
   let upcoming: UpcomingItem[] = [];
   let reminders: Array<{ at: number; when: string; kind: string; text: string }> = [];
-  let today: { hebrew: string; civil: string; part: 'night' | 'day'; date: string; civilDate: string } | null = null;
+  let today: { hebrew: string; civil: string; text: string; part: 'night' | 'day'; date: string; civilDate: string } | null = null;
   let grid: Grid | null = null;
   if (computed) {
     const t = computed.timeline;
     const phase = t.status.state === 'tehorah' ? null : t.status.phase;
-    status = { ...statusLines(t, tz, lang), phase: phase ? phase.kind : 'tehorah', day: phase && phase.kind === 'counting' ? phase.day : null };
+    status = { ...statusLines(t, tz, lang, data.app.dates), phase: phase ? phase.kind : 'tehorah', day: phase && phase.kind === 'counting' ? phase.day : null };
     // The note about a period that began with no hefsek recorded before it is shown for the latest period only:
     // an older one is history.
     const latestStart = t.periods.length > 0 ? t.periods[t.periods.length - 1]!.startId : null;
@@ -99,9 +101,20 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
       alerts.push({ level: 'warn', text: f('The {mikvah_night} falls on an {onat_perishah}.') });
     }
     const civilToday = localAbs(now, tz);
+    // Coming up and the reminders: long weekdays, relative to today.
+    const w: DateWords = { dates: data.app.dates, lang, long: true, today: civilToday };
+    /**
+     * The words for a moment with a clock time: after sunset, its night. A
+     * time is rounded to the minute: a start may be up to a minute before
+     * the true moment, an end up to a minute after it.
+     */
+    const onahOf = (ms: number): { abs: number; part: 'night' | 'day' } => onahAt(ms, computed.place, computed.zopts).onah;
+    const momentText = (ms: number): string => momentWords(localAbs(ms, tz), onahOf(ms).abs, w);
     today = {
       hebrew: `${weekday(t.nowOnah.abs)}, ${hebrewDate(t.nowOnah.abs, lang)}`,
       civil: civilDate(civilToday),
+      // The onah it is now, in words with its date as the household chooses: "Monday night, eve of 14 Kislev".
+      text: onahWords(t.nowOnah, { dates: data.app.dates, lang, long: true }),
       part: t.nowOnah.part,
       // The daytime of the Hebrew date it is now (after sunset: tomorrow's civil date), and the civil date.
       date: isoDate(t.nowOnah.abs),
@@ -128,14 +141,20 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
           if (e.kind === 'mikvah') {
             // The calendar event has a length only so that calendar apps show it; immersion is any time after nightfall.
             b = a;
-            when = `${englishDate(a)}, after ${clock12(e.timed.start, tz, 'ceil')}`;
+            when = `${momentText(e.timed.start + 59_999)}, after ${clock12(e.timed.start, tz, 'ceil')}`;
           } else {
-            when = a === b ? `${englishDate(a)}, ${from} to ${to}` : `${englishDate(a)} ${from} to ${englishDate(b)} ${to}`;
+            // Within one onah (a night, or a daytime): named once. "Wednesday night, 4:12 PM to 7:01 AM"
+            const first = onahOf(e.timed.start + 59_999);
+            const last = onahOf(Math.max(e.timed.start, e.timed.end - 60_000));
+            when =
+              first.abs === last.abs && first.part === last.part
+                ? `${onahWords(first, w)}, ${from} to ${to}`
+                : `${from} ${momentText(e.timed.start + 59_999)} to ${to} ${momentText(Math.max(e.timed.start, e.timed.end - 60_000))}`;
           }
         } else {
           a = e.allDay!.startAbs;
           b = e.allDay!.endAbsExclusive - 1;
-          when = englishDate(a);
+          when = a === b ? dayWords(a, w) : `${dayWords(a, w)} to ${dayWords(b, w)}`;
         }
         return { key: e.key, kind: e.kind, title: e.title, description: e.description, when, date: isoDate(a), endDate: isoDate(b), projected: e.projected, light: e.light === true };
       });
@@ -143,10 +162,9 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
       .filter(r => r.at > now)
       .slice(0, 30)
       .map(r => {
-        const l = localDateTime(r.at, tz);
-        return { at: r.at, when: `${englishDate(civilToAbs(l))} ${clock12(r.at, tz, 'floor')}`, kind: r.kind, text: r.text };
+        return { at: r.at, when: `${momentText(r.at)}, ${clock12(r.at, tz, 'floor')}`, kind: r.kind, text: r.text };
       });
-    grid = buildGrid(computed, { lang, style: data.app.calendar.style, yomTov: data.halachic.yomTov, now });
+    grid = buildGrid(computed, { lang, dates: data.app.dates, style: data.app.calendar.style, yomTov: data.halachic.yomTov, now });
   }
 
   return {
@@ -170,8 +188,27 @@ export function calculationState(data: HouseholdData, computed: Computed | null,
         return pb - pa || b.createdAt - a.createdAt;
       })
       .slice(0, MAX_LISTED_ENTRIES)
-      .map(e => ({ id: e.entry.id, kind: e.entry.kind, text: entryText(e.entry, lang), source: e.source, note: e.note, createdAt: e.createdAt })),
+      .map(e => ({
+        id: e.entry.id,
+        kind: e.entry.kind,
+        text: entryText(e.entry, lang, data.app.dates),
+        ...entryWhen(e.entry),
+        source: e.source,
+        note: e.note,
+        createdAt: e.createdAt,
+      })),
   };
+}
+
+/**
+ * The civil date an entry is shown on, and 'day' or 'night' for the kinds
+ * that have one: the same date and part that recording it takes (see
+ * draftFromForm). A night, and an immersion, are on the date of the evening.
+ */
+export function entryWhen(e: LogEntry): { date: string; part: 'day' | 'night' | '' } {
+  if (e.kind === 'hefsek') return { date: isoDate(e.abs), part: '' };
+  if (e.kind === 'mikvah') return { date: isoDate(e.abs - 1), part: '' };
+  return { date: isoDate(e.onah.part === 'night' ? e.onah.abs - 1 : e.onah.abs), part: e.onah.part };
 }
 
 /** The names of the kinds of entries, as the Record form and the Log show them. */

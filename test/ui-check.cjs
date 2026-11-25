@@ -13,17 +13,18 @@
 //   - a new account by invitation, through the whole guided setup: ZIP codes against the real lookup
 //     (unknown, a place where the times cannot be computed, a good one), leaving midway and resuming
 //     after a reload, customs, dates with Undo, the calendar link, phones, the last screen;
-//   - the dashboard: Today (status, calendar before recording, the marks against the dates recorded and
-//     the rules of docs/HALACHA.md), recording with Undo, a slow and a failing request, two tabs, an
-//     expired session; Log; Customs with the Hebrew-terms toggle; Settings loosely (test/ui/settings.cjs
-//     has the detail); keyboard use, focus, a dialog, reduced motion, 200% zoom;
-//   - the test account: banner; Today by day and at night (the box agrees with the headline);
+//   - the dashboard: the home (the status line and the month, the marks against the dates recorded and
+//     the rules of docs/HALACHA.md), recording in a day's popup with Undo, Edit and Delete, a slow and a failing request,
+//     two browser tabs, an expired session in the full form; the menu by keyboard; Log; Coming up;
+//     Customs with the Hebrew-terms toggle; Settings loosely (test/ui/settings.cjs has the detail);
+//     keyboard use, focus, a dialog, reduced motion, 200% zoom;
+//   - the test account: its tag; the home by day and at night (the status line and the calendar agree);
 //     "Try a text" walking through MENU and its options as buttons, CUSTOMS, REMINDERS, LOCATION with a ZIP, ADD, CALENDAR LINK,
 //     WEB (whose link then signs in, and leaves the address), and DELETE ACCOUNT with NO and then YES;
 //   - privacy on the page: the address bar, the page title, what is kept in the browser, what is left
 //     on screen after signing out;
 //   - signing out and back in with the password, downloading the data, deleting the account;
-//   - every tab at 360, 390 and 1280 px, light and dark, with screenshots, and in Hebrew terms at 360 px.
+//   - every page at 360, 390 and 1280 px, light and dark, with screenshots, and in Hebrew terms at 360 px.
 // The per-area checks (test/ui/auth.cjs, test/ui/dashboard.cjs) go into more detail and stay.
 // Needs Playwright with Chromium. Exits 0 when every step passed.
 const { chromium } = require('playwright');
@@ -91,10 +92,31 @@ const problems = [];
     return body;
   };
   const state = async p => (await api('GET', '/api/state', undefined, p)).state;
+  /** Opens a page from the menu: tab('Log'). */
+  const PAGE_IDS = { Today: 'today', Calendar: 'today', 'Coming up': 'coming', Log: 'log', Customs: 'customs', Settings: 'settings', Texting: 'texting', 'Try a text': 'try' };
   const tab = async (name, p) => {
     const q = p || page;
-    await q.click(`nav.tabs button:has-text("${name}")`);
-    await q.waitForSelector(`nav.tabs button[aria-selected="true"]:has-text("${name}")`);
+    const id = PAGE_IDS[name];
+    await q.click('#menu-button');
+    await q.waitForSelector('dialog#menu[open]');
+    await q.click('dialog#menu #menu-' + id);
+    await q.waitForSelector('main.page-' + id);
+  };
+  /** Opens a day's popup, paging the month as needed. */
+  const openDay = async (date, p) => {
+    const q = p || page;
+    if (!(await q.locator('main.page-today').count())) await tab('Today', q);
+    if (await q.locator('#day-pop').count()) {
+      await q.keyboard.press('Escape');
+      await q.waitForSelector('#day-pop', { state: 'detached' });
+    }
+    for (let k = 0; k < 6 && !(await q.locator('#day-' + date).count()); k += 1) {
+      const first = await q.$eval('table.month button.day', b => b.id.slice(4));
+      await q.click(date < first ? '#cal-prev' : '#cal-next');
+    }
+    await q.click('#day-' + date);
+    await q.waitForSelector('#day-pop.placed');
+    await q.waitForSelector(`#day-${date}[aria-expanded="true"]`);
   };
   /** Opens a Settings section. On a narrow screen an open section hides the list, so go back to the list first. */
   const settingsSection = async id => {
@@ -269,7 +291,7 @@ const problems = [];
     await noSideways();
     await shot('12-setup-done');
     await page.click('#setup-finish');
-    await page.waitForSelector('nav.tabs');
+    await page.waitForSelector('main.page-today');
     const st = await state();
     if (!st.account.welcomed) throw new Error('not marked welcomed');
     if (await page.evaluate(() => localStorage.getItem('betaharah.setup'))) throw new Error('the setup’s storage was not cleared');
@@ -277,20 +299,18 @@ const problems = [];
 
   // ===================== the dashboard =====================
 
-  await step('today: status with the next step, then the calendar, then coming up, in the page’s order', async () => {
+  await step('home: the status line, then the month, and nothing else; the onot of separation are in Coming up', async () => {
     const st = await state();
     if (st.status.phase !== 'tehorah') throw new Error('phase ' + st.status.phase);
     if ((await page.textContent('#status-headline')).trim() !== 'Tehorah') throw new Error('headline');
-    const order = await page.evaluate(() => ['.status-card', '.calendar-card', '.upcoming-card'].map(s => document.querySelector(s)).map(el => (el ? el.getBoundingClientRect().top + scrollY : -1)));
+    const order = await page.evaluate(() => ['.status-line', 'table.month', '.cal-hint'].map(s => document.querySelector(s)).map(el => (el ? el.getBoundingClientRect().top + scrollY : -1)));
     if (order.some(x => x < 0) || !(order[0] < order[1] && order[1] < order[2])) throw new Error('order on a phone: ' + order.join(', '));
-    // A tehorah woman sees the next onat perishah next to the status.
-    await page.waitForSelector('.status-card .next-line');
-    // One thing to do next, in the status card; no floating button and no form until asked for.
-    if ((await page.textContent('.status-card #next-step')).trim() !== 'A period began') throw new Error('next step: ' + (await page.textContent('#next-step')));
-    await page.waitForSelector('.status-card #next-earlier:has-text("It began earlier")');
-    if (await page.locator('#record-jump, #record-panel, #rec-suggested').count()) throw new Error('a floating button or an open form');
+    if (await page.locator('#record-panel, .upcoming-card, #cal-legend, #text-card, .onboarding, nav.tabs, #next-step').count()) throw new Error('more than the calendar on the home screen');
     await noSideways();
     await shot('20-today-390');
+    await tab('Coming up');
+    await page.waitForSelector('#up-onot .up-row');
+    await tab('Today');
   });
 
   await step('today: the calendar marks agree with the dates recorded and with docs/HALACHA.md', async () => {
@@ -321,11 +341,11 @@ const problems = [];
     if (!label.includes('Today')) throw new Error('today is not labelled');
   });
 
-  await step('today: the day detail has its date, Hebrew date, sunrise and sunset on one line; a mikvah night is "after" nightfall', async () => {
-    if (await page.locator('.day-detail .date-change').count()) throw new Error('the sentence about when the Hebrew date ends is still there');
-    await has('.day-detail .detail-head .sun-times', 'Sunrise');
-    if ((await page.locator('.day-detail .detail-head .sun-times .hebrew-date').count()) !== 1) throw new Error('no Hebrew date in the line');
-    await has('#day-panel h4', 'What happened?');
+  await step('the popup of today: "Today" and its date; while tehorah "A period began" first; a mikvah night is "after" nightfall', async () => {
+    await openDay((await state()).grid.today);
+    if (!(await page.textContent('#day-pop .pop-date')).startsWith('Today')) throw new Error('date ' + (await page.textContent('#day-pop .pop-date')));
+    if ((await page.$eval('#day-pop .pop-item', b => b.id)) !== 'pop-add-flow') throw new Error('the first item is not "A period began"');
+    if (await page.locator('#pop-add-hefsek').count()) throw new Error('the hefsek taharah offered while tehorah');
     const st = await state();
     const m = st.upcoming.find(u => u.kind === 'mikvah');
     if (m && !/after \d/.test(m.when)) throw new Error('mikvah when: ' + m.when);
@@ -336,44 +356,51 @@ const problems = [];
       await new Promise(r => setTimeout(r, 1500));
       await route.abort('failed');
     });
-    await page.click('#next-step');
-    await page.waitForSelector('#next-step[aria-busy="true"]', { timeout: 1200 });
-    await has('.status-card .rec-error', 'could not be reached');
+    await page.click('#pop-add-flow');
+    await page.waitForSelector('#pop-add-flow[aria-busy="true"]', { timeout: 1200 });
+    await has('#cal-said .rec-error', 'could not be reached');
     await page.unroute('**/api/entries');
     if ((await state()).entryCount !== 2) throw new Error('something was recorded');
     await shot('21-record-failed');
   });
 
   await step('recording: then it works, with the server’s sentence, and Undo removes exactly that entry', async () => {
-    await page.click('#next-step');
-    await has('.status-card .rec-done', 'Recorded: flow');
+    await page.click('#pop-add-flow');
+    await has('#cal-said .rec-done', 'Recorded: flow');
+    if (await page.locator('#day-pop').count()) throw new Error('the popup stayed open');
     const st = await state();
     if (st.entryCount !== 3 || st.status.phase !== 'before_hefsek') throw new Error('not recorded: ' + st.status.phase);
-    // During a niddah period the next onat perishah is not next to the task of the day.
-    if ((await page.locator('.status-card .next-line').count()) !== 0) throw new Error('next onat perishah shown during niddah');
+    // the status line beside the popup is the new one
+    if ((await page.textContent('#status-headline')).trim() !== st.status.headline) throw new Error('the status line did not change');
     await page.click('#rec-undo');
     await has('.rec-done', 'Removed');
     const after = await state();
     if (after.entryCount !== 2 || after.status.phase !== 'tehorah') throw new Error('Undo: ' + after.entryCount);
   });
 
-  await step('two tabs: the second, still showing the old state, is told that the entry exists already', async () => {
+  await step('two browser tabs: the second, still showing the old state, is told that the entry exists already', async () => {
     const second = await context.newPage();
     watch(second);
     await second.goto(base + '/app/#today');
-    await second.waitForSelector('#next-step');
-    await page.click('#next-step');
+    await second.waitForSelector('#cal-title');
+    const today = (await state()).grid.today;
+    await openDay(today, second);
+    await openDay(today);
+    await page.click('#pop-add-flow');
     await has('.rec-done', 'Recorded: flow');
-    await second.click('#next-step');
-    await has('.status-card .rec-error', 'Already recorded', second);
+    await second.click('#pop-add-flow');
+    await has('#cal-said .rec-error', 'Already recorded', second);
     await second.close();
     await page.click('#rec-undo');
     await has('.rec-done', 'Removed');
   });
 
   await step('an expired session in the middle of a form: back to sign-in with a note, then in again with the password', async () => {
-    await page.click('#next-else');
+    await openDay((await state()).grid.today);
+    await page.click('#pop-more');
+    await page.waitForSelector('main.page-record');
     await page.click('#rec-kind-stain');
+    await page.click('#r-rec-how-day');
     await page.route('**/api/entries', route => route.fulfill({ status: 401, json: { error: 'Please sign in.' } }));
     await page.click('#rec-submit');
     await has('.alert', 'Please sign in again.');
@@ -383,25 +410,31 @@ const problems = [];
     await page.fill('#number', LOCAL);
     await page.fill('#pw', ACCOUNT_PASSWORD);
     await page.click('button[type=submit]');
-    await page.waitForSelector('nav.tabs');
+    await page.waitForSelector('main.page');
   });
 
-  await step('keyboard: the tabs move with the arrow keys, and the focus can be seen', async () => {
-    await page.focus('#tab-today');
-    await page.keyboard.press('ArrowRight');
-    await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Log")');
+  await step('keyboard: the menu opens with Enter, moves with Tab, and the focus can be seen; Back and Forward', async () => {
+    await page.goto(base + '/app/#today');
+    await page.waitForSelector('#cal-title');
+    await page.focus('#menu-button');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog#menu[open]');
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
     const focus = await page.evaluate(() => {
       const el = document.activeElement;
       const s = getComputedStyle(el);
       return { id: el.id, outline: s.outlineStyle, width: s.outlineWidth, shadow: s.boxShadow };
     });
-    if (focus.id !== 'tab-log') throw new Error('focus on ' + focus.id);
+    if (focus.id !== 'menu-log') throw new Error('focus on ' + focus.id);
     if ((focus.outline === 'none' || focus.width === '0px') && focus.shadow === 'none') throw new Error('no visible focus');
-    // The browser's Back button returns to the tab before, and Forward to this one.
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('main.page-log');
+    // The browser's Back button returns to the page before, and Forward to this one.
     await page.goBack();
-    await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Today")');
+    await page.waitForSelector('main.page-today');
     await page.goForward();
-    await page.waitForSelector('nav.tabs button[aria-selected="true"]:has-text("Log")');
+    await page.waitForSelector('main.page-log');
   });
 
   await step('log: the entries, newest period first; removing asks in a dialog that keeps the focus; Escape keeps the entry', async () => {
@@ -441,10 +474,13 @@ const problems = [];
     await page.waitForSelector('#terms-en[aria-pressed="true"]');
   });
 
-  await step('settings (loosely): the tab opens and shows the signed-in number; the header has Sign out', async () => {
+  await step('settings (loosely): the page opens and shows the signed-in number; the menu has Sign out', async () => {
     await tab('Settings');
     await has('.panel', PRETTY);
-    await has('header.dash-top #top-sign-out', 'Sign out');
+    await page.click('#menu-button');
+    await has('dialog#menu #menu-sign-out', 'Sign out');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('dialog#menu', { state: 'detached' });
     await noSideways();
   });
 
@@ -474,26 +510,26 @@ const problems = [];
     await has('.field .error', 'Wrong number or password.');
     await page.fill('#pw', ACCOUNT_PASSWORD);
     await page.click('button[type=submit]');
-    await page.waitForSelector('nav.tabs');
+    await page.waitForSelector('main.page');
   });
 
-  // ----- the same account, walked through a period with the day buttons and the next-step button -----
+  // ----- the same account, walked through a period with the popup of a day -----
   // Time cannot be stepped, so each phase is reached with dates in the past.
 
   const WALK_FLOW = isoDaysAgo(16);
   const longDate = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' });
-  /** Chooses a day on the calendar, moving back a month when it is not shown. */
-  const pickDay = async date => {
-    await tab('Today');
-    for (let k = 0; k < 4 && !(await page.locator('#day-' + date).count()); k += 1) await page.click('#cal-prev');
-    await page.click('#day-' + date);
-    await page.waitForSelector(`#day-${date}[aria-pressed="true"]`);
-  };
-  /** Records with a button of the chosen day and waits for the server's sentence. */
-  const dayButton = async (date, id) => {
+  /** Opens a day's popup. */
+  const pickDay = date => openDay(date);
+  /** Records with the popup of a day ('flow-day', 'flow-night' or 'hefsek') and waits for the server's sentence. */
+  const dayButton = async (date, what) => {
     await pickDay(date);
-    await page.click('#' + id);
-    await has('#day-panel .rec-done', 'Recorded');
+    if (what.startsWith('flow')) {
+      await page.click('#pop-add-flow');
+      // an earlier day asks by day or at night; today records at once (the date may be today in the household's time zone)
+      await page.waitForSelector('#pop-add-' + what + ', #cal-said .rec-done');
+      if (await page.locator('#pop-add-' + what).count()) await page.click('#pop-add-' + what);
+    } else await page.click('#pop-add-' + what);
+    await has('#cal-said .rec-done', 'Recorded');
     return state();
   };
   const removeAll = async () => {
@@ -513,87 +549,101 @@ const problems = [];
     await shot(name);
   };
 
-  await step('walk: tehorah, "It began earlier" opens the form preset to a flow on another date', async () => {
+  await step('walk: tehorah, "Another date or time" opens the full form preset to another date', async () => {
     await removeAll();
-    if ((await state()).status.phase !== 'tehorah') throw new Error('not tehorah');
-    await page.click('#next-earlier');
-    await page.waitForSelector('#record-panel #rec-kind-flow[aria-pressed="true"]');
+    const st = await state();
+    if (st.status.phase !== 'tehorah') throw new Error('not tehorah');
+    await pickDay(st.grid.today);
+    await page.click('#pop-more');
+    await page.waitForSelector('main.page-record #rec-kind-flow');
+    if ((await page.evaluate(() => document.activeElement.id)) !== 'rec-kind-flow') throw new Error('the focus is not on the first kind');
+    await page.click('#rec-kind-flow');
     if (!(await page.isChecked('#r-rec-mode-other'))) throw new Error('not on another time');
-    if ((await page.inputValue('#rec-date')) !== (await state()).grid.today) throw new Error('the date is not today');
-    if ((await page.evaluate(() => document.activeElement.id)) !== 'rec-date') throw new Error('the focus is not on the date');
+    if ((await page.inputValue('#rec-date')) !== st.grid.today) throw new Error('the date is not today');
     await page.click('#rec-close');
-    await page.waitForSelector('#record-panel', { state: 'detached' });
+    await page.waitForSelector('main.page-today #cal-title');
     await walkShot('50-walk-tehorah');
   });
 
   let walkHefsek = '';
   await step('walk: a period with the day button; the hefsek day is "H?" and "not recorded", the rest "expected"', async () => {
-    const st = await dayButton(WALK_FLOW, 'dp-add-flow-day');
+    const st = await dayButton(WALK_FLOW, 'flow-day');
     if (st.status.phase !== 'before_hefsek') throw new Error('phase ' + st.status.phase);
     const hefsek = st.grid.events.find(e => e.kind === 'hefsek' && e.projected);
     walkHefsek = hefsek.startDate;
     await pickDay(walkHefsek);
     if ((await page.textContent(`#day-${walkHefsek} .mk.hefsek.projected`)) !== 'H?') throw new Error('the hefsek day is not H?');
     if (!(await page.getAttribute('#day-' + walkHefsek, 'aria-label')).includes('not recorded')) throw new Error('the day does not say "not recorded"');
-    await page.waitForSelector('#day-events .ev.hefsek .tag:text-is("not recorded")');
+    await has('#pop-expected', 'Hefsek taharah');
+    // the day it can be done (and it is not later than today): the hefsek taharah first
+    if (walkHefsek <= st.grid.today && (await page.$eval('#day-pop .pop-item', b => b.id)) !== 'pop-add-hefsek') throw new Error('the hefsek taharah is not first');
+    await noProjected();
+    await walkShot('51-walk-before-hefsek');
+    await tab('Coming up');
     await page.waitForSelector('#up-steps .up-hefsek .tag:text-is("not recorded")');
     await page.waitForSelector('#up-steps .up-clean_day .tag:text-is("expected")');
     await page.waitForSelector('#up-steps .up-mikvah .tag:text-is("expected")');
     await has('#up-assume', 'If the hefsek taharah is done on the first day it can be.');
     await noProjected();
-    // The next step: the hefsek taharah, only while it can be done today.
-    const canToday = st.today.part === 'day' && walkHefsek <= st.today.civilDate;
-    if (canToday && (await page.textContent('#next-step')).trim() !== 'Hefsek taharah done') throw new Error('next step: ' + (await page.textContent('#next-step')));
-    if (!canToday && (await page.locator('#next-step').count())) throw new Error('a next-step button while the hefsek cannot be done today');
-    await walkShot('51-walk-before-hefsek');
+    await tab('Today');
+    // The home has no buttons beside the status line.
+    if (await page.locator('.status-line button, #next-step').count()) throw new Error('a button beside the status line');
   });
 
   await step('walk: the hefsek taharah with the day button: the count, with no button to press', async () => {
-    const st = await dayButton(isoDaysAgo(3), 'dp-add-hefsek');
+    const st = await dayButton(isoDaysAgo(3), 'hefsek');
     if (st.status.phase !== 'counting') throw new Error('phase ' + st.status.phase);
     if ((await page.textContent(`#day-${isoDaysAgo(3)} .mk.hefsek.done`)) !== 'H✓') throw new Error('the recorded hefsek is not H✓');
-    await page.waitForSelector('#day-events .ev.hefsek .tag:text-is("recorded")');
-    if (await page.locator('#next-step').count()) throw new Error('a next-step button in the count');
     await noProjected();
     await walkShot('52-walk-counting');
-    await page.click('#rec-undo');
-    await has('#day-panel .rec-done', 'Removed');
+    // the recorded day's popup: the entry with Edit and Delete; Delete asks once, then removes it
+    await pickDay(isoDaysAgo(3));
+    await has('#pop-entries', 'Hefsek taharah');
+    await page.waitForSelector('#pop-entries button:text-is("Edit")');
+    await page.click('#pop-entries button:text-is("Delete")');
+    await page.click('#pop-del-yes');
+    await page.waitForSelector('#pop-entries', { state: 'detached' });
+    if ((await state()).status.phase !== 'before_hefsek') throw new Error('not removed');
+    await page.keyboard.press('Escape');
   });
 
   await step('walk: a hefsek taharah a week ago: the seventh clean day by day, then the mikvah night with its time and no button', async () => {
     try {
-      const st = await dayButton(isoDaysAgo(7), 'dp-add-hefsek');
+      const st = await dayButton(isoDaysAgo(7), 'hefsek');
       if (st.status.phase === 'counting') {
         // By day the seventh clean day is still counted; there is nothing to press until the night.
         if (st.status.day !== 7) throw new Error('day ' + st.status.day);
-        if (await page.locator('#next-step').count()) throw new Error('a next-step button on the seventh clean day');
         return;
       }
       if (st.status.phase !== 'mikvah_tonight') throw new Error('phase ' + st.status.phase);
       await has('#status-headline', 'Mikvah night');
       await has('#status-detail', 'Immersion after ');
-      if (await page.locator('#next-step').count()) throw new Error('a button on the mikvah night');
     } finally {
       for (const e of (await state()).entries.filter(x => x.kind !== 'flow')) await api('DELETE', '/api/entries/' + encodeURIComponent(e.id));
+      // the page is loaded again, so that it shows what the server has now
+      await page.goto('about:blank');
+      await page.goto(base + '/app/#today');
+      await page.waitForSelector('#status-headline');
     }
   });
 
   const WALK_HEFSEK = addDays(WALK_FLOW, 5);
   const WALK_MIKVAH = addDays(WALK_HEFSEK, 7);
   await step('walk: the mikvah night passed with no immersion recorded: tehorah, and nothing asks about it', async () => {
-    const st = await dayButton(WALK_HEFSEK, 'dp-add-hefsek');
+    const st = await dayButton(WALK_HEFSEK, 'hefsek');
     if (st.status.phase !== 'tehorah') throw new Error('phase ' + st.status.phase);
-    if ((await page.textContent('#next-step')).trim() !== 'A period began') throw new Error('next step: ' + (await page.textContent('#next-step')));
+    if ((await page.textContent('#status-headline')).trim() !== 'Tehorah') throw new Error('headline');
     await pickDay(WALK_MIKVAH);
     if ((await page.textContent(`#day-${WALK_MIKVAH} .mk.mikvah.plan`)) !== 'M') throw new Error('the mikvah night is not an outlined M');
-    if (await page.locator('#day-events .ev.mikvah .tag').count()) throw new Error('a label on the past mikvah night');
+    await has('#pop-expected', 'Mikvah night');
+    if (await page.locator('#pop-entries').count()) throw new Error('something shown as recorded on the past mikvah night');
     const words = await page.textContent('#root');
     if (/immersed|not recorded: |no immersion/i.test(words)) throw new Error('something asks about the immersion');
     await walkShot('53-walk-after-mikvah-night');
   });
 
   await step('walk: a new period after the count: no note, and the earlier mikvah night is an ordinary one', async () => {
-    const st = await dayButton(isoDaysAgo(1), 'dp-add-flow-day');
+    const st = await dayButton(isoDaysAgo(1), 'flow-day');
     if (st.status.phase !== 'before_hefsek') throw new Error('phase ' + st.status.phase);
     if (st.alerts.length) throw new Error('an alert: ' + JSON.stringify(st.alerts));
     const night = st.grid.events.find(e => e.kind === 'mikvah' && e.startDate === WALK_MIKVAH);
@@ -648,16 +698,15 @@ const problems = [];
     return state();
   };
 
-  await step('test account: the banner, and Today by day: the box is today’s and agrees with the headline', async () => {
+  await step('test account: its tag, and the home by day: the status line agrees with today in the calendar', async () => {
     await openDemo();
     await page.goto(base + '/app/#today');
-    await has('.demo-banner', 'This is the test account. Nothing here is sent to a real phone.');
+    await has('#demo-tag', 'Test account');
     const st = await atPlace(placeAt(12.5));
     if (st.today.part !== 'day') throw new Error('expected day, the place is ' + JSON.stringify(st.today));
-    await has('.today-box h3', 'Today, ');
     if (st.status.phase === 'counting') {
       if (!(await page.textContent('#status-headline')).includes('day ' + st.status.day)) throw new Error('headline');
-      await has('.today-box .ti-title', 'day ' + st.status.day);
+      if (!(await page.getAttribute('#day-' + st.grid.today, 'aria-label')).includes('day ' + st.status.day)) throw new Error('today in the calendar is another day');
     }
     await shot('30-demo-day');
   });
@@ -669,23 +718,22 @@ const problems = [];
     await step('test account: Today at night, ' + label + ': the box describes the night that has begun, as the headline does', async () => {
       const st = await atPlace(placeAt(hour));
       if (st.today.part !== 'night') throw new Error('expected night: ' + JSON.stringify(st.today));
-      await has('.today-box.night h3', 'Tonight, ');
-      if (await page.locator('.today-box .night-note').count()) throw new Error('the sentence about the Hebrew date is still there');
-      await has('.date-line .hebrew', 'The night of');
       if (st.status.phase === 'counting') {
+        // At night the count is of the Hebrew date that began at nightfall: the next civil date in the calendar.
         const n = st.status.day;
         if (!(await page.textContent('#status-headline')).includes('day ' + n)) throw new Error('headline');
-        const titles = await page.$$eval('.today-box .ti-title', els => els.map(e => e.textContent));
-        if (titles.some(x => /clean days: day/.test(x) && !x.includes('day ' + n))) throw new Error('the box shows another day: ' + titles.join(' | '));
+        const d = await page.$eval('#day-' + st.today.date, el => el.getAttribute('aria-label')).catch(() => '');
+        if (d && n <= 7 && !d.includes('day ' + n)) throw new Error('the calendar shows another day: ' + d);
       }
       await shot('31-demo-night-' + label.replace(/ /g, '-'));
     });
   }
 
-  await step('test account: back to Lakewood', async () => {
+  await step('test account: back to Lakewood; "Try a text" from the menu', async () => {
     const st = await state();
     const lakewood = st.places.find(p => p.name === 'Lakewood, NJ');
     await atPlace(lakewood);
+    await tab('Try a text');
   });
 
   /** Sends a text from the box; returns the replies the server gave, after the page has shown them. */
@@ -736,14 +784,14 @@ const problems = [];
     if (!/\/app\/\?k=[A-Za-z0-9_-]{24,64}$/.test(signInLink)) throw new Error('link: ' + signInLink);
     await api('POST', '/api/auth/logout', {});
     await page.goto(signInLink.replace(/^https?:\/\/[^/]+/, base));
-    await page.waitForSelector('nav.tabs');
+    await page.waitForSelector('main.page');
     if (page.url().includes('k=')) throw new Error('the token is still in the address');
     await api('POST', '/api/auth/logout', {});
     await page.goto(signInLink.replace(/^https?:\/\/[^/]+/, base));
     await has('.alert.bad', 'This sign-in link expired or was used');
     if (page.url().includes('k=')) throw new Error('the token is still in the address');
     await openDemo();
-    await page.goto(base + '/app/#today');
+    await page.goto(base + '/app/#try');
     await page.waitForSelector('#demo-text');
   });
 
@@ -762,7 +810,7 @@ const problems = [];
 
   // ===================== every tab, at three widths, light and dark; reduced motion; 200% zoom =====================
 
-  await step('every tab at 360, 390 and 1280 px, light and dark, with no sideways scrolling', async () => {
+  await step('every page at 360, 390 and 1280 px, light and dark, with no sideways scrolling', async () => {
     await openDemo();
     for (const width of [360, 390, 1280]) {
       for (const scheme of ['light', 'dark']) {
@@ -770,9 +818,9 @@ const problems = [];
         await c.addCookies(await context.cookies());
         const p = await c.newPage();
         watch(p);
-        for (const name of ['today', 'log', 'customs', 'settings']) {
+        for (const name of ['today', 'coming', 'log', 'customs', 'settings', 'texting', 'try']) {
           await p.goto(base + '/app/#' + name);
-          await p.waitForSelector('nav.tabs');
+          await p.waitForSelector('main.page-' + name);
           await p.waitForTimeout(150);
           await noSideways(p, name + ' at ' + width + ' px ' + scheme);
           await shot(`40-${name}-${width}-${scheme}`, p);
@@ -791,9 +839,9 @@ const problems = [];
     await p.waitForSelector('#status-headline');
     const dur = await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--dur').trim());
     if (!/^0(ms|s)?$/.test(dur)) throw new Error('--dur is ' + dur);
-    for (const name of ['today', 'log', 'customs', 'settings']) {
+    for (const name of ['today', 'coming', 'log', 'customs', 'settings']) {
       await p.goto(base + '/app/#' + name);
-      await p.waitForSelector('nav.tabs');
+      await p.waitForSelector('main.page-' + name);
       await noSideways(p, name + ' at 200%');
     }
     await shot('41-today-200-percent', p);

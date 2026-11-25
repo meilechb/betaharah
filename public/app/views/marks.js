@@ -149,8 +149,8 @@ export function entryMark(kind) {
 const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
- * The legend, always shown under the month, in two groups: what she
- * recorded, and what the calendar works out from it; one short line per
+ * The legend ("Key", in a sheet from the home screen), in two groups: what
+ * she recorded, and what the calendar works out from it; one short line per
  * mark. How a day is drawn is under "More", closed.
  */
 export function legend() {
@@ -183,6 +183,7 @@ export function legend() {
         item(h('span', { class: 'mk-pair' }, mark({ kind: 'onah' }, { night: false }), mark({ kind: 'onah' }, { night: true })), cap1(t('{veset_onah}'))),
         item(mark({ kind: 'onah', light: true }, { night: true }), cap1(t('{or_zarua} only'))),
         item(mark({ kind: 'clean_day', projected: true }, { number: 3 }), 'Expected'),
+        item(h('span', { class: 'legend-day niddah', 'aria-hidden': 'true' }, '7'), cap1(t('{niddah} days'))),
       ),
     ),
     h(

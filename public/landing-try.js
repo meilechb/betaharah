@@ -285,13 +285,7 @@ function openSheet(date) {
   const mobile = window.matchMedia('(max-width: 720px)').matches;
   sheet.classList.toggle('sheet-mobile', mobile);
   sheet.classList.toggle('sheet-pop', !mobile);
-  // On a phone the sheet is modal, so it sits in the top layer: as a plain dialog it stays inside the
-  // hero's stacking context, and the next section is drawn over it and takes its taps.
-  if (sheet.open && sheet.matches(':modal') !== mobile) sheet.close();
-  if (!sheet.open) {
-    if (mobile) sheet.showModal();
-    else sheet.show();
-  }
+  if (!sheet.open) sheet.show();
   sheet.style.margin = '0';
   sheet.style.inset = 'auto';
   sheet.style.position = mobile ? 'fixed' : 'absolute';

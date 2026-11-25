@@ -256,14 +256,14 @@ describe('the whole life of an account, by text message alone', () => {
     // Step 3: dated entries.
     const flow = await sms(WIFE, 'Nov 19 day');
     expect(flow).toHaveLength(1);
-    expect(flow[0]).toBe('Recorded: flow Thu Nov 19 by day, 2026. Hefsek from Mon Nov 23. Hefsek done? Its date, for example: Nov 27.\nReply: NOT YET');
+    expect(flow[0]).toBe('Recorded: flow Thu, 9 Kislev 5787 by day. Hefsek from today. Hefsek done? Its date, for example: Nov 27.\nReply: NOT YET');
     expect(await sms(WIFE, 'NOT YET')).toEqual([SETUP_DONE]);
     h = (await householdOf(WIFE))!;
     expect(h.data.entries.map(e => [e.entry.kind, e.source])).toEqual([['flow', 'sms']]);
     expect(h.data.chat?.[WIFE]?.key).toBe('setup.done'); // the options of the last text
 
     // Status, and reminders turned on by text (the consent).
-    expect((await sms(WIFE, 'status'))[0]).toMatch(/^Niddah since Thu Nov 19\./);
+    expect((await sms(WIFE, 'status'))[0]).toMatch(/^Niddah since Thu, 9 Kislev\./);
     expect(await sms(WIFE, 'REMINDERS ON')).toEqual([tx({ key: 'reminders.on', vars: { last4: '0102' } })]);
     h = (await householdOf(WIFE))!;
     expect(h.data.phones[0]!.consentAt).not.toBeNull();
@@ -277,7 +277,7 @@ describe('the whole life of an account, by text message alone', () => {
     const reminder = world.telnyx.sent.slice(beforeTick);
     expect(reminder).toHaveLength(1);
     expect(reminder[0]).toMatchObject({ to: WIFE, endpoint: 'sms' });
-    expect(reminder[0]!.text).toMatch(/^Hefsek tahara: Mon Nov 23, before sunset at 4:3\d PM\.\nReply: DONE, STATUS$/);
+    expect(reminder[0]!.text).toMatch(/^Hefsek tahara: today, before sunset at 4:3\d PM\.\nReply: DONE, STATUS$/);
 
     // ADD: the person who asks gets a code; nothing is sent to anyone else.
     const added = await sms(WIFE, 'ADD');
@@ -297,8 +297,8 @@ describe('the whole life of an account, by text message alone', () => {
     expect(await count('join_codes')).toBe(0); // used up
 
     // Both record.
-    expect((await sms(HUSBAND, 'hefsek today'))[0]).toMatch(/^Recorded: hefsek Mon Nov 23\. Clean days Tue Nov 24 - Mon Nov 30\./);
-    expect((await sms(WIFE, 'HISTORY'))[0]).toBe('Latest: first: hefsek Mon Nov 23; second: flow Thu Nov 19 by day. Erase one?\nReply: FIRST, SECOND, MENU');
+    expect((await sms(HUSBAND, 'hefsek today'))[0]).toMatch(/^Recorded: hefsek today\. Clean days from tomorrow\. Mikvah Mon night, eve of 21 Kislev after/);
+    expect((await sms(WIFE, 'HISTORY'))[0]).toBe('Latest: first: hefsek today; second: flow Thu, 9 Kislev by day. Erase one?\nReply: FIRST, SECOND, MENU');
     expect((await sms(HUSBAND, 'PHONES'))[0]).toBe(
       'Phones: first ending 0102 (reminders on); second ending 0101 (this phone, reminders off).\nReply: ADD, REMOVE, LEAVE, MENU',
     );
@@ -408,7 +408,7 @@ describe('the same conversation over RCS', () => {
     expect(joined).toEqual([JOINED]);
     const last = world.telnyx.sent.at(-1)!;
     expect(last).toMatchObject({ to: HUSBAND, endpoint: 'rcs', delivered: 'sms', fallback: { from: OUR_NUMBER, text: joined[0] } });
-    expect((await sms(HUSBAND, 'STATUS'))[0]).toMatch(/^Niddah since Thu Nov 19\./);
+    expect((await sms(HUSBAND, 'STATUS'))[0]).toMatch(/^Niddah since Thu, 9 Kislev\./);
 
     // A sign-in code goes as a plain SMS even with RCS on, and so does the sign-in link.
     hasWritten.add(WIFE);
@@ -832,7 +832,7 @@ describe('the operator\'s simulator', () => {
     expect(h.data.demo).toBe(true);
     expect((await say('08701')).replies.map(r => r.text)).toEqual([tx({ key: 'location.set', vars: { place: 'Lakewood, NJ 08701' } }, 'setup.customs')]);
     expect((await say('KEEP FOR NOW')).outcome).toBe('conversed');
-    expect((await say('Nov 19 day')).replies[0]!.text).toMatch(/^Recorded: flow Thu Nov 19 by day, 2026\./);
+    expect((await say('Nov 19 day')).replies[0]!.text).toMatch(/^Recorded: flow Thu, 9 Kislev 5787 by day\./);
     expect((await say('NOT YET')).replies).toEqual([{ text: SETUP_DONE, suggestions: ['PERIOD', 'HEFSEK', 'REMINDERS', 'MORE'].map(l => ({ label: l, send: l })) }]);
     expect((await say('REMINDERS ON')).replies[0]!.text).toBe(tx({ key: 'reminders.on', vars: { last4: '0142' } }));
     // a second made-up phone joins with a code

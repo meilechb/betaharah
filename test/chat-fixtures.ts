@@ -54,6 +54,8 @@ export function phone(number: string, verified = true): PhoneRecord {
 /** A household with one phone; with a location unless `place` is false. */
 export function household(opts: { place?: boolean; spouse?: boolean } = {}): HouseholdData {
   const data = newHousehold();
+  // Civil dates, so that the dates in replies read as month and day; test/dates.test.ts covers the three settings.
+  data.app.dates = 'civil';
   data.phones.push(phone(ME));
   if (opts.spouse) data.phones.push(phone(SPOUSE));
   if (opts.place !== false) {

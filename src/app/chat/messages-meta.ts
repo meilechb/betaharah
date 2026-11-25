@@ -109,6 +109,7 @@ const BY_CATEGORY: Record<CategoryId, Record<string, Entry>> = {
     'date.not_recent': ['Not in the past year', 'Feb 29 without a year, none in the past year.'],
     'date.needs_onah': ['Date needs day or night', 'A period date with no day, night or time.'],
     'date.nothing_more': ['Date alone, please', 'A hefsek or immersion date with more after it.'],
+    'date.adar': ['Adar I or Adar II?', 'A Hebrew date in Adar, in a leap year, without I or II.'],
   },
   status: {
     'status.tehorah_onah': ['Tehorah, next onah', 'STATUS when tehorah, with the next onah.', IMPORTANT],
@@ -188,6 +189,9 @@ const BY_CATEGORY: Record<CategoryId, Record<string, Entry>> = {
     'terms.show': ['Hebrew or English terms', 'TERMS.', { sub: 'Terms and dates' }],
     'terms.changed': ['Terms changed', 'The terms were changed.', { sub: 'Terms and dates' }],
     'terms.same': ['Terms unchanged', 'The terms chosen are already set.', { sub: 'Terms and dates' }],
+    'dates.show': ['Hebrew, civil or both dates', 'DATES.', { sub: 'Terms and dates' }],
+    'dates.changed': ['Dates changed', 'The dates were changed.', { sub: 'Terms and dates' }],
+    'dates.same': ['Dates unchanged', 'The dates chosen are already set.', { sub: 'Terms and dates' }],
   },
   phones: {
     'phones.list': ['Phones on the account', 'PHONES.'],

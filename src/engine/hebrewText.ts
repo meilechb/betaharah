@@ -7,7 +7,8 @@
  * words at all. Each line ends with a right-to-left mark, so that a number,
  * a bracket or a tick at its end stays at the end.
  */
-import { dayOfWeek } from './civil';
+import { absToCivil, dayOfWeek } from './civil';
+import type { DateStyle } from './dates';
 import { hebrewDate } from './terms';
 
 export type CivilPart = 'night' | 'day';
@@ -33,9 +34,23 @@ export function heClock(clock12: string): string {
 
 const DAYS = ['יום א׳', 'יום ב׳', 'יום ג׳', 'יום ד׳', 'יום ה׳', 'יום ו׳', 'שבת'] as const;
 
-/** A daytime: "יום ה׳, ט״ז כסלו". `abs` is the R.D. number of the day. */
-export function heDay(abs: number): string {
-  return `${DAYS[dayOfWeek(abs)]}, ${hebrewDate(abs, 'he', false)}`;
+const CIVIL_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'] as const;
+
+/** A civil date in Hebrew words: "26 בנובמבר". */
+function heCivil(abs: number): string {
+  const c = absToCivil(abs);
+  return `${c.d} ב${CIVIL_MONTHS[c.m - 1]}`;
+}
+
+/**
+ * A daytime, with its date as the household chooses (src/engine/dates.ts),
+ * wholly in Hebrew: "יום ה׳, ט״ז כסלו", "יום ה׳, 26 בנובמבר",
+ * "יום ה׳, 26 בנובמבר (ט״ז כסלו)". `abs` is the R.D. number of the day.
+ */
+export function heDay(abs: number, dates: DateStyle = 'hebrew'): string {
+  const hebrew = hebrewDate(abs, 'he', false);
+  const date = dates === 'hebrew' ? hebrew : dates === 'civil' ? heCivil(abs) : `${heCivil(abs)} (${hebrew})`;
+  return `${DAYS[dayOfWeek(abs)]}, ${date}`;
 }
 
 /**
@@ -43,10 +58,12 @@ export function heDay(abs: number): string {
  * begins with it: "יום ד׳ בערב, אור לכ״ה חשוון". `eveningAbs` is the R.D.
  * number of the civil day of the evening.
  */
-export function heEvening(eveningAbs: number): string {
+export function heEvening(eveningAbs: number, dates: DateStyle = 'hebrew'): string {
   const dow = dayOfWeek(eveningAbs);
   const when = dow === 6 ? 'מוצאי שבת' : dow === 5 ? 'ליל שבת' : `${DAYS[dow]} בערב`;
-  return `${when}, אור ל${hebrewDate(eveningAbs + 1, 'he', false)}`;
+  const hebrew = `אור ל${hebrewDate(eveningAbs + 1, 'he', false)}`;
+  const date = dates === 'hebrew' ? hebrew : dates === 'civil' ? heCivil(eveningAbs) : `${heCivil(eveningAbs)} (${hebrew})`;
+  return `${when}, ${date}`;
 }
 
 export const HE = {

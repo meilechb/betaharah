@@ -108,12 +108,12 @@ export function instantOf(today: PretendToday, where: Where): number {
 }
 
 /** The settings of the made-up household, exactly as the two settings routes save them on a new account. */
-export function settleSettings(data: HouseholdData, place: unknown, terms: unknown, halachic: unknown): void {
+export function settleSettings(data: HouseholdData, place: unknown, terms: unknown, halachic: unknown, dates?: unknown): void {
   // PUT /api/app, with the customs a new account has. The checks use the
   // location object the calculation keeps for this place (whereOf), so that
   // the sun times worked out for them are kept for later requests; the
   // check is the same.
-  const app = parseAppSettings({ ...DEFAULT_APP_SETTINGS, place, terms: terms ?? DEFAULT_APP_SETTINGS.terms });
+  const app = parseAppSettings({ ...DEFAULT_APP_SETTINGS, place, terms: terms ?? DEFAULT_APP_SETTINGS.terms, dates: dates ?? DEFAULT_APP_SETTINGS.dates });
   const kept = whereOf({ ...data, app }) as Where;
   assertSunTimesExist(kept.place, { useElevation: app.useElevation, tzeit: data.halachic.tzeit });
   data.app = app;
@@ -146,7 +146,7 @@ function parseMonths(input: unknown): string[] | null {
 
 /**
  * Works out the picture for a made-up household. `input`:
- *   { place, halachic?, terms?, today: { date, part }, entries: [ ... as POST /api/entries takes them ], months? }
+ *   { place, halachic?, terms?, dates?, today: { date, part }, entries: [ ... as POST /api/entries takes them ], months? }
  * Throws ValidationError (or SettingsError, NoSunError) for input that a
  * settings route would refuse; an entry that POST /api/entries would refuse
  * is not an error: it is reported in `outcomes` with the same sentence.
@@ -160,7 +160,7 @@ export function runSandbox(input: unknown, limits: SandboxLimits) {
   if (list.length > limits.maxEntries) throw new ValidationError(`At most ${limits.maxEntries} dates can be added here.`);
 
   const data = newHousehold();
-  settleSettings(data, placeFrom(o.place), o.terms, o.halachic);
+  settleSettings(data, placeFrom(o.place), o.terms, o.halachic, o.dates);
   const where = whereOf(data) as Where;
   const now = instantOf(today, where);
 
@@ -212,6 +212,7 @@ export function runSandbox(input: unknown, limits: SandboxLimits) {
     place: data.app.place as PlaceSetting,
     halachic: data.halachic,
     terms: data.app.terms,
+    dates: data.app.dates,
     outcomes,
     /** What POST /api/entries answers after the last entry that was recorded. */
     message: recorded ? confirmationText({ ok: true, entry: recorded.entry, computed, notes: recorded.notes }, null) : null,
