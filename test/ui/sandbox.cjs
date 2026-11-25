@@ -135,7 +135,7 @@ async function console_(browser) {
     // onah beinonit, day 30 and 31 from Nov 10, in the month below
     if ((await page.locator('#calc-day-2026-12-09 .mk.onah').count()) < 1) throw new Error('no onah on Dec 9');
     if ((await page.locator('#calc-day-2026-12-10 .mk.onah').count()) < 1) throw new Error('no onah on Dec 10');
-    if (!/Onah beinonit \(day 30\)/.test(await page.textContent('#calc-onot'))) throw new Error('the onot do not say why they are kept');
+    if (!/Onah beinonis \(day 30\)/.test(await page.textContent('#calc-onot'))) throw new Error('the onot do not say why they are kept');
     await page.click('#calc-day-2026-12-09');
     await page.waitForSelector('#calc-day-events:has-text("Onah beinonis")');
     if ((await logCount()) !== 1) throw new Error('the date is not listed');
