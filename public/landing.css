@@ -405,7 +405,7 @@ body.lp {
 .top-hero::before {
   content: '';
   position: absolute;
-  inset: -20% -10% auto;
+  inset: -20% 0 auto;
   height: 900px;
   z-index: -1;
   background:
