@@ -63,7 +63,7 @@ function prefixes(info) {
 }
 
 function signedIn() {
-  for (const id of ['hero-start']) {
+  for (const id of ['hero-start', 'cta-start']) {
     const a = byId(id);
     if (a && a.firstChild) a.firstChild.textContent = 'Open my calendar';
   }
@@ -107,7 +107,7 @@ function navLine() {
 function reveal() {
   if (!('IntersectionObserver' in window)) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const targets = document.querySelectorAll('.section-head, .split > *, .flow-steps > li, .cal-compare > *, .priv-grid > li');
+  const targets = document.querySelectorAll('.hp-head, .split > *, .hp-cards > li, .hp-steps > li');
   const io = new IntersectionObserver(
     entries => {
       for (const e of entries) {
