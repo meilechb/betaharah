@@ -519,7 +519,10 @@ async function seed() {
     if ((await page.locator('#tx-reminder-hefsek-discreet').count()) !== 0) throw new Error('the discreet wording has its own row');
     const hefsek = await page.textContent('#tx-reminder-hefsek');
     if (!hefsek.includes('Hefsek taharah day') || !hefsek.includes('Plain:') || !hefsek.includes('Discreet:') || !hefsek.includes('H Wed, 15 Kislev before')) throw new Error('reminder row: ' + hefsek);
-    if ((await txRows().count()) !== 6) throw new Error((await txRows().count()) + ' reminder rows');
+    // the six kinds, the text before Shabbat and Yom Tov, and its lines as one set
+    if ((await txRows().count()) !== 8) throw new Error((await txRows().count()) + ' reminder rows');
+    if (!(await page.textContent('#tx-reminder-rest')).includes('Over Shabbat.')) throw new Error('no row for the text before Shabbat');
+    if ((await page.locator('#tx-set-reminder-rest-lines').count()) !== 1) throw new Error('no set for its lines');
     // the customs questions are one row that opens to twelve
     await page.click('#tx-cat-settings');
     await page.waitForSelector('#tx-set-customs-questions');
