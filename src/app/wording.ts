@@ -3,6 +3,7 @@
  * shown in English letters or in Hebrew script, as the household chooses.
  */
 import { localAbs } from '../engine/civil';
+import { shortDate } from '../engine/calendar';
 import type { LogEntry, LogWarningCode } from '../engine/cycle';
 import { dayWords, nightWords, onahWords, type DateStyle, type DateWords } from '../engine/dates';
 import type { PatternAlert } from '../engine/patterns';
@@ -33,6 +34,8 @@ export function entryText(e: LogEntry, lang: TermLanguage, dates: DateStyle): st
       return `${capital(term('immersion', lang))}: ${nightWords(e.abs, w)}`;
   }
 }
+
+export { shortDate };
 
 /** Where things stand: a headline, and one short line with the next date and its time. */
 export function statusLines(t: Timeline, timeZone: string, lang: TermLanguage, dates: DateStyle): { headline: string; detail: string } {

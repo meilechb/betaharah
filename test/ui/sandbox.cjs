@@ -308,49 +308,35 @@ async function home(browser) {
   for (const [width, scheme] of [[1280, 'light'], [1280, 'dark'], [390, 'light'], [360, 'dark']]) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: scheme, deviceScaleFactor: out ? 2 : 1 });
     const page = await context.newPage();
-    const errors = watch(page);
+    // the made-up zip code below is refused with a 400 on purpose; before it, every answer must be a 200
+    const errors = watch(page, /status of 400/);
+    const refused = [];
+    page.on('response', r => {
+      if (r.url().includes('/api/try') && r.status() !== 200) refused.push(r.status());
+    });
     const step = (name, fn) => run(`home ${width}px: ${name}`, page, fn);
-    await step('a period, then the hefsek taharah; the walk ends there with the sign-up button', async () => {
+    await step('the sample month is filled, and a day opens the add sheet', async () => {
       await page.goto(base + '/#try');
-      await page.waitForSelector('#try-start');
-      if (await page.locator('#try-fallback').count()) throw new Error('the fallback sentence stayed');
-      const today = await page.getAttribute('#try-start', 'max');
-      const start = new Date(Date.parse(today + 'T00:00:00Z') - 8 * 86400000).toISOString().slice(0, 10);
-      await page.fill('#try-start', start);
-      await page.click('#try-go');
-      await page.waitForSelector('.try-headline');
-      if ((await page.textContent('.try-headline')) !== 'Niddah, before the hefsek taharah') throw new Error(await page.textContent('.try-headline'));
-      if ((await page.locator(`#try-day-${start} .mk.flow`).count()) !== 1) throw new Error('no flow mark');
-      await page.click('#try-add');
-      await page.waitForFunction(() => /after the hefsek taharah|Seven clean days/.test(document.querySelector('.try-headline').textContent));
-      if ((await page.locator('.try-cal .mk.clean').count()) === 0) throw new Error('no clean days on the calendar');
-      if ((await page.locator('.try-cal .mk.mikvah').count()) === 0) throw new Error('no mikvah night on the calendar');
-      // nothing asks for the immersion: the walk ends with the sign-up button
-      if (await page.locator('#try-add, #try-jump').count()) throw new Error('a next step after the hefsek');
-      if (/immers/i.test(await page.textContent('.try-side'))) throw new Error('the immersion is mentioned');
-      if (!(await page.isVisible('#try-signup'))) throw new Error('no button to sign up');
+      if (await page.locator('#try-place, #try-zip, select').count()) throw new Error('a place or zip field is on the page');
+      await page.waitForSelector('#try-cal .mk.flow');
+      await page.waitForSelector('#try-cal .mk.hefsek');
+      const today = await page.locator('#try-cal .day.today').getAttribute('id').catch(() => null);
+      const target = today || (await page.locator('#try-cal button.day').first().getAttribute('id'));
+      await page.click('#' + target);
+      await page.waitForSelector('#try-sheet[open], #try-sheet:visible');
+      if (!(await page.locator('#try-add-hefsek').isVisible()) && !(await page.locator('text=Hefsek taharah').count())) {
+        if (!(await page.getByText('Hefsek taharah').count())) throw new Error('the sheet is missing the hefsek');
+      }
+      await page.click('#try-add-flow-day');
+      await page.waitForSelector('#' + target + ' .mk.flow', { timeout: 8000 });
+      if (!(await page.isVisible('#hero-start'))) throw new Error('no button to start');
       const text = await page.textContent('#try');
       for (const word of [/\bserver\b/i, /\bengine\b/i, /\bAPI\b/, /algorithm/i]) if (word.test(text)) throw new Error('technical wording: ' + word);
-      if (!text.includes('Nothing you enter is saved.')) throw new Error('does not say nothing is saved');
+      if (/when did your period start/i.test(text)) throw new Error('asks when the period started');
       const wide = await sideways(page);
       if (wide > 0) throw new Error('scrolls sideways by ' + wide + 'px');
-      if (out) {
-        await page.evaluate(() => document.querySelectorAll('.reveal-pending').forEach(e => e.classList.add('revealed')));
-        await page.locator('#try').screenshot({ path: `${out}/home-try-${width}-${scheme}.png` });
-      }
-    });
-    await step('a date in the future is refused with the sentence a person gets', async () => {
-      await page.click('#try-again');
-      const start = await page.getAttribute('#try-start', 'max');
-      await page.fill('#try-start', new Date(Date.parse(start + 'T00:00:00Z') - 2 * 86400000).toISOString().slice(0, 10));
-      await page.click('#try-go');
-      await page.waitForSelector('#try-next-date');
-      const today = await page.inputValue('#try-next-date');
-      const later = new Date(Date.parse(today + 'T00:00:00Z') + 40 * 86400000).toISOString().slice(0, 10);
-      await page.fill('#try-next-date', later);
-      await page.dispatchEvent('#try-next-date', 'change');
-      await page.click('#try-add');
-      await page.waitForSelector('#try-form-error:has-text("Not recorded: that time has not come yet.")');
+      if (refused.length) throw new Error('a real date and zip code were refused: ' + refused.join(', '));
+      if (out) await page.locator('#try').screenshot({ path: `${out}/home-try-${width}-${scheme}.png` });
     });
     if (errors.length) {
       failures.push(`home ${width}px: errors`);
@@ -366,17 +352,8 @@ async function home(browser) {
     const errors = watch(page);
     await run('home: by keyboard alone', page, async () => {
       await page.goto(base + '/#try');
-      await page.waitForSelector('#try-start');
-      await page.focus('#try-place');
-      await page.keyboard.press('Tab');
-      if ((await page.evaluate(() => document.activeElement.id)) !== 'try-start') throw new Error('Tab does not reach the date');
-      await page.focus('#try-start-part-day');
-      await page.keyboard.press('ArrowRight'); // at night
-      if (!(await page.isChecked('#try-start-part-night'))) throw new Error('the arrow keys do not choose night');
-      await page.focus('#try-go');
-      await page.keyboard.press('Enter');
-      await page.waitForSelector('.try-headline');
-      const first = await page.evaluate(() => document.querySelector('.try .month .day[tabindex="0"]').id);
+      await page.waitForSelector('#try-cal button.day');
+      const first = await page.evaluate(() => document.querySelector('#try .month button.day[tabindex="0"]').id);
       await page.focus('#' + first);
       await page.keyboard.press('ArrowRight');
       const next = await page.evaluate(() => document.activeElement.id);
@@ -396,17 +373,17 @@ async function home(browser) {
     await run('home: the calculation failing shows a plain sentence and a link to sign up', page, async () => {
       await page.route('**/api/try', route => (route.request().method() === 'POST' ? route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"x"}' }) : route.continue()));
       await page.goto(base + '/#try');
-      await page.waitForSelector('#try-start');
-      await page.click('#try-go');
       await page.waitForSelector('#try-error:has-text("The calendar could not be shown just now.")');
       if ((await page.locator('#try-error a[href="/app/"]').count()) !== 1) throw new Error('no link to sign up');
+      if (!(await page.isVisible('.month'))) throw new Error('the example month is gone');
     });
-    await run('home: the choices failing to load leave the sentence and its link', page, async () => {
+    await run('home: the calculation failing to load leaves the example and a way to start', page, async () => {
       await page.unroute('**/api/try');
       await page.route('**/api/try', route => route.abort());
       await page.goto(base + '/?again#try');
       await page.waitForLoadState('networkidle');
-      if (!(await page.isVisible('#try-fallback a[href="/app/"]'))) throw new Error('no sentence with a link');
+      if (!(await page.isVisible('#hero-start'))) throw new Error('no button to start');
+      if (!(await page.isVisible('.month'))) throw new Error('the example month is gone');
     });
     for (const e of errors) if (!/net::ERR_FAILED|Failed to load resource/.test(e)) failures.push('home failing: ' + e);
     await context.close();
@@ -416,9 +393,10 @@ async function home(browser) {
   {
     const context = await browser.newContext({ viewport: { width: 360, height: 800 }, javaScriptEnabled: false });
     const page = await context.newPage();
-    await run('home: without JavaScript, a sentence and a link to sign up', page, async () => {
+    await run('home: without JavaScript, the example month and a link to start', page, async () => {
       await page.goto(base + '/#try');
-      if (!(await page.isVisible('#try-fallback a[href="/app/"]'))) throw new Error('no sentence with a link');
+      if (!(await page.isVisible('#hero-start'))) throw new Error('no button to start');
+      if (!(await page.isVisible('.month'))) throw new Error('the example month is gone');
       const wide = await sideways(page);
       if (wide > 0) throw new Error('scrolls sideways by ' + wide + 'px');
     });

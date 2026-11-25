@@ -17,6 +17,7 @@ const COLOR: Record<CalendarEvent['kind'], string> = {
   hefsek: '5', // banana
   clean_day: '7', // peacock
   mikvah: '10', // basil
+  apart: '11', // tomato
 };
 /** An onah that is only an Or Zarua onah gets a lighter colour. */
 const COLOR_OR_ZARUA = '6'; // tangerine
@@ -100,9 +101,15 @@ const EDGE_MS = 7 * 86_400_000;
 /**
  * What must change. `windowStart` is the oldest time the app keeps up to
  * date: desired events that ended before it are not written, and existing
- * events near it are not removed.
+ * events near it are not removed, except those `hidden` names (events of a
+ * kind the calendar app no longer shows), which are removed wherever they are.
  */
-export function planSync(desired: readonly DesiredEvent[], existing: readonly ExistingEvent[], windowStart: number): SyncOp[] {
+export function planSync(
+  desired: readonly DesiredEvent[],
+  existing: readonly ExistingEvent[],
+  windowStart: number,
+  hidden: (key: string) => boolean = () => false,
+): SyncOp[] {
   const ops: SyncOp[] = [];
   const wanted = new Map<string, DesiredEvent>();
   for (const d of desired) {
@@ -120,7 +127,7 @@ export function planSync(desired: readonly DesiredEvent[], existing: readonly Ex
     // A duplicate of a wanted event is always removed; an unwanted event is
     // removed unless it sits at the far edge of the window.
     const duplicate = key !== null && want !== undefined;
-    if (duplicate || !(e.endMs <= windowStart + EDGE_MS)) ops.push({ op: 'delete', id: e.id, key });
+    if (duplicate || (key !== null && hidden(key)) || !(e.endMs <= windowStart + EDGE_MS)) ops.push({ op: 'delete', id: e.id, key });
   }
   for (const [key, d] of wanted) {
     if (!seen.has(key)) ops.push({ op: 'insert', desired: d });

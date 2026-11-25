@@ -35,18 +35,13 @@ const failures = [];
 const fail = (where, message) => failures.push(`${where}: ${message}`);
 
 const HOME_PHRASES = [
-  'The mikvah calendar that does the counting',
-  'Hefsek taharah from Sat, Dec 5, before 4:31 PM.',
-  'Recorded: flow Tue Dec 1 by day. Hefsek from Sat Dec 5. 0 to undo.',
-  'Calculated by your customs',
-  'In the calendar you already use',
-  'Nothing is sent on Shabbat or Yom Tov',
-  'One account, each on your own phone',
-  'Everything works by text message',
-  'Private by design',
-  'Read the Privacy page',
-  'Questions people ask',
-  'Is it free?',
+  'Your mikvah calendar, worked out for you',
+  'Tap any day to try it.',
+  'Prefer texting?',
+  'period now',
+  'Hefsek from Sat Nov 28',
+  'Text reminders, your way',
+  'Signing in with Google',
 ];
 // The home page says what it does for a person; how it is built is on /privacy.
 const TECHNICAL = [/AES/, /decrypt/i, /encrypt/i, /Telnyx/, /cookie/i, /\bserver\b/i, /night of Shabbat/];
@@ -112,14 +107,11 @@ async function checkTexting(page, pub, where) {
       const text = await hero.innerText();
       if (!text.includes('JOIN') || !text.replace(/\D/g, '').includes(digits)) fail(where, 'the hero texting line is wrong: ' + text);
     }
-    for (const sel of ['#hero-sms a[href^="sms:"]', '#offline-cta a[href^="sms:"]', '#closing-sms a[href^="sms:"]']) {
-      const href = await page.locator(sel).first().getAttribute('href').catch(() => null);
-      if (!href || !href.includes(number)) fail(where, `no sms: link to the number in ${sel}`);
-    }
+    const href = await page.locator('#hero-sms a[href^="sms:"]').getAttribute('href').catch(() => null);
+    if (!href || !href.includes(number)) fail(where, 'no sms: link to the number');
     if (await page.locator('#offline-note').isVisible()) fail(where, 'the "not available" note shows although there is a texting number');
   } else {
     if (await hero.isVisible()) fail(where, 'the hero says to text JOIN while there is no texting number');
-    for (const sel of ['#offline-cta', '#closing-sms']) if (await page.locator(sel).isVisible()) fail(where, sel + ' shows while there is no texting number');
     const body = await page.locator('main').innerText();
     if (/\(\d{3}\) \d{3}-\d{4}/.test(body)) fail(where, 'the page names a phone number while there is none');
     if (pub.configured && !(await page.locator('#offline-note').isVisible())) fail(where, 'no note that sign-up by text is not available');
@@ -128,12 +120,9 @@ async function checkTexting(page, pub, where) {
 
 /** The donation line and footer link: shown, and leading to /donate, only when `on`; otherwise nothing visible mentions donating. */
 async function checkDonate(page, on, where) {
-  for (const sel of ['#faq-donate', '#foot-donate']) {
-    const visible = await page.locator(sel).isVisible();
-    if (visible !== on) fail(where, `${sel} is ${visible ? 'shown' : 'hidden'} while the Donate page ${on ? 'exists' : 'does not exist'}`);
-  }
+  const visible = await page.locator('#foot-donate').isVisible();
+  if (visible !== on) fail(where, `#foot-donate is ${visible ? 'shown' : 'hidden'} while the Donate page ${on ? 'exists' : 'does not exist'}`);
   if (on) {
-    if ((await page.locator('#faq-donate a').getAttribute('href')) !== '/donate') fail(where, 'the line under the questions does not lead to /donate');
     if ((await page.locator('#foot-donate').getAttribute('href')) !== '/donate') fail(where, 'the footer link does not lead to /donate');
   } else {
     const shown = await page.evaluate(() => document.body.innerText);
@@ -209,18 +198,15 @@ async function keyboard(browser) {
   await page.keyboard.press('Tab');
   const first = await page.evaluate(() => document.activeElement && document.activeElement.className);
   if (!/skip/.test(first || '')) fail(where, 'the first Tab does not reach the skip link');
-  const summary = page.locator('#questions summary').first();
-  await summary.focus();
-  await page.keyboard.press('Enter');
-  if (!(await page.locator('#questions details').first().evaluate(d => d.open))) fail(where, 'Enter does not open a question');
-  await page.keyboard.press('Enter');
-  if (await page.locator('#questions details').first().evaluate(d => d.open)) fail(where, 'Enter does not close a question');
-  const focusRing = await summary.evaluate(el => {
+  await page.waitForSelector('#try-cal button.day');
+  const field = page.locator('#try-cal button.day').first();
+  await field.focus();
+  const focusRing = await field.evaluate(el => {
     el.focus();
     const s = getComputedStyle(el);
     return s.outlineStyle !== 'none' && s.outlineWidth !== '0px';
   });
-  if (!focusRing) fail(where, 'a question has no visible focus outline');
+  if (!focusRing) fail(where, 'the date has no visible focus outline');
   await context.close();
 }
 
@@ -233,12 +219,10 @@ async function withoutScript(browser, label = '') {
   if ((await page.locator('h1').count()) !== 1) fail(where, 'not exactly one h1');
   const main = (await page.locator('main').textContent()).replace(/\s+/g, ' ');
   for (const p of HOME_PHRASES) if (!main.includes(p)) fail(where, 'missing: ' + p);
-  for (const sel of ['#hero-sms', '#offline-cta', '#offline-note', '#closing-sms', '#signup-note']) if (await page.locator(sel).isVisible()) fail(where, sel + ' shows an empty line');
-  if (!(await page.locator('#hero-start').isVisible())) fail(where, 'no "Get started"');
-  if (!(await page.locator('.month').isVisible())) fail(where, 'the calendar is not shown');
-  await page.locator('#questions summary').nth(1).click();
-  if (!(await page.locator('#questions details').nth(1).evaluate(d => d.open))) fail(where, 'a question does not open');
-  const opacity = await page.locator('#privacy .priv-grid li').first().evaluate(el => getComputedStyle(el).opacity);
+  for (const sel of ['#hero-sms', '#offline-note', '#signup-note']) if (await page.locator(sel).isVisible()) fail(where, sel + ' shows an empty line');
+  if (!(await page.locator('#hero-start').isVisible())) fail(where, 'no "Start for free"');
+  if (!(await page.locator('.month').first().isVisible())) fail(where, 'the calendar is not shown');
+  const opacity = await page.locator('#privacy p').evaluate(el => getComputedStyle(el).opacity);
   if (opacity !== '1') fail(where, 'a section is left invisible');
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (sideways > 0) fail(where, `scrolls sideways by ${sideways}px`);
@@ -290,10 +274,8 @@ async function donation(browser) {
     if (out) {
       for (const scheme of ['light', 'dark']) {
         await page.emulateMedia({ colorScheme: scheme });
-        await page.locator('#faq-donate').scrollIntoViewIfNeeded();
-        await page.evaluate(() => document.querySelectorAll('.reveal-pending').forEach(e => e.classList.add('revealed')));
-        await page.waitForTimeout(500);
-        await page.locator('#questions').screenshot({ path: `${out}/home-donate-line-${width}-${scheme}.png` });
+        await page.locator('#foot-donate').scrollIntoViewIfNeeded();
+        await page.waitForTimeout(200);
         await page.locator('footer').screenshot({ path: `${out}/home-donate-footer-${width}-${scheme}.png` });
       }
     }

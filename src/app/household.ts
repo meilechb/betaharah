@@ -3,7 +3,7 @@
  * to the database or the network: the current picture, recording and
  * removing entries, and the wording of what was recorded.
  */
-import { buildCalendar, type CalendarEvent } from '../engine/calendar';
+import { buildCalendar, calendarAppEvents, type CalendarEvent } from '../engine/calendar';
 import { localAbs } from '../engine/civil';
 import { processLog, sortLog, type LogEntry, type LogWarningCode } from '../engine/cycle';
 import { dayWords, nightWords, onahWords, type DateStyle, type DateWords } from '../engine/dates';
@@ -83,6 +83,12 @@ export function compute(data: HouseholdData, now: number): Computed | null {
   const ctx: ReminderContext = { place, zopts, yomTov: data.halachic.yomTov, recordedAt: id => recorded.get(id), dates };
   const reminders = buildReminders(timeline, data.app.reminders, ctx);
   return { dates, timeline, events, reminders, place, zopts };
+}
+
+/** The events given to calendar apps (Google Calendar and the subscription feed): the kinds the household shows there. */
+export function publishedEvents(data: HouseholdData, computed: Computed): CalendarEvent[] {
+  const opts = { style: data.app.calendar.style, lang: data.app.terms, timeZone: computed.place.timeZone, dates: data.app.dates };
+  return calendarAppEvents(computed.timeline, data.app.calendar.show, opts);
 }
 
 // ---------- recording an entry ----------

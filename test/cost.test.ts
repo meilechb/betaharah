@@ -9,7 +9,7 @@ import type { Session } from '../src/app/auth';
 import { checkPassword, decrypt, encrypt, hashPassword, randomToken } from '../src/app/crypto';
 import { dashboardState } from '../src/app/dashboard';
 import { converse } from '../src/app/chat';
-import { compute } from '../src/app/household';
+import { compute, publishedEvents } from '../src/app/household';
 import { lookupPostal, nearestPostal } from '../src/app/zip';
 import { DEFAULT_SITE_CONFIG, newHousehold, type HouseholdData } from '../src/app/model';
 import { rebuildQueue } from '../src/app/queue';
@@ -63,6 +63,7 @@ describe('cost of one request', () => {
 
   it('the whole calculation for three years of history: a few milliseconds', async () => {
     const data = longHistory(now);
+    const all = { ...data, app: { ...data.app, calendar: { ...data.app.calendar, show: { onot: true, period: true, hefsek: true, niddah: true, cleanDays: true, mikvah: true } } } };
     let events = 0;
     let state: ReturnType<typeof dashboardState> | null = null;
     // What one request does at most: work the picture out once, rebuild the
@@ -72,7 +73,8 @@ describe('cost of one request', () => {
     const each = await best(() => {
       const c = compute(data, now)!;
       rebuildQueue(data, c.reminders, now);
-      const desired = c.events.map(e => toDesired(e, 'America/New_York'));
+      // every kind switched on: the most a calendar app is given
+      const desired = publishedEvents(all, c).map(e => toDesired(e, 'America/New_York'));
       planSync(desired, [], now - 400 * 86_400_000);
       state = dashboardState({ data, computed: c, site: { config: DEFAULT_SITE_CONFIG, secrets: {} }, session, myNumber: '+17325550101', now, origin: 'https://x.example' });
       JSON.stringify(state);
@@ -120,7 +122,7 @@ describe('cost of one request', () => {
         // The server works a picture out only when the engine did not pass one on.
         const c = out.computed ?? compute(doc, now)!;
         rebuildQueue(doc, c.reminders, now);
-        const desired = c.events.map(e => toDesired(e, 'America/New_York'));
+        const desired = publishedEvents(doc, c).map(e => toDesired(e, 'America/New_York'));
         planSync(desired, [], now - 400 * 86_400_000);
       }
       await encrypt(KEY, JSON.stringify(doc), 'household:h');

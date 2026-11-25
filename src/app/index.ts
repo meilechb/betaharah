@@ -35,7 +35,7 @@ import { recordTick } from './admin-data';
 import { noteTextReceived } from './admin-notes';
 import { realDeps, type Deps, type Env } from './env';
 import { authorizationUrl, exchangeCode, fetchGoogleIdentity, GoogleCalendar, GoogleError, revokeToken, SIGN_IN_SCOPE } from './google';
-import { compute, confirmationText, recordEntry, rejectionText, removeEntry, whereOf, type Computed } from './household';
+import { compute, confirmationText, publishedEvents, recordEntry, rejectionText, removeEntry, whereOf, type Computed } from './household';
 import { toICalendar } from './ics';
 import { addMessage, DEFAULT_SITE_CONFIG, donateReady, googleReady, lastFour, MAX_PHONES, smsReady, type Site } from './model';
 import { donatePage, helpPage, privacyPage, termsPage } from './pages';
@@ -211,7 +211,7 @@ export function createApp(deps: Deps = realDeps): Hono<Ctx> {
     const now = deps.now();
     const computed = compute(household.data, now);
     const windowStart = now - household.data.app.calendar.historyDays * DAY;
-    const events = (computed?.events ?? []).filter(e => (e.timed ? e.timed.end : absToUtcMidnightMs(e.allDay!.endAbsExclusive)) >= windowStart);
+    const events = (computed ? publishedEvents(household.data, computed) : []).filter(e => (e.timed ? e.timed.end : absToUtcMidnightMs(e.allDay!.endAbsExclusive)) >= windowStart);
     return c.body(toICalendar(events, household.data.app.calendar.name, now), 200, { 'Content-Type': 'text/calendar; charset=utf-8' });
   });
 

@@ -12,11 +12,12 @@ import { compute, confirmationText, recordEntry } from '../src/app/household';
 import type { HouseholdData } from '../src/app/model';
 import { DEFAULT_APP_SETTINGS, parseAppSettings, ValidationError } from '../src/app/settings';
 import { entryText, statusLines } from '../src/app/wording';
-import { buildCalendar } from '../src/engine/calendar';
+import { buildCalendar, calendarAppEvents, DEFAULT_CALENDAR_SHOW } from '../src/engine/calendar';
 import { civilToAbs } from '../src/engine/civil';
 import type { LogEntry } from '../src/engine/cycle';
 import { DATE_STYLES, dayWords, momentWords, nightWords, onahWords, type DateStyle, type DateWords } from '../src/engine/dates';
 import { absOfHebrew } from '../src/engine/hebrew';
+import { heDay, heEvening } from '../src/engine/hebrewText';
 import { buildReminders, DEFAULT_REMINDER_OPTIONS, statusMessage, statusText } from '../src/engine/present';
 import type { GeoPoint } from '../src/engine/sun';
 import { buildTimeline } from '../src/engine/timeline';
@@ -236,6 +237,21 @@ describe('Coming up, the Log and the calendar on the page', () => {
     const make = (dates: DateStyle) => buildCalendar(t, { style: 'words', lang: 'en', timeZone: TZ, dates });
     expect(make('civil')).toEqual(make('hebrew'));
     expect(make('both')).toEqual(make('hebrew'));
+  });
+
+  it('a calendar app: the niddah event names the mikvah night with its date in full, one language per line', () => {
+    const t = timeline([flow, hefsek], now);
+    const show = { ...DEFAULT_CALENDAR_SHOW, niddah: true };
+    const niddah = (dates: DateStyle, lang: 'en' | 'he') => calendarAppEvents(t, show, { style: 'words', lang, timeZone: TZ, dates }).find(e => e.kind === 'apart')!.description;
+    expect(niddah('hebrew', 'en')).toBe('Until mikvah night: Thu night, eve of 24 Kislev, after 5:16 PM.');
+    expect(niddah('civil', 'en')).toBe('Until mikvah night: Thu night, Dec 3, after 5:16 PM.');
+    expect(niddah('both', 'en')).toBe('Until mikvah night: Thu night, Dec 3 (eve of 24 Kislev), after 5:16 PM.');
+    expect(niddah('hebrew', 'he')).toBe('עד ליל טבילה: יום ה׳ בערב, אור לכ״ד כסלו, אחרי 5:16\u200f');
+    expect(niddah('civil', 'he')).toBe('עד ליל טבילה: יום ה׳ בערב, 3 בדצמבר, אחרי 5:16\u200f');
+    expect(niddah('both', 'he')).toBe('עד ליל טבילה: יום ה׳ בערב, 3 בדצמבר (אור לכ״ד כסלו), אחרי 5:16\u200f');
+    for (const dates of DATE_STYLES) expect(niddah(dates, 'he')).not.toMatch(/[A-Za-z]/);
+    expect(heDay(abs(2026, 11, 26), 'both')).toBe('יום ה׳, 26 בנובמבר (ט״ז כסלו)');
+    expect(heEvening(abs(2026, 12, 31), 'both')).toBe('יום ה׳ בערב, 31 בדצמבר (אור לכ״ב טבת)');
   });
 
   it('today, in words with its date as the setting has it', () => {
