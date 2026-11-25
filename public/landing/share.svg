@@ -32,7 +32,7 @@
     <text x="72" y="306" font-size="60" font-weight="800" fill="#1c2230" letter-spacing="-2">calendar that does</text>
     <text x="72" y="376" font-size="60" font-weight="800" fill="#1c2230" letter-spacing="-2">the counting.</text>
     <text x="72" y="440" font-size="24" fill="#3e465c">Hefsek taharah, seven clean days, mikvah night</text>
-    <text x="72" y="474" font-size="24" fill="#3e465c">and onot perishah, by your customs.</text>
+    <text x="72" y="474" font-size="24" fill="#3e465c">and onos perishah, by your customs.</text>
     <g transform="translate(72 520)">
       <rect width="336" height="48" rx="24" fill="#ffffff" stroke="#e2ded5" />
       <circle cx="26" cy="24" r="6" fill="#2e7d4f" />
@@ -45,7 +45,7 @@
     </g>
     <g transform="translate(690 92)">
       <text x="220" y="46" text-anchor="middle" font-size="20" font-weight="700" fill="#1c2230">December 2026</text>
-      <text x="220" y="70" text-anchor="middle" font-size="14" fill="#3e465c">Kislev – Tevet</text>
+      <text x="220" y="70" text-anchor="middle" font-size="14" fill="#3e465c">Kislev – Teves</text>
       <g font-size="13" fill="#3e465c" text-anchor="middle">
         <text x="47" y="104">Sun</text><text x="105" y="104">Mon</text><text x="163" y="104">Tue</text><text x="221" y="104">Wed</text><text x="279" y="104">Thu</text><text x="337" y="104">Fri</text><text x="395" y="104" font-weight="700" fill="#1c2230">Sat</text>
       </g>
@@ -57,7 +57,7 @@
         <rect x="20" y="302" width="54" height="58" rx="6" /><rect x="78" y="302" width="54" height="58" rx="6" /><rect x="136" y="302" width="54" height="58" rx="6" /><rect x="194" y="302" width="54" height="58" rx="6" /><rect x="252" y="302" width="54" height="58" rx="6" /><rect x="310" y="302" width="54" height="58" rx="6" />
         <rect x="20" y="364" width="54" height="58" rx="6" /><rect x="78" y="364" width="54" height="58" rx="6" /><rect x="136" y="364" width="54" height="58" rx="6" /><rect x="194" y="364" width="54" height="58" rx="6" /><rect x="252" y="364" width="54" height="58" rx="6" />
       </g>
-      <!-- Shabbat -->
+      <!-- Shabbos -->
       <g fill="#f1ebe0" stroke="#ddd4c4">
         <rect x="368" y="116" width="54" height="58" rx="6" /><rect x="368" y="240" width="54" height="58" rx="6" /><rect x="368" y="302" width="54" height="58" rx="6" />
       </g>

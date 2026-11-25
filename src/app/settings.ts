@@ -5,7 +5,7 @@
 import { DEFAULT_CALENDAR_SHOW, SHOWN_KINDS, type CalendarShow } from '../engine/calendar';
 import { civilToAbs, isValidTimeZone } from '../engine/civil';
 import { DATE_STYLES, type DateStyle } from '../engine/dates';
-import { DEFAULT_REMINDER_OPTIONS, type ReminderKind, type ReminderOptions } from '../engine/present';
+import { ALL_CLEAN_DAYS, DEFAULT_REMINDER_OPTIONS, type ReminderKind, type ReminderOptions } from '../engine/present';
 import type { GeoPoint } from '../engine/sun';
 import type { TermLanguage } from '../engine/terms';
 import { dayTimes, type ZmanimOptions } from '../engine/zmanim';
@@ -71,7 +71,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   dates: 'hebrew',
   calendar: { name: 'Betaharah', style: 'words', historyDays: 400, show: { ...DEFAULT_CALENDAR_SHOW } },
   reminders: DEFAULT_REMINDER_OPTIONS,
-  boundaryMarginMinutes: 20,
+  // The owner: "Texts close to sunrise or sunset - default should be 60 minutes" (Settings, Reminders, Advanced).
+  boundaryMarginMinutes: 60,
 };
 
 export const REMINDER_KINDS: ReminderKind[] = ['hefsek', 'bedikah_morning', 'bedikah_afternoon', 'mikvah', 'mikvah_book', 'onah'];
@@ -179,6 +180,21 @@ export function parsePlace(input: unknown): PlaceSetting {
   return place;
 }
 
+/** Which clean days get bedikah reminders: a set of 1 to 7, in order. Saved before there was a choice: all seven. */
+function cleanDays(input: unknown): number[] {
+  if (input === undefined) return [...ALL_CLEAN_DAYS];
+  if (!Array.isArray(input)) throw new ValidationError('reminders.bedikot.days: expected a list');
+  const days = new Set(input.map(d => num(d, 'reminders.bedikot.days', 1, 7, true)));
+  return ALL_CLEAN_DAYS.filter(d => days.has(d));
+}
+
+/**
+ * The reminder settings. Fields added later read as their defaults when an
+ * account saved before has none: the bedikah days and parts (all seven days,
+ * morning and before sunset) and the time of the text before Shabbat and Yom
+ * Tov. `beforeRestDays` (a switch that once let reminders go out during
+ * Shabbat and Yom Tov) is no longer read: nothing is ever sent then.
+ */
 function parseReminders(input: unknown): ReminderOptions {
   const o = obj(input, 'reminders');
   const hefsek = obj(o.hefsek, 'reminders.hefsek');
@@ -187,6 +203,7 @@ function parseReminders(input: unknown): ReminderOptions {
   // Saved before the reminder to book the mikvah replaced the question about immersion: its setting, as it was.
   const book = obj(o.mikvahBook ?? o.mikvahConfirm, 'reminders.mikvahBook');
   const onah = obj(o.onah, 'reminders.onah');
+  const eve = o.restEve === undefined ? DEFAULT_REMINDER_OPTIONS.restEve : obj(o.restEve, 'reminders.restEve');
   return {
     style: oneOf(o.style, 'reminders.style', ['plain', 'discreet'] as const),
     hefsek: { on: bool(hefsek.on, 'reminders.hefsek.on'), minutesBeforeSunset: num(hefsek.minutesBeforeSunset, 'reminders.hefsek.minutesBeforeSunset', 20, 600, true) },
@@ -195,6 +212,9 @@ function parseReminders(input: unknown): ReminderOptions {
       morningHour: num(bedikot.morningHour, 'reminders.bedikot.morningHour', 0, 23, true),
       morningMinute: num(bedikot.morningMinute, 'reminders.bedikot.morningMinute', 0, 59, true),
       minutesBeforeSunset: num(bedikot.minutesBeforeSunset, 'reminders.bedikot.minutesBeforeSunset', 20, 600, true),
+      days: cleanDays(bedikot.days),
+      morning: bedikot.morning === undefined ? true : bool(bedikot.morning, 'reminders.bedikot.morning'),
+      beforeSunset: bedikot.beforeSunset === undefined ? true : bool(bedikot.beforeSunset, 'reminders.bedikot.beforeSunset'),
     },
     mikvah: { on: bool(mikvah.on, 'reminders.mikvah.on'), minutesBeforeSunset: num(mikvah.minutesBeforeSunset, 'reminders.mikvah.minutesBeforeSunset', 20, 600, true) },
     mikvahBook: {
@@ -203,7 +223,7 @@ function parseReminders(input: unknown): ReminderOptions {
       minute: num(book.minute, 'reminders.mikvahBook.minute', 0, 59, true),
     },
     onah: { on: bool(onah.on, 'reminders.onah.on'), minutesBefore: num(onah.minutesBefore, 'reminders.onah.minutesBefore', 0, 1440, true) },
-    beforeRestDays: bool(o.beforeRestDays, 'reminders.beforeRestDays'),
+    restEve: { hour: num(eve.hour, 'reminders.restEve.hour', 0, 23, true), minute: num(eve.minute, 'reminders.restEve.minute', 0, 59, true) },
     hefsekMaxDays: num(o.hefsekMaxDays, 'reminders.hefsekMaxDays', 1, 30, true),
   };
 }

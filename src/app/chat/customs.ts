@@ -46,8 +46,8 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   },
   {
     key: 'beinonitDays',
-    name: 'onah beinonit day',
-    question: 'Onah beinonit (the flow is day 1): day 30, day 31, or both.',
+    name: 'onah beinonis day',
+    question: 'Onah beinonis (the flow is day 1): day 30, day 31, or both.',
     note: '',
     options: [
       { value: '30', text: 'day 30', short: 'Day 30' },
@@ -57,8 +57,8 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   },
   {
     key: 'beinonitLength',
-    name: 'onah beinonit length',
-    question: 'Onah beinonit length: the onah of the flow, or the full day.',
+    name: 'onah beinonis length',
+    question: 'Onah beinonis length: the onah of the flow, or the full day.',
     note: '',
     options: [
       { value: 'onah', text: 'the onah of the flow', short: 'One onah' },
@@ -67,8 +67,8 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   },
   {
     key: 'chodeshLength',
-    name: 'veset hachodesh length',
-    question: 'Veset hachodesh length: the onah of the flow, or the full day.',
+    name: 'vest hachodesh length',
+    question: 'Vest hachodesh length: the onah of the flow, or the full day.',
     note: '',
     options: [
       { value: 'onah', text: 'the onah of the flow', short: 'One onah' },
@@ -78,7 +78,7 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'orZarua',
     name: 'Or Zarua',
-    question: 'Or Zarua, the onah before each veset onah: observed or not.',
+    question: 'Or Zarua, the onah before each onas havest: observed or not.',
     note: '',
     options: [
       { value: 'yes', text: 'observed', short: 'Observed' },
@@ -88,11 +88,11 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'haflagahMethod',
     name: 'haflagah count',
-    question: 'Veset haflagah counted in days, flow to flow, or in onot, hefsek to flow (Chabad).',
+    question: 'Vest haflagah counted in days, flow to flow, or in onos, hefsek to flow (Chabad).',
     note: '',
     options: [
       { value: 'days', text: 'in days, flow to flow', short: 'In days' },
-      { value: 'onot_from_hefsek', text: 'in onot, hefsek to flow (Chabad)', short: 'In onot' },
+      { value: 'onot_from_hefsek', text: 'in onos, hefsek to flow (Chabad)', short: 'In onos' },
     ],
   },
   {
@@ -120,17 +120,17 @@ export const SMS_CUSTOMS: SmsCustom[] = [
   {
     key: 'longCycle',
     name: 'long cycles',
-    question: 'Three cycles in a row past day 31: onah beinonit and veset hachodesh as usual, or not until a shorter cycle.',
+    question: 'Three cycles in a row past day 31: onah beinonis and vest hachodesh as usual, or not until a shorter cycle.',
     note: '',
     options: [
-      { value: 'observe', text: 'onah beinonit and veset hachodesh as usual', short: 'As usual' },
+      { value: 'observe', text: 'onah beinonis and vest hachodesh as usual', short: 'As usual' },
       { value: 'exempt', text: 'not observed until a shorter cycle', short: 'Not observed' },
     ],
   },
   {
     key: 'vesatot',
-    name: 'vesatot',
-    question: 'Vesatot: calculated, or paused.',
+    name: 'vestos',
+    question: 'Vestos: calculated, or paused.',
     note: '',
     options: [
       { value: 'active', text: 'calculated', short: 'Calculated' },

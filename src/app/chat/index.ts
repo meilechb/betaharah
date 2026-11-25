@@ -1,5 +1,5 @@
 /** The text-message conversation engine. See engine.ts and docs/TEXTING.md. */
-export { begin, CHAT_TTL_MS, converse, greet, INVITE_DAYS, joinWord, LINK_MARK, messageOut, serverText, validChat } from './engine';
+export { begin, CHAT_TTL_MS, converse, greet, INVITE_DAYS, joinWord, LINK_MARK, messageOut, restOut, serverText, validChat } from './engine';
 export { parseDated, recordDated, resolveDate } from './dated';
 export { SMS_CUSTOMS } from './customs';
 export { isGsmBasic, segments, MAX_TEXT_CHARS, SEGMENT_CHARS } from './gsm';

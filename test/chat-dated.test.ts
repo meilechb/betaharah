@@ -130,7 +130,7 @@ describe('recording with a date, by words and by ANOTHER DAY', () => {
     const data = household();
     const p = new Phone(data);
     expect(p.say('period 11/1 day')).toMatch(/^Recorded: flow Sun, Nov 1, 2026 by day\./);
-    expect(p.say('hefsek 11/6')).toMatch(/^Recorded: hefsek Fri, Nov 6, 2026\. Clean days from Shabbat, Nov 7\. Mikvah Fri night, Nov 13 after/);
+    expect(p.say('hefsek 11/6')).toMatch(/^Recorded: hefsek Fri, Nov 6, 2026\. Clean days from Shabbos, Nov 7\. Mikvah Fri night, Nov 13 after/);
     p.send('MORE');
     p.send('OTHER ENTRIES');
     expect(p.say('IMMERSION')).toBe('Immersion: which night?');

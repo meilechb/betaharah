@@ -11,12 +11,14 @@ import { onahIndex } from './onah';
 import { clock12, roundToMinute } from './present';
 import { capital, dayOfMonth, fill, hebrewDate, term, type TermLanguage } from './terms';
 import type { CivilPart } from './hebrewText';
-import { HE, heClock, heDay, heEvening, hePart, rtl } from './hebrewText';
+import { HE, heClock, heDay, heEvening, heOnahWhen, hePart, heTime, rtl } from './hebrewText';
 import type { OnahView, PeriodView, Timeline } from './timeline';
 import type { BaseReason, VesetReason } from './vesatot';
 
 const MINUTE = 60_000;
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Shabbat'] as const;
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Shabbos'] as const;
+/** The civil weekday of an evening: "the night of Shabbos" would be read as Friday night. */
+const CIVIL_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 
 /** "Thursday" */
@@ -62,26 +64,91 @@ export function reasonText(r: VesetReason, lang: TermLanguage): string {
   return capital(baseReason(r, lang));
 }
 
-function baseReasonHebrew(r: BaseReason): string {
+/** The reason itself, without "Or Zarua of" or "full day of". */
+function baseOf(r: VesetReason): BaseReason {
+  return r.kind === 'or_zarua' || r.kind === 'full_day' ? r.of : r;
+}
+
+/** A reason in plain words, with its name in brackets: "day 31 from the last period (onah beinonit)". */
+function whyEnglish(r: BaseReason, lang: TermLanguage): string {
   switch (r.kind) {
     case 'beinonit':
-      return `${term('onah_beinonit', 'he')} – יום ${r.day}`;
+      return fill(`day ${r.day} from the last period ({onah_beinonit})`, lang);
     case 'chodesh':
-      if (r.rule === 'same_date') return `${term('veset_hachodesh', 'he')} – ${dayOfMonth(r.dayOfMonth, 'he')} בחודש`;
-      if (r.rule === 'day29') return `${term('veset_hachodesh', 'he')} – כ״ט בחודש, לראייה בל׳ בחודש`;
-      return `${term('veset_hachodesh', 'he')} – א׳ בחודש הבא, לראייה בל׳ בחודש`;
+      if (r.rule === 'same_date') return fill(`day ${dayOfMonth(r.dayOfMonth, 'en')} of the Hebrew month ({veset_hachodesh})`, lang);
+      if (r.rule === 'day29') return fill('the 29th, for a period on the 30th ({veset_hachodesh})', lang);
+      return fill('the 1st of the next month, for a period on the 30th ({veset_hachodesh})', lang);
     case 'haflagah': {
-      const unit = r.unit === 'days' ? 'ימים' : term('onot', 'he');
-      return r.latest ? `${term('veset_haflagah', 'he')} – ${r.length} ${unit}` : `${term('haflagah', 'he')} קודמת שעדיין לא עברה – ${r.length} ${unit}`;
+      const unit = r.unit === 'days' ? 'days' : term('onot', lang);
+      return r.latest ? fill(`an interval of ${r.length} ${unit} ({veset_haflagah})`, lang) : fill(`an earlier interval of ${r.length} ${unit} ({haflagah})`, lang);
     }
   }
 }
 
-/** One reason for an onat perishah as a line wholly in Hebrew (for a calendar app). */
-export function reasonTextHebrew(r: VesetReason): string {
-  if (r.kind === 'or_zarua') return `${term('or_zarua', 'he')} של ${baseReasonHebrew(r.of)}`;
-  if (r.kind === 'full_day') return `${term('full_day', 'he')} של ${baseReasonHebrew(r.of)}`;
-  return baseReasonHebrew(r);
+/** The same, wholly in Hebrew. */
+function whyHebrew(r: BaseReason): string {
+  switch (r.kind) {
+    case 'beinonit':
+      return `יום ${r.day} מהראייה האחרונה (${term('onah_beinonit', 'he')})`;
+    case 'chodesh':
+      if (r.rule === 'same_date') return `${dayOfMonth(r.dayOfMonth, 'he')} בחודש (${term('veset_hachodesh', 'he')})`;
+      if (r.rule === 'day29') return `כ״ט בחודש, לראייה בל׳ בחודש (${term('veset_hachodesh', 'he')})`;
+      return `א׳ בחודש הבא, לראייה בל׳ בחודש (${term('veset_hachodesh', 'he')})`;
+    case 'haflagah': {
+      const unit = r.unit === 'days' ? 'ימים' : term('onot', 'he');
+      return r.latest ? `${term('haflagah', 'he')} של ${r.length} ${unit} (${term('veset_haflagah', 'he')})` : `${term('haflagah', 'he')} קודמת של ${r.length} ${unit}`;
+    }
+  }
+}
+
+/**
+ * An onah as a calendar app shows it, for a person who does not know the
+ * terms: when it is in plain day words with its hours, what applies, why
+ * (each reason once, with its name in brackets), and the customs by which
+ * this onah is kept when it is not the onah of the reason itself.
+ *
+ *   Onah: Saturday night
+ *   Saturday night, 4:36 PM to 6:50 AM
+ *   Separation and a bedikah
+ *   Why: day 31 from the last period (onah beinonit); day 12 of the Hebrew month (veset hachodesh)
+ *   Custom: full day (24 hours); Or Zarua (the onah before)
+ */
+function onahEventForApp(o: OnahView, opts: CalendarOptions): CalendarEvent {
+  const { lang, timeZone: tz } = opts;
+  const he = hebrewOnly(opts);
+  const night = o.onah.part === 'night';
+  // A night is named by the civil day of its evening.
+  const civil = night ? o.onah.abs - 1 : o.onah.abs;
+  const from = clock12(o.start, tz, 'floor');
+  const to = clock12(o.end, tz, 'ceil');
+  const bases: BaseReason[] = [];
+  const seen = new Set<string>();
+  for (const r of o.reasons) {
+    const base = baseOf(r);
+    const id = JSON.stringify(base);
+    if (!seen.has(id)) {
+      seen.add(id);
+      bases.push(base);
+    }
+  }
+  const fullDay = o.reasons.some(r => r.kind === 'full_day');
+  const orZarua = o.reasons.some(r => r.kind === 'or_zarua');
+  const timed = { start: roundToMinute(o.start, 'floor'), end: roundToMinute(o.end, 'ceil') };
+  const common = { key: `onah:${onahIndex(o.onah)}`, kind: 'onah' as const, timed, projected: false, light: !o.veset };
+  if (he) {
+    const when = heOnahWhen(civil, o.onah.part);
+    const customs = [fullDay ? `${term('full_day', 'he')} (כל היממה)` : '', orZarua ? `${term('or_zarua', 'he')} (העונה שלפני)` : ''].filter(x => x !== '');
+    const lines = [`${when}, מ־${heTime(from)} עד ${heTime(to)}`, o.veset ? HE.separationAndBedikah : HE.separation, `למה: ${bases.map(whyHebrew).join('; ')}`];
+    if (customs.length > 0) lines.push(`מנהג: ${customs.join('; ')}`);
+    if (o.onMikvahNight) lines.push(HE.onMikvahNight);
+    return { ...common, title: rtl(`${term('onat_perishah', 'he')}${o.veset ? '' : ` (${term('or_zarua', 'he')})`} – ${when}`), description: lines.map(rtl).join('\n') };
+  }
+  const when = night ? `${CIVIL_WEEKDAYS[dayOfWeek(civil)]} night` : `${weekday(civil)} by day`;
+  const customs = [fullDay ? fill('{full_day} (24 hours)', lang) : '', orZarua ? fill('{or_zarua} (the {onah} before)', lang) : ''].filter(x => x !== '');
+  const lines = [`${when}, ${from} to ${to}`, o.veset ? fill('Separation and a {bedikah}', lang) : 'Separation', `Why: ${bases.map(r => whyEnglish(r, lang)).join('; ')}`];
+  if (customs.length > 0) lines.push(`Custom: ${customs.join('; ')}`);
+  if (o.onMikvahNight) lines.push(fill('It falls on the {mikvah_night}.', lang));
+  return { ...common, title: `${capital(term('onah', lang))}${o.veset ? '' : fill(' ({or_zarua})', lang)}: ${when}`, description: lines.join('\n') };
 }
 
 export type CalendarStyle = 'words' | 'discreet';
@@ -138,19 +205,7 @@ function onahEvent(o: OnahView, opts: CalendarOptions): CalendarEvent {
   if (opts.style === 'discreet') {
     return { key, kind: 'onah', title: o.veset ? '◆' : '◇', description: '', timed, projected: false, light: !o.veset };
   }
-  if (hebrewOnly(opts)) {
-    const lines = [...o.reasons.map(r => reasonTextHebrew(r)), o.veset ? HE.separationAndBedikah : HE.separation];
-    if (o.onMikvahNight) lines.push(HE.onMikvahNight);
-    return {
-      key,
-      kind: 'onah',
-      title: rtl(`${term(o.veset ? 'veset_onah' : 'or_zarua', 'he')} – ${hePart(part)}`),
-      description: lines.map(rtl).join('\n'),
-      timed,
-      projected: false,
-      light: !o.veset,
-    };
-  }
+  if (opts.forApp) return onahEventForApp(o, opts);
   // The event's own date and hours are not repeated: the reasons, then what is done.
   const lines = [...o.reasons.map(r => reasonText(r, lang)), o.veset ? fill('Separation, and a {bedikah}.', lang) : 'Separation.'];
   if (o.onMikvahNight) lines.push(fill('It falls on the {mikvah_night}.', lang));

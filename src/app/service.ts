@@ -5,7 +5,7 @@
  * texts, and the periodic job.
  */
 import { hiddenKey } from '../engine/calendar';
-import { filedText, messageOut, NO_TEXTS, serverText, type ChatState, type OutMessage, type SiteTexts } from './chat';
+import { filedText, messageOut, NO_TEXTS, restOut, serverText, type ChatState, type OutMessage, type SiteTexts } from './chat';
 import { fingerprint, randomCode } from './crypto';
 import { DEMO_NUMBER } from './demo';
 import { noteSmsOutcome } from './admin-notes';
@@ -441,19 +441,29 @@ export async function sendDueReminders(env: Env, deps: Deps, site: Site, now: nu
       if (!taken || taken.result.due.length === 0) continue;
       const { demo, due } = taken.result;
       budget -= due.length;
-      const results: Array<{ key: string; to: string; text: string; chat: ChatState | null; result: Settlement }> = [];
+      const results: Array<{ key: string; to: string; texts: string[]; chat: ChatState | null; result: Settlement }> = [];
       for (const q of due) {
-        // In the operator's wording, with its options (DONE on the hefsek reminder, STATUS on the others).
-        const made = q.msg ? messageOut(site.texts ?? NO_TEXTS, q.msg, now) : { out: { text: q.text, body: q.text }, chat: null };
-        const outcome = await sendHouseholdText(env, deps, site, demo, { to: q.to, ...toSend(made.out), now });
-        if (outcome.ok) sent++;
-        results.push({
-          key: q.key,
-          to: q.to,
-          text: made.out.text,
-          chat: made.chat,
-          result: outcome.ok ? 'sent' : outcome.reason === 'failed' ? 'failed' : outcome.reason === 'blocked' ? 'blocked' : 'refused',
-        });
+        // In the operator's wording, with its options (DONE on the hefsek reminder, STATUS on the others). The
+        // text of a Shabbat or Yom Tov is worded from its lines, and may be two texts.
+        const texts = site.texts ?? NO_TEXTS;
+        const made = q.rest
+          ? restOut(texts, q.rest, now)
+          : q.msg
+            ? (({ out, chat }) => ({ outs: [out], chat }))(messageOut(texts, q.msg, now))
+            : { outs: [{ text: q.text, body: q.text }], chat: null };
+        const went: string[] = [];
+        let failure: Settlement | null = null;
+        for (const out of made.outs) {
+          const outcome = await sendHouseholdText(env, deps, site, demo, { to: q.to, ...toSend(out), now });
+          if (!outcome.ok) {
+            failure = outcome.reason === 'failed' ? 'failed' : outcome.reason === 'blocked' ? 'blocked' : 'refused';
+            break;
+          }
+          sent++;
+          went.push(out.text);
+        }
+        // A second text that could not follow the first: what went out counts as sent.
+        results.push({ key: q.key, to: q.to, texts: went, chat: made.chat, result: went.length > 0 ? 'sent' : (failure ?? 'failed') });
       }
       const blocked = results.some(r => r.result === 'blocked');
       await changeHousehold(
@@ -462,11 +472,11 @@ export async function sendDueReminders(env: Env, deps: Deps, site: Site, now: nu
         now,
         data => {
           for (const r of results) {
-            settle(data, r, r.result, now);
+            settle(data, r, r.result, now, Math.max(1, r.texts.length));
             // A reminder that went out is the last message to that phone: its options are the ones a reply answers.
             if (r.result === 'sent' && r.chat) data.chat = { ...(data.chat ?? {}), [r.to]: r.chat };
             // The test account's reminders appear in its messages, as they would arrive on a phone.
-            if (demo) addMessage(data, { direction: 'out', phone: lastFour(r.to), body: r.text, at: now, status: 'simulated' });
+            if (demo) for (const body of r.texts) addMessage(data, { direction: 'out', phone: lastFour(r.to), body, at: now, status: 'simulated' });
           }
         },
         // A phone that opted out: refresh soon, so that nothing more waits for it.

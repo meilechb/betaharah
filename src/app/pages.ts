@@ -200,7 +200,7 @@ ${
       {
         id: 'reminders',
         title: 'Reminders',
-        body: `<p>Reminders are off until you turn them on for a phone, under Settings or by text (REMINDERS, then TURN ON). You choose which ones each phone receives and when. Nothing is sent on Shabbat or Yom Tov: what falls on those days is sent beforehand, or held until afterwards, or dropped, depending on what it is.</p>
+        body: `<p>Reminders are off until you turn them on for a phone, under Settings or by text (REMINDERS, then TURN ON). You choose which ones each phone receives and when. Nothing is sent on Shabbos or Yom Tov: what falls on those days is sent beforehand, or held until afterwards, or dropped, depending on what it is.</p>
 <p>To stop all texts to a phone, reply <strong>STOP</strong>. To turn them back on, reply <strong>START</strong>. Reply <strong>HELP</strong> for a short description. Message frequency varies with your settings. Message and data rates may apply.</p>`,
       },
       {
@@ -211,7 +211,7 @@ ${
   <li><strong>Google Calendar.</strong> Under Settings, connect Google Calendar. That is separate from signing in. The site creates one new calendar and keeps it up to date within about a minute of each change. It can see and change only that one calendar. To share it with your spouse, share that calendar from Google Calendar.</li>
   <li><strong>A subscription link</strong>, for Apple Calendar, Outlook, or Google Calendar without connecting an account. Under Settings, create the link and add it in your calendar app as a subscribed calendar (in Google Calendar: Other calendars, +, From URL). The calendar app decides how often it looks for changes; Google says it can take up to 12 hours. Anyone who has the link can read the calendar, so treat it like a password. You can replace or remove it at any time.</li>
 </ul>
-<p>By default your calendar app shows only the onot, the start of each period and the hefsek taharah; the niddah days, the seven clean days and the mikvah night can be switched on under Settings, Calendar.</p>
+<p>By default your calendar app shows only the onos, the start of each period and the hefsek taharah; the niddah days, the seven clean days and the mikvah night can be switched on under Settings, Calendar.</p>
 <p>Event titles can be written in words or as symbols only, for a calendar other people may see.</p>`,
       },
       {
@@ -228,7 +228,7 @@ ${
       {
         id: 'what-it-is-not',
         title: 'What this is not',
-        body: `<p class="callout">The calendar calculates dates from what you record and the customs you choose. It does not give halachic rulings. Where a veset kavua may have been established, it says so but does not apply it.</p>`,
+        body: `<p class="callout">The calendar calculates dates from what you record and the customs you choose. It does not give halachic rulings. Where a vest kavua may have been established, it says so but does not apply it.</p>`,
       },
       {
         id: 'contact',

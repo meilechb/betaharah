@@ -83,7 +83,8 @@ window.addEventListener('popstate', () => {
     // The path is put back in the address by the first draw.
     if (p) pending = p;
     setTimeout(() => {
-      if (currentTab() !== 'settings') go('settings');
+      // Only while the address still names Settings: she may have gone on (Back, then Forward at once).
+      if (pathOf(location.hash) !== null && currentTab() !== 'settings') go('settings');
     }, 60);
     return;
   }

@@ -94,21 +94,21 @@ describe('terms', () => {
 describe('dates in words', () => {
   it('names a day by its weekday, Hebrew date and civil date', () => {
     expect(weekday(SUN)).toBe('Sunday');
-    expect(weekday(SUN + 6)).toBe('Shabbat');
+    expect(weekday(SUN + 6)).toBe('Shabbos');
     expect(civilDate(SUN)).toBe('Nov 22, 2026');
   });
 
   it('names each reason', () => {
-    expect(reasonText({ kind: 'beinonit', day: 30 }, 'en')).toBe('Onah beinonit (day 30)');
+    expect(reasonText({ kind: 'beinonit', day: 30 }, 'en')).toBe('Onah beinonis (day 30)');
     expect(reasonText({ kind: 'beinonit', day: 31 }, 'he')).toBe('עונה בינונית (day 31)');
-    expect(reasonText({ kind: 'chodesh', rule: 'same_date', dayOfMonth: 13 }, 'en')).toBe('Veset hachodesh (day 13 of the month)');
+    expect(reasonText({ kind: 'chodesh', rule: 'same_date', dayOfMonth: 13 }, 'en')).toBe('Vest hachodesh (day 13 of the month)');
     expect(reasonText({ kind: 'chodesh', rule: 'same_date', dayOfMonth: 13 }, 'he')).toBe('וסת החודש (day י״ג of the month)');
-    expect(reasonText({ kind: 'chodesh', rule: 'day29', dayOfMonth: 30 }, 'en')).toBe('Veset hachodesh (the 29th, for a flow on the 30th)');
-    expect(reasonText({ kind: 'haflagah', unit: 'days', length: 28, latest: true }, 'en')).toBe('Veset haflagah (28 days)');
-    expect(reasonText({ kind: 'haflagah', unit: 'onot', length: 48, latest: false }, 'en')).toBe('An earlier haflagah not yet passed (48 onot)');
-    expect(reasonText({ kind: 'or_zarua', of: { kind: 'beinonit', day: 30 } }, 'en')).toBe('Or Zarua of onah beinonit (day 30)');
+    expect(reasonText({ kind: 'chodesh', rule: 'day29', dayOfMonth: 30 }, 'en')).toBe('Vest hachodesh (the 29th, for a flow on the 30th)');
+    expect(reasonText({ kind: 'haflagah', unit: 'days', length: 28, latest: true }, 'en')).toBe('Vest haflagah (28 days)');
+    expect(reasonText({ kind: 'haflagah', unit: 'onot', length: 48, latest: false }, 'en')).toBe('An earlier haflagah not yet passed (48 onos)');
+    expect(reasonText({ kind: 'or_zarua', of: { kind: 'beinonit', day: 30 } }, 'en')).toBe('Or Zarua of onah beinonis (day 30)');
     expect(reasonText({ kind: 'full_day', of: { kind: 'chodesh', rule: 'first_of_following', dayOfMonth: 30 } }, 'en')).toBe(
-      'Full day of veset hachodesh (the 1st of the following month, for a flow on the 30th)',
+      'Full day of vest hachodesh (the 1st of the following month, for a flow on the 30th)',
     );
   });
 });
@@ -135,9 +135,9 @@ describe('calendar events', () => {
     expect(m.timed!.start).toBeGreaterThanOrEqual(dayTimes(SUN + 11, LAKEWOOD, ZOPTS).tzeit);
     // 22 November 2026 is 12 Kislev, and Kislev has 30 days this year:
     // day 30 is 21 December (11 Tevet) and veset hachodesh is 22 December (12 Tevet).
-    expect(byKind('onah').map(e => e.title)).toEqual(['Veset onah (day)', 'Veset onah (day)']);
-    expect(byKind('onah')[0]!.description).toBe('Onah beinonit (day 30)\nSeparation, and a bedikah.');
-    expect(byKind('onah')[1]!.description).toBe('Veset hachodesh (day 12 of the month)\nSeparation, and a bedikah.');
+    expect(byKind('onah').map(e => e.title)).toEqual(['Onas havest (day)', 'Onas havest (day)']);
+    expect(byKind('onah')[0]!.description).toBe('Onah beinonis (day 30)\nSeparation, and a bedikah.');
+    expect(byKind('onah')[1]!.description).toBe('Vest hachodesh (day 12 of the month)\nSeparation, and a bedikah.');
   });
 
   it('the same events with Hebrew terms: the sentences stay English, the terms and Hebrew dates change', () => {
@@ -177,8 +177,8 @@ describe('calendar events', () => {
   it('separate Or Zarua onot are titled as such, and a night is named by its evening', () => {
     const events = buildCalendar(timeline([flow], at(2026, 11, 23, 10), { orZarua: 'yes' }), EN);
     const onot = events.filter(e => e.kind === 'onah');
-    expect(onot.map(e => e.title)).toEqual(['Or Zarua (night)', 'Veset onah (day)', 'Or Zarua (night)', 'Veset onah (day)']);
-    expect(onot[0]!.description).toBe('Or Zarua of onah beinonit (day 30)\nSeparation.');
+    expect(onot.map(e => e.title)).toEqual(['Or Zarua (night)', 'Onas havest (day)', 'Or Zarua (night)', 'Onas havest (day)']);
+    expect(onot[0]!.description).toBe('Or Zarua of onah beinonis (day 30)\nSeparation.');
     expect(localDateTime(onot[0]!.timed!.start, TZ)).toMatchObject({ m: 12, d: 20 }); // the evening it begins
     expect(onot.map(e => e.light)).toEqual([true, false, true, false]);
   });
@@ -228,7 +228,7 @@ describe('calendar events', () => {
     const b: LogEntry = { id: 'b', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: true };
     const events = buildCalendar(timeline([a, b, hefsek], at(2026, 11, 30, 10)), EN);
     // the second flow comes twelve days after the first with nothing recorded between them, so it begins the period the hefsek belongs to
-    expect(events.find(e => e.key === 'mikvah:b')!.description).toContain('It falls on an onat perishah.');
+    expect(events.find(e => e.key === 'mikvah:b')!.description).toContain('It falls on an onas perishah.');
     expect(events.find(e => e.kind === 'onah' && e.description.includes('It falls on the mikvah night.'))).toBeDefined();
   });
 });
@@ -314,7 +314,7 @@ describe('what a calendar app shows', () => {
     const p2 = publish(t2, WITH_NIDDAH).find(e => e.kind === 'apart')!;
     expect(lastDay(p2)).toBe(lastDay(p1) + 2);
     expect(p2.key).toBe(p1.key);
-    expect(p2.description).toBe('Mikvah night would be Sat night, Dec 5, if the hefsek taharah is done Shabbat, Nov 28.');
+    expect(p2.description).toBe('Mikvah night would be Sat night, Dec 5, if the hefsek taharah is done Shabbos, Nov 28.');
   });
 
   it('a recorded immersion on a later night extends it to that night', () => {
@@ -427,7 +427,7 @@ describe('wording for the dashboard', () => {
   it('describes each kind of entry', () => {
     expect(entryText(flow, 'en', 'both')).toBe('Flow: Sunday, Nov 22, 2026 (12 Kislev 5787), by day');
     expect(entryText({ id: 'x', kind: 'flow', onah: { abs: SUN, part: 'night' }, veset: false }, 'en', 'both')).toBe(
-      'Flow: Saturday night, Nov 21, 2026 (eve of 12 Kislev 5787) (not counted for vesatot)',
+      'Flow: Saturday night, Nov 21, 2026 (eve of 12 Kislev 5787) (not counted for vestos)',
     );
     expect(entryText({ id: 'x', kind: 'stain', onah: { abs: SUN, part: 'day' } }, 'he', 'both')).toBe('כתם: Sunday, Nov 22, 2026 (י״ב כסלו תשפ״ז), by day');
     expect(entryText({ id: 'x', kind: 'broken', onah: { abs: SUN, part: 'day' } }, 'en', 'hebrew')).toBe('Count broken: Sunday, 12 Kislev 5787, by day');
@@ -436,7 +436,7 @@ describe('wording for the dashboard', () => {
     // an immersion is stored under the Hebrew date of its night, and shown by the evening
     expect(entryText({ id: 'm', kind: 'mikvah', abs: SUN + 12 }, 'en', 'both')).toBe('Immersion: Thursday night, Dec 3, 2026 (eve of 24 Kislev 5787)');
     // Shabbat by day
-    expect(entryText({ id: 'x', kind: 'stain', onah: { abs: SUN + 6, part: 'day' } }, 'en', 'civil')).toBe('Stain: Shabbat, Nov 28, 2026, by day');
+    expect(entryText({ id: 'x', kind: 'stain', onah: { abs: SUN + 6, part: 'day' } }, 'en', 'civil')).toBe('Stain: Shabbos, Nov 28, 2026, by day');
   });
 
   it('has a sentence for every warning, pattern and note, in both forms, with nothing left unfilled', () => {
@@ -469,7 +469,7 @@ describe('wording for the dashboard', () => {
       }
     }
     expect(patternText({ kind: 'kavua_chodesh', dayOfMonth: 12, part: 'day' }, 'en')).toBe(
-      'Three times in a row the flow began on day 12 of the month, by day. A veset kavua for the date may have been established.',
+      'Three times in a row the flow began on day 12 of the month, by day. A vest kavua for the date may have been established.',
     );
     expect(patternText({ kind: 'dilug_chodesh', step: -2, part: 'night' }, 'en')).toContain('moved by the same step (2 days)');
     expect(patternText({ kind: 'dilug_haflagah', step: 1, part: 'day' }, 'en')).toContain('(1 day)');
@@ -561,10 +561,29 @@ describe('a calendar app with Hebrew terms', () => {
     const onDay = (events: CalendarEvent[], d: number) => events.find(e => e.kind === 'onah' && localDateTime(e.timed!.start, TZ).d === d && localDateTime(e.timed!.start, TZ).hh < 12)!;
     const en = calendarAppEvents(t, DEFAULT_CALENDAR_SHOW, EN);
     const he = calendarAppEvents(t, DEFAULT_CALENDAR_SHOW, HE);
-    expect(plain(onDay(en, 21))).toEqual(['Veset onah (day)', 'Onah beinonit (day 30)', 'Separation, and a bedikah.']);
-    expect(plain(onDay(he, 21))).toEqual(['עונת הוסת – יום', 'עונה בינונית – יום 30', 'פרישה ובדיקה']);
-    expect(plain(onDay(en, 22))).toEqual(['Veset onah (day)', 'Veset hachodesh (day 12 of the month)', 'Separation, and a bedikah.']);
-    expect(plain(onDay(he, 22))).toEqual(['עונת הוסת – יום', 'וסת החודש – י״ב בחודש', 'פרישה ובדיקה']);
+    // when, in plain day words with the hours; what applies; why
+    expect(plain(onDay(en, 21))).toEqual(['Onah: Shabbos by day', 'Shabbos by day, 6:49 AM to 4:37 PM', 'Separation and a bedikah', 'Why: day 30 from the last period (onah beinonis)']);
+    expect(plain(onDay(he, 21))).toEqual(['עונת פרישה – שבת ביום', 'שבת ביום, מ־6:49 בבוקר עד 4:37', 'פרישה ובדיקה', 'למה: יום 30 מהראייה האחרונה (עונה בינונית)']);
+    expect(plain(onDay(en, 22))).toEqual(['Onah: Sunday by day', 'Sunday by day, 6:50 AM to 4:36 PM', 'Separation and a bedikah', 'Why: day 12 of the Hebrew month (vest hachodesh)']);
+    expect(plain(onDay(he, 22))).toEqual(['עונת פרישה – יום ראשון ביום', 'יום ראשון ביום, מ־6:50 בבוקר עד 4:36', 'פרישה ובדיקה', 'למה: י״ב בחודש (וסת החודש)']);
+  });
+
+  it('an onah kept by Or Zarua or as a full day: each reason once, the customs on their own line, nights by the day of their evening', () => {
+    const t = timeline([{ id: 'f', kind: 'flow', onah: { abs: civil(2026, 10, 23), part: 'day' }, veset: true }, { id: 'h', kind: 'hefsek', abs: civil(2026, 10, 28) }], at(2026, 10, 30, 12), { orZarua: 'yes' });
+    const plain = (e: CalendarEvent) => [e.title, ...e.description.split('\n')].map(l => l.replace(/\u200F/g, ''));
+    const night = (events: CalendarEvent[], d: number) => events.find(e => e.kind === 'onah' && localDateTime(e.timed!.start, TZ).d === d && localDateTime(e.timed!.start, TZ).hh >= 12)!;
+    const en = calendarAppEvents(t, DEFAULT_CALENDAR_SHOW, EN);
+    const he = calendarAppEvents(t, DEFAULT_CALENDAR_SHOW, HE);
+    // Friday 20 November at sunset: the night before the day of the onah beinonit
+    expect(plain(night(en, 20))).toEqual(['Onah (Or Zarua): Friday night', 'Friday night, 4:36 PM to 6:50 AM', 'Separation', 'Why: day 30 from the last period (onah beinonis)', 'Custom: Or Zarua (the onah before)']);
+    expect(plain(night(he, 20))).toEqual(['עונת פרישה (אור זרוע) – ליל שבת', 'ליל שבת, מ־4:36 עד 6:50 בבוקר', 'פרישה', 'למה: יום 30 מהראייה האחרונה (עונה בינונית)', 'מנהג: אור זרוע (העונה שלפני)']);
+    expect(plain(night(en, 21))[0]).toBe('Onah (Or Zarua): Saturday night');
+    expect(plain(night(he, 21))[0]).toBe('עונת פרישה (אור זרוע) – מוצאי שבת');
+    // no reason is written twice
+    for (const e of [...en, ...he].filter(x => x.kind === 'onah')) {
+      const why = e.description.split('\n').find(l => /^(Why|למה):/.test(l))!.replace(/^[^:]+: /, '').replace(/\u200F/g, '').split('; ');
+      expect(new Set(why).size).toBe(why.length);
+    }
   });
 
   it('the app\'s own events are unchanged by it', () => {

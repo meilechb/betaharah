@@ -110,7 +110,7 @@ const H = { 'x-betaharah': '1' };
     const checks = {
       location: 'Lakewood, NJ · sunset today ' + sunset,
       phones: '2 phones · reminders on for both',
-      reminders: '5 of 5 kinds on · nothing sent on Shabbat or Yom Tov',
+      reminders: '5 of 5 kinds on',
       calendar: 'Not connected',
       language: 'Terms in English letters · Hebrew dates',
       texting: '(888) 555-0100 · ' + s.sms.usedThisMonth + ' of ' + s.sms.monthlyLimit + ' texts this month',
@@ -315,15 +315,63 @@ const H = { 'x-betaharah': '1' };
     await savedIn('reminders');
     const b = (await state()).app.reminders.bedikot;
     if (b.morningHour !== 7 || b.morningMinute !== 30) throw new Error('time not saved');
-    await page.waitForSelector('#rem-when-bedikot:has-text("7:30 AM")');
+    await page.waitForSelector('#rem-when-bedikot:has-text("7:30 AM and 1 hour 30 minutes before sunset")');
   });
 
-  await step('reminders: Shabbat and Yom Tov, wording, and the advanced options', async () => {
-    await page.click('label[for="rem-rest"]');
+  await step('reminders: the bedikah days in a few taps, and morning and before sunset each with its switch and time', async () => {
+    const days = async () => (await state()).app.reminders.bedikot.days.join(',');
+    const pressed = id => page.getAttribute(id, 'aria-pressed');
+    if ((await pressed('#rem-day-1')) !== 'true' || (await pressed('#rem-days-all')) !== 'true') throw new Error('all seven not shown as chosen');
+    await page.click('#rem-days-17');
     await savedIn('reminders');
-    if ((await state()).app.reminders.beforeRestDays) throw new Error('rest days not saved');
-    await page.click('label[for="rem-rest"]');
+    if ((await days()) !== '1,7') throw new Error('1 and 7 not saved: ' + (await days()));
+    await page.waitForSelector('#rem-day-3[aria-pressed="false"]');
+    await page.waitForSelector('#rem-when-bedikot:has-text("Days 1 and 7 · 7:30 AM")');
+    await page.click('#rem-day-3');
     await savedIn('reminders');
+    if ((await days()) !== '1,3,7') throw new Error('day 3 not added: ' + (await days()));
+    await page.click('#rem-day-1');
+    await savedIn('reminders');
+    if ((await days()) !== '3,7') throw new Error('day 1 not removed: ' + (await days()));
+    await page.waitForSelector('#rem-days-17[aria-pressed="false"]');
+    // the morning off by its switch (or its name), then on again
+    await page.click('label[for="rem-bedikot-am"]');
+    await savedIn('reminders');
+    if ((await state()).app.reminders.bedikot.morning) throw new Error('morning not off');
+    await page.waitForSelector('#rem-when-bedikot:has-text("Days 3 and 7 · 1 hour 30 minutes before sunset")');
+    await page.click('#rem-bedikot-pm');
+    await savedIn('reminders');
+    if ((await state()).app.reminders.bedikot.beforeSunset) throw new Error('before sunset not off');
+    await page.waitForSelector('#rem-when-bedikot:has-text("No times")');
+    await page.click('#rem-bedikot-am');
+    await savedIn('reminders');
+    await page.click('#rem-bedikot-pm');
+    await savedIn('reminders');
+    // the minutes before sunset, beside its switch: refused out of range, saved in range
+    await page.fill('#rem-bedikot-min', '5');
+    await page.press('#rem-bedikot-min', 'Tab');
+    await page.waitForSelector('#rem-bedikot-min-error:has-text("from 20 to 600")');
+    await page.fill('#rem-bedikot-min', '45');
+    await page.press('#rem-bedikot-min', 'Tab');
+    await savedIn('reminders');
+    const b = (await state()).app.reminders.bedikot;
+    if (!b.morning || !b.beforeSunset || b.minutesBeforeSunset !== 45) throw new Error('parts not saved: ' + JSON.stringify(b));
+    await page.click('#rem-days-all');
+    await savedIn('reminders');
+    if ((await days()) !== '1,2,3,4,5,6,7') throw new Error('all not saved');
+    await page.waitForSelector('#rem-when-bedikot:has-text("7:30 AM and 45 minutes before sunset")');
+    await noSideways('the bedikot');
+  });
+
+  await step('reminders: the text before Shabbat and Yom Tov, wording, and the advanced options', async () => {
+    if ((await page.inputValue('#rem-rest-eve')) !== '09:00') throw new Error('rest eve: ' + (await page.inputValue('#rem-rest-eve')));
+    if (!(await page.textContent('label[for="rem-rest-eve"]')).includes('Before Shabbos and Yom Tov')) throw new Error('no label');
+    await page.fill('#rem-rest-eve', '08:15');
+    await page.press('#rem-rest-eve', 'Tab');
+    await savedIn('reminders');
+    const eve = (await state()).app.reminders.restEve;
+    if (eve.hour !== 8 || eve.minute !== 15) throw new Error('rest eve not saved: ' + JSON.stringify(eve));
+    if (await page.locator('#rem-rest-group input[type="checkbox"]').count()) throw new Error('the old Shabbat switch is still there');
     if (!(await page.textContent('#rem-style-group')).includes('M night: Thu night')) throw new Error('no discreet example');
     await page.click('label[for="r-sms-style-discreet"]');
     await savedIn('reminders');
@@ -396,7 +444,7 @@ const H = { 'x-betaharah': '1' };
       return (await r.text()).split('\r\n').filter(l => l.startsWith('SUMMARY:')).map(l => l.slice(8));
     };
     const want = [
-      ['onot', 'Onot', '', true],
+      ['onot', 'Onos', '', true],
       ['period', 'Period start', '', true],
       ['hefsek', 'Hefsek taharah', '', true],
       ['niddah', 'Niddah days', '', false],
@@ -412,7 +460,7 @@ const H = { 'x-betaharah': '1' };
     if (JSON.stringify((await state()).app.calendar.show) !== JSON.stringify({ onot: true, period: true, hefsek: true, niddah: false, cleanDays: false, mikvah: false })) throw new Error('defaults');
     const before = await feed();
     if (before.includes('Niddah')) throw new Error('the niddah days are in the feed by default');
-    if (!before.some(t => t.startsWith('Veset onah'))) throw new Error('no onot in the feed: ' + before.join(' | '));
+    if (!before.some(t => t.startsWith('Onah'))) throw new Error('no onot in the feed: ' + before.join(' | '));
     // the niddah days switched on, and off again
     await page.click('label[for="cal-show-niddah"]');
     await savedIn('calendar');
@@ -433,7 +481,7 @@ const H = { 'x-betaharah': '1' };
     await page.click('label[for="cal-show-onot"]');
     await savedIn('calendar');
     const noOnot = await feed();
-    if (noOnot.some(t => t.startsWith('Veset onah') || t.startsWith('Or Zarua'))) throw new Error('onot still in the feed');
+    if (noOnot.some(t => t.startsWith('Onah'))) throw new Error('onot still in the feed');
     await page.screenshot({ path: out + '/settings-calendar-show-390.png', fullPage: true });
     // back to the defaults
     await page.click('label[for="cal-show-onot"]');
@@ -461,7 +509,9 @@ const H = { 'x-betaharah': '1' };
     await page.waitForSelector('#r-terms-he:checked');
     await backToHome();
     if ((await summary('language')) !== 'Terms in Hebrew script · Hebrew dates') throw new Error('summary: ' + (await summary('language')));
-    if (!(await summary('reminders')).includes('שבת')) throw new Error('reminders summary not in Hebrew terms: ' + (await summary('reminders')));
+    await openSection('reminders', 'Reminders');
+    if (!(await page.textContent('label[for="rem-rest-eve"]')).includes('שבת')) throw new Error('the text before Shabbos not in Hebrew terms: ' + (await page.textContent('label[for="rem-rest-eve"]')));
+    await backToHome();
     await page.setViewportSize({ width: 360, height: 800 });
     for (const id of ['', 'location', 'phones', 'phones/17325550100', 'phones/add', 'reminders', 'reminders/scheduled', 'calendar', 'language', 'texting', 'security', 'data']) {
       await page.evaluate(p => (location.hash = '#settings' + (p ? '/' + p : '')), id);

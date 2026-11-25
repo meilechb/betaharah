@@ -1,5 +1,6 @@
 /** What is stored for one household, and for the site as a whole. */
 import type { LogEntry } from '../engine/cycle';
+import type { RestText } from '../engine/present';
 import type { SiteTexts } from './chat/site-texts';
 import type { ChatState } from './chat/types';
 import { DEFAULT_HALACHIC_SETTINGS, type HalachicSettings } from '../engine/settings';
@@ -43,6 +44,14 @@ export interface QueuedReminder {
   text: string;
   /** The same by its message key, sent in the operator's wording with its options; dropped once dealt with. */
   msg?: { key: string; vars: Record<string, string>; day?: number };
+  /**
+   * The text of a Shabbat or Yom Tov (src/engine/present.ts): its lines,
+   * worded in the operator's wording when it is sent, less those that a text
+   * of the same days already brought to this phone. Dropped once dealt with.
+   */
+  rest?: RestText;
+  /** For a text of a Shabbat or Yom Tov taken for sending: the keys of the reminders it carried. */
+  covered?: string[];
   status: 'pending' | 'sending' | 'sent' | 'dropped';
   /** After a failed attempt: not to be tried again before this time. */
   notBefore: number;
